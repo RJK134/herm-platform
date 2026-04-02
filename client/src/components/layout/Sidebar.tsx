@@ -3,7 +3,7 @@ import {
   BarChart3, Radar, Grid3X3, Building2, Search, ShoppingBasket,
   Download, Settings, Sun, Moon, Store, HelpCircle, BookOpen, Bot,
   Calculator, Briefcase, Network, LogIn, LogOut, User, Crown,
-  Layers, TrendingUp, FileText,
+  Layers, TrendingUp, FileText, FolderKanban, Map,
 } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../hooks/useAuth';
@@ -21,6 +21,11 @@ const analyticsItems = [
   { to: '/architecture', icon: Layers, label: 'Architecture Assessment' },
   { to: '/value', icon: TrendingUp, label: 'Value Analysis' },
   { to: '/documents', icon: FileText, label: 'Document Generator' },
+];
+
+const procurementItems = [
+  { to: '/projects', icon: FolderKanban, label: 'Procurement Projects' },
+  { to: '/guide', icon: Map, label: 'Procurement Guide' },
 ];
 
 const intelligenceItems = [
@@ -102,6 +107,8 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 py-3 overflow-y-auto space-y-2">
         <NavSection title="Analytics" items={analyticsItems} />
+        <div className="mx-4 border-t border-white/10" />
+        <NavSection title="Procurement Engine" items={procurementItems} />
         <div className="mx-4 border-t border-white/10" />
         <NavSection title="Intelligence" items={intelligenceItems} />
         <div className="mx-4 border-t border-white/10" />

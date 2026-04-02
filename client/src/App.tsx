@@ -23,6 +23,8 @@ import { IntegrationAssessment } from './pages/IntegrationAssessment';
 import { ArchitectureAssessment } from './pages/ArchitectureAssessment';
 import { ValueAnalysis } from './pages/ValueAnalysis';
 import { DocumentGenerator } from './pages/DocumentGenerator';
+import { ProcurementProjects } from './pages/ProcurementProjects';
+import { ProcurementGuide } from './pages/ProcurementGuide';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 5 * 60 * 1000, retry: 1 } },
@@ -73,6 +75,8 @@ export default function App() {
                     <Route path="/architecture" element={<ArchitectureAssessment />} />
                     <Route path="/value" element={<ValueAnalysis />} />
                     <Route path="/documents" element={<DocumentGenerator />} />
+                    <Route path="/projects" element={<ProcurementProjects />} />
+                    <Route path="/guide" element={<ProcurementGuide />} />
                   </Routes>
                 </AppShell>
               }

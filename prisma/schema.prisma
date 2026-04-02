@@ -108,6 +108,7 @@ model VendorSystem {
   integrationTargets      IntegrationAssessment[]
   architectureAssessments ArchitectureAssessment[]
   valueAnalyses           ValueAnalysis[]
+  evaluations             ProcurementEvaluation[]
   createdAt               DateTime                @default(now())
   updatedAt               DateTime                @updatedAt
 }
@@ -155,17 +156,25 @@ model BasketItem {
 }
 
 model ProcurementProject {
-  id            String      @id @default(cuid())
-  name          String
-  institutionId String
-  institution   Institution @relation(fields: [institutionId], references: [id])
-  status        String      @default("draft")
-  basketId      String?
-  jurisdiction  String      @default("UK")
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  workflow      ProcurementWorkflow?
-  shortlist     ShortlistEntry[]
+  id               String      @id @default(cuid())
+  name             String
+  description      String?
+  institutionId    String
+  institution      Institution @relation(fields: [institutionId], references: [id])
+  status           String      @default("draft")
+  basketId         String?
+  jurisdiction     String      @default("UK")
+  estimatedValue   Decimal?    @db.Decimal(14, 2)
+  procurementRoute String?     @default("open")
+  startDate        DateTime?
+  targetAwardDate  DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  workflow         ProcurementWorkflow?
+  shortlist        ShortlistEntry[]
+  stages           ProcurementStage[]
+  evaluations      ProcurementEvaluation[]
+  complianceChecks ComplianceCheck[]
 }
 
 model AuditLog {
@@ -450,4 +459,133 @@ enum DocumentStatus {
   REVIEW
   FINAL
   ARCHIVED
+}
+
+// ── Phase 4: Multi-Jurisdiction Procurement Engine ───────────────────────────
+
+model ProcurementJurisdiction {
+  id                  String   @id @default(cuid())
+  code                String   @unique
+  name                String
+  legislation         String
+  thresholds          Json
+  minimumTimelines    Json
+  mandatoryStages     Json
+  noticeRequirements  Json
+  standstillPeriod    Int?
+  rules               Json
+  isActive            Boolean  @default(true)
+  updatedAt           DateTime @updatedAt
+}
+
+model ProcurementStage {
+  id               String             @id @default(cuid())
+  projectId        String
+  project          ProcurementProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stageCode        String
+  stageName        String
+  stageOrder       Int
+  status           StageStatus        @default(NOT_STARTED)
+  startDate        DateTime?
+  dueDate          DateTime?
+  completedDate    DateTime?
+  assignedTo       String?
+  complianceChecks Json?
+  notes            String?
+  documents        StageDocument[]
+  approvals        StageApproval[]
+  tasks            StageTask[]
+  @@index([projectId])
+  @@unique([projectId, stageCode])
+}
+
+enum StageStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  AWAITING_APPROVAL
+  APPROVED
+  COMPLETED
+  SKIPPED
+  BLOCKED
+}
+
+model StageTask {
+  id          String           @id @default(cuid())
+  stageId     String
+  stage       ProcurementStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  assignedTo  String?
+  dueDate     DateTime?
+  isCompleted Boolean          @default(false)
+  isMandatory Boolean          @default(false)
+  completedAt DateTime?
+  completedBy String?
+  sortOrder   Int
+  @@index([stageId])
+}
+
+model StageApproval {
+  id           String           @id @default(cuid())
+  stageId      String
+  stage        ProcurementStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  approverRole String
+  approverName String?
+  status       String           @default("pending")
+  requestedAt  DateTime         @default(now())
+  decidedAt    DateTime?
+  comments     String?
+  @@index([stageId])
+}
+
+model StageDocument {
+  id                    String           @id @default(cuid())
+  stageId               String
+  stage                 ProcurementStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  documentType          String
+  title                 String
+  content               Json?
+  status                String           @default("draft")
+  version               Int              @default(1)
+  generatedFromTemplate Boolean          @default(false)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  @@index([stageId])
+}
+
+model ProcurementEvaluation {
+  id                  String             @id @default(cuid())
+  projectId           String
+  project             ProcurementProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  systemId            String
+  system              VendorSystem       @relation(fields: [systemId], references: [id])
+  evaluatorId         String?
+  evaluatorName       String?
+  hermScore           Decimal?           @db.Decimal(5, 2)
+  technicalScore      Decimal?           @db.Decimal(5, 2)
+  commercialScore     Decimal?           @db.Decimal(5, 2)
+  implementationScore Decimal?           @db.Decimal(5, 2)
+  referenceScore      Decimal?           @db.Decimal(5, 2)
+  overallScore        Decimal?           @db.Decimal(5, 2)
+  weightingProfile    Json?
+  recommendation      String?
+  notes               String?
+  submittedAt         DateTime?
+  @@unique([projectId, systemId, evaluatorId])
+  @@index([projectId])
+}
+
+model ComplianceCheck {
+  id             String             @id @default(cuid())
+  projectId      String
+  project        ProcurementProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  checkCode      String
+  checkName      String
+  jurisdictionId String
+  isRequired     Boolean
+  isPassed       Boolean?
+  evidence       String?
+  checkedAt      DateTime?
+  checkedBy      String?
+  @@index([projectId])
 }

@@ -215,6 +215,38 @@ export const api = {
   getIntegrationAssessment: (id: string) =>
     client.get<ApiResponse<unknown>>(`/integration/assess/${id}`),
 
+  // Phase 4: Jurisdictions
+  listJurisdictions: () =>
+    client.get<ApiResponse<unknown[]>>('/procurement/jurisdictions'),
+  getJurisdiction: (code: string) =>
+    client.get<ApiResponse<unknown>>(`/procurement/jurisdictions/${code}`),
+
+  // Phase 4: Procurement Projects (v2 - with stage engine)
+  createProjectV2: (data: Record<string, unknown>) =>
+    client.post<ApiResponse<unknown>>('/procurement/v2/projects', data),
+  listProjectsV2: () =>
+    client.get<ApiResponse<unknown[]>>('/procurement/v2/projects'),
+  getProjectV2: (id: string) =>
+    client.get<ApiResponse<unknown>>(`/procurement/v2/projects/${id}`),
+  advanceProjectStage: (id: string) =>
+    client.post<ApiResponse<unknown>>(`/procurement/v2/projects/${id}/advance`),
+  updateStageTask: (projectId: string, stageId: string, taskId: string, data: { isCompleted: boolean; completedBy?: string }) =>
+    client.patch<ApiResponse<unknown>>(`/procurement/v2/projects/${projectId}/stages/${stageId}/tasks/${taskId}`, data),
+  updateStageApproval: (projectId: string, stageId: string, approvalId: string, data: { status: string; comments?: string; approverName?: string }) =>
+    client.patch<ApiResponse<unknown>>(`/procurement/v2/projects/${projectId}/stages/${stageId}/approvals/${approvalId}`, data),
+  getProjectCompliance: (id: string) =>
+    client.get<ApiResponse<unknown>>(`/procurement/v2/projects/${id}/compliance`),
+  getProjectTimeline: (id: string) =>
+    client.get<ApiResponse<unknown[]>>(`/procurement/v2/projects/${id}/timeline`),
+  addEvaluation: (projectId: string, data: { systemId: string; evaluatorName?: string }) =>
+    client.post<ApiResponse<unknown>>(`/procurement/v2/projects/${projectId}/evaluations`, data),
+  getEvaluations: (projectId: string) =>
+    client.get<ApiResponse<unknown[]>>(`/procurement/v2/projects/${projectId}/evaluations`),
+  updateEvaluation: (projectId: string, evalId: string, data: Record<string, unknown>) =>
+    client.patch<ApiResponse<unknown>>(`/procurement/v2/projects/${projectId}/evaluations/${evalId}`, data),
+  getProjectSpecification: (id: string) =>
+    client.get<ApiResponse<unknown>>(`/procurement/v2/projects/${id}/specification`),
+
   // Architecture Assessment
   analyseArchitecture: (data: Record<string, unknown>) =>
     client.post<ApiResponse<unknown>>('/architecture/analyse', data),
