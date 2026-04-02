@@ -1,0 +1,24 @@
+{
+  "name": "herm-platform",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": ["client", "server"],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "npm run dev --workspace=server",
+    "dev:client": "npm run dev --workspace=client",
+    "db:push": "npx prisma db push --schema=prisma/schema.prisma",
+    "db:seed": "npx tsx prisma/seed.ts",
+    "db:studio": "npx prisma studio --schema=prisma/schema.prisma",
+    "db:generate": "npx prisma generate --schema=prisma/schema.prisma"
+  },
+  "prisma": {
+    "seed": "npx tsx prisma/seed.ts"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "@prisma/client": "^5.10.0",
+    "prisma": "^5.10.0",
+    "tsx": "^4.7.0"
+  }
+}

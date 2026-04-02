@@ -1,0 +1,233 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Institution {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  country   String
+  tier      String   @default("free")
+  logoUrl   String?
+  domain    String?
+  users     User[]
+  baskets   CapabilityBasket[]
+  projects  ProcurementProject[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id            String      @id @default(cuid())
+  email         String      @unique
+  name          String
+  passwordHash  String      @default("")
+  role          UserRole    @default(VIEWER)
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id])
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  @@index([institutionId])
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  INSTITUTION_ADMIN
+  PROCUREMENT_LEAD
+  EVALUATOR
+  VENDOR_ADMIN
+  VENDOR_CONTRIBUTOR
+  VIEWER
+}
+
+model HermFamily {
+  id           String           @id @default(cuid())
+  code         String           @unique
+  name         String
+  category     String
+  sortOrder    Int
+  capabilities HermCapability[]
+}
+
+model HermCapability {
+  id            String        @id @default(cuid())
+  code          String        @unique
+  name          String
+  description   String?
+  familyId      String
+  family        HermFamily    @relation(fields: [familyId], references: [id])
+  sortOrder     Int
+  scores        Score[]
+  basketItems   BasketItem[]
+  versionScores VersionScore[]
+  @@index([familyId])
+}
+
+model VendorSystem {
+  id          String   @id @default(cuid())
+  name        String
+  vendor      String
+  category    String
+  description String?
+  regions     String[]
+  cloudNative Boolean  @default(false)
+  website     String?
+  logoUrl     String?
+  isOwnSystem Boolean  @default(false)
+  scores      Score[]
+  profile     VendorProfile?
+  versions    VendorVersion[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Score {
+  id           String         @id @default(cuid())
+  systemId     String
+  system       VendorSystem   @relation(fields: [systemId], references: [id])
+  capabilityId String
+  capability   HermCapability @relation(fields: [capabilityId], references: [id])
+  value        Int
+  evidence     String?
+  source       String?
+  version      Int            @default(1)
+  scoredBy     String?
+  scoredAt     DateTime       @default(now())
+  @@unique([systemId, capabilityId, version])
+  @@index([systemId])
+  @@index([capabilityId])
+}
+
+model CapabilityBasket {
+  id            String      @id @default(cuid())
+  name          String
+  description   String?
+  institutionId String?
+  institution   Institution? @relation(fields: [institutionId], references: [id])
+  createdById   String
+  items         BasketItem[]
+  isTemplate    Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model BasketItem {
+  id           String           @id @default(cuid())
+  basketId     String
+  basket       CapabilityBasket @relation(fields: [basketId], references: [id], onDelete: Cascade)
+  capabilityId String
+  capability   HermCapability   @relation(fields: [capabilityId], references: [id])
+  priority     String           @default("must")
+  weight       Int              @default(1)
+  notes        String?
+  @@unique([basketId, capabilityId])
+}
+
+model ProcurementProject {
+  id            String      @id @default(cuid())
+  name          String
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id])
+  status        String      @default("draft")
+  basketId      String?
+  jurisdiction  String      @default("UK")
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  changes    Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+  @@index([entityType, entityId])
+  @@index([userId])
+}
+
+model VendorVersion {
+  id           String         @id @default(cuid())
+  systemId     String
+  system       VendorSystem   @relation(fields: [systemId], references: [id])
+  versionName  String
+  releaseDate  DateTime?
+  endOfLife    DateTime?
+  changelog    String?
+  scores       VersionScore[]
+  createdAt    DateTime       @default(now())
+  @@index([systemId])
+}
+
+model VersionScore {
+  id             String         @id @default(cuid())
+  versionId      String
+  version        VendorVersion  @relation(fields: [versionId], references: [id])
+  capabilityId   String
+  capability     HermCapability @relation(fields: [capabilityId], references: [id])
+  value          Int
+  changeFromPrev Int?
+  evidence       String?
+  @@unique([versionId, capabilityId])
+  @@index([versionId])
+}
+
+model VendorProfile {
+  id                   String       @id @default(cuid())
+  systemId             String       @unique
+  system               VendorSystem @relation(fields: [systemId], references: [id])
+  foundedYear          Int?
+  headquarters         String?
+  employees            String?
+  marketShare          String?
+  gartnerPosition      String?
+  deploymentModel      String[]
+  techStack            String?
+  apiStandards         String[]
+  integrationProtocols String[]
+  certifications       String[]
+  pricingModel         String?
+  typicalCostRange     String?
+  implementationTime   String?
+  keyStrengths         String[]
+  knownLimitations     String[]
+  recentNews           String?
+  lastUpdated          DateTime     @default(now())
+}
+
+model ResearchItem {
+  id              String   @id @default(cuid())
+  title           String
+  publisher       String
+  year            Int
+  category        String
+  tags            String[]
+  summary         String?
+  url             String?
+  relevantSystems String[]
+  createdAt       DateTime @default(now())
+}
+
+model ScoringMethodology {
+  id        String   @id @default(cuid())
+  category  String   @unique
+  content   Json
+  updatedAt DateTime @updatedAt
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  sessionId String
+  role      String
+  content   String
+  context   Json?
+  createdAt DateTime @default(now())
+  @@index([sessionId])
+}
