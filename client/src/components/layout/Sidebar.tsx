@@ -3,6 +3,7 @@ import {
   BarChart3, Radar, Grid3X3, Building2, Search, ShoppingBasket,
   Download, Settings, Sun, Moon, Store, HelpCircle, BookOpen, Bot,
   Calculator, Briefcase, Network, LogIn, LogOut, User, Crown,
+  Layers, TrendingUp, FileText,
 } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../hooks/useAuth';
@@ -17,6 +18,9 @@ const analyticsItems = [
   { to: '/tco', icon: Calculator, label: 'TCO Calculator' },
   { to: '/procurement', icon: Briefcase, label: 'Procurement Workflow' },
   { to: '/integration', icon: Network, label: 'Integration Assessment' },
+  { to: '/architecture', icon: Layers, label: 'Architecture Assessment' },
+  { to: '/value', icon: TrendingUp, label: 'Value Analysis' },
+  { to: '/documents', icon: FileText, label: 'Document Generator' },
 ];
 
 const intelligenceItems = [

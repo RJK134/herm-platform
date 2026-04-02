@@ -20,6 +20,9 @@ import { AiAssistant } from './pages/AiAssistant';
 import { TcoCalculator } from './pages/TcoCalculator';
 import { ProcurementWorkflow } from './pages/ProcurementWorkflow';
 import { IntegrationAssessment } from './pages/IntegrationAssessment';
+import { ArchitectureAssessment } from './pages/ArchitectureAssessment';
+import { ValueAnalysis } from './pages/ValueAnalysis';
+import { DocumentGenerator } from './pages/DocumentGenerator';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 5 * 60 * 1000, retry: 1 } },
@@ -67,6 +70,9 @@ export default function App() {
                     <Route path="/tco" element={<TcoCalculator />} />
                     <Route path="/procurement" element={<ProcurementWorkflow />} />
                     <Route path="/integration" element={<IntegrationAssessment />} />
+                    <Route path="/architecture" element={<ArchitectureAssessment />} />
+                    <Route path="/value" element={<ValueAnalysis />} />
+                    <Route path="/documents" element={<DocumentGenerator />} />
                   </Routes>
                 </AppShell>
               }

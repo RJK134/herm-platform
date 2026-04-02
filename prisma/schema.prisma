@@ -100,14 +100,16 @@ model VendorSystem {
   website              String?
   logoUrl              String?
   isOwnSystem          Boolean                 @default(false)
-  scores               Score[]
-  profile              VendorProfile?
-  versions             VendorVersion[]
-  tcoEstimates         TcoEstimate[]
-  shortlistEntries     ShortlistEntry[]
-  integrationTargets   IntegrationAssessment[]
-  createdAt            DateTime                @default(now())
-  updatedAt            DateTime                @updatedAt
+  scores                  Score[]
+  profile                 VendorProfile?
+  versions                VendorVersion[]
+  tcoEstimates            TcoEstimate[]
+  shortlistEntries        ShortlistEntry[]
+  integrationTargets      IntegrationAssessment[]
+  architectureAssessments ArchitectureAssessment[]
+  valueAnalyses           ValueAnalysis[]
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
 }
 
 model Score {
@@ -338,4 +340,114 @@ model IntegrationAssessment {
   createdById     String        @default("anonymous")
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
+}
+
+// ── Architecture & System Landscape Assessment ────────────────────────────────
+
+model ArchitectureAssessment {
+  id                  String        @id @default(cuid())
+  name                String
+  institutionId       String?
+  currentSystems      Json          // SystemNode[] — each with name, category, age, criticality, vendor
+  integrationLinks    Json          // IntegrationLink[] — { fromId, toId, protocol, complexity }
+  architecturePattern String        @default("point-to-point")
+  targetSystemId      String?
+  targetSystem        VendorSystem? @relation(fields: [targetSystemId], references: [id])
+  // Risk dimensions (0–100 each)
+  dataRisk            Int           @default(0)
+  cutoverRisk         Int           @default(0)
+  integrationRisk     Int           @default(0)
+  changeRisk          Int           @default(0)
+  // Computed scores
+  overallRisk         Int           @default(0)
+  readinessScore      Int           @default(0)
+  recommendations     Json?         // RecommendationItem[]
+  notes               String?
+  createdById         String        @default("anonymous")
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+}
+
+// ── Cost & Value Analysis (Business Case Builder) ─────────────────────────────
+
+model ValueAnalysis {
+  id                      String        @id @default(cuid())
+  name                    String
+  institutionId           String?
+  systemId                String?
+  targetSystem            VendorSystem? @relation(fields: [systemId], references: [id])
+  // Institution profile
+  studentFte              Int           @default(10000)
+  staffFte                Int           @default(500)
+  institutionType         String        @default("pre-92")
+  // Current state costs (annual, GBP)
+  currentSystemCostAnnual Float         @default(0)
+  currentMaintenanceCost  Float         @default(0)
+  currentSupportCost      Float         @default(0)
+  // Operational benefits inputs
+  adminEfficiencyPct      Float         @default(0)
+  adminStaffAffected      Int           @default(0)
+  avgAdminSalaryGbp       Float         @default(35000)
+  registryEfficiencyPct   Float         @default(0)
+  registryStaffAffected   Int           @default(0)
+  avgRegistrySalaryGbp    Float         @default(42000)
+  // Strategic benefits inputs
+  errorReductionPct       Float         @default(0)
+  errorCostCurrentAnnual  Float         @default(0)
+  complianceSavingAnnual  Float         @default(0)
+  studentExperienceValue  Float         @default(0)
+  otherBenefitsAnnual     Float         @default(0)
+  // Investment costs
+  implementationCost      Float         @default(0)
+  annualLicenceCost       Float         @default(0)
+  annualSupportCost       Float         @default(0)
+  annualInternalStaffCost Float         @default(0)
+  // Calculated results
+  totalAnnualBenefits     Float         @default(0)
+  totalAnnualCosts        Float         @default(0)
+  netAnnualBenefit        Float         @default(0)
+  roi3Year                Float         @default(0)
+  roi5Year                Float         @default(0)
+  npv5Year                Float         @default(0)
+  paybackMonths           Int           @default(0)
+  notes                   String?
+  createdById             String        @default("anonymous")
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  @@index([systemId])
+}
+
+// ── Document Generation ───────────────────────────────────────────────────────
+
+model GeneratedDocument {
+  id              String         @id @default(cuid())
+  title           String
+  type            DocumentType
+  institutionId   String?
+  projectId       String?
+  basketId        String?
+  tcoEstimateId   String?
+  valueAnalysisId String?
+  sections        Json           // DocumentSection[] — { id, title, content, order, locked }
+  metadata        Json?          // { author, institution, date, version, classification }
+  status          DocumentStatus @default(DRAFT)
+  wordCount       Int            @default(0)
+  createdById     String         @default("anonymous")
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+enum DocumentType {
+  BUSINESS_CASE
+  RFP_ITT
+  SHORTLIST_REPORT
+  REQUIREMENTS_SPEC
+  EXECUTIVE_SUMMARY
+}
+
+enum DocumentStatus {
+  DRAFT
+  REVIEW
+  FINAL
+  ARCHIVED
 }

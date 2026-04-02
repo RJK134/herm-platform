@@ -18,16 +18,11 @@ export class VendorsService {
     const system = await prisma.vendorSystem.findUnique({ where: { id: systemId } });
     if (!system) throw new NotFoundError(`System not found: ${systemId}`);
 
-    return prisma.vendorProfile.upsert({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (prisma.vendorProfile.upsert as any)({
       where: { systemId },
-      create: {
-        systemId,
-        ...(data as Parameters<typeof prisma.vendorProfile.create>[0]['data']),
-      },
-      update: {
-        ...(data as Parameters<typeof prisma.vendorProfile.update>[0]['data']),
-        lastUpdated: new Date(),
-      },
+      create: { systemId, ...data },
+      update: { ...data, lastUpdated: new Date() },
     });
   }
 

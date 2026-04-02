@@ -15,6 +15,9 @@ import procurementRouter from './api/procurement/procurement.router';
 import integrationRouter from './api/integration/integration.router';
 import authRouter from './api/auth/auth.router';
 import institutionsRouter from './api/institutions/institutions.router';
+import architectureRouter from './api/architecture/architecture.router';
+import valueRouter from './api/value/value.router';
+import documentsRouter from './api/documents/documents.router';
 
 const app = express();
 const PORT = process.env['PORT'] || 3002;
@@ -59,6 +62,11 @@ app.use('/api/baskets', basketsRouter);
 app.use('/api/tco', tcoRouter);
 app.use('/api/procurement', procurementRouter);
 app.use('/api/integration', integrationRouter);
+
+// Phase 3 — Architecture, Value Analysis, Document Generation
+app.use('/api/architecture', architectureRouter);
+app.use('/api/value', valueRouter);
+app.use('/api/documents', documentsRouter);
 
 // 404
 app.use((_req, res) => {

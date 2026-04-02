@@ -214,4 +214,42 @@ export const api = {
     client.get<ApiResponse<unknown[]>>('/integration/assess'),
   getIntegrationAssessment: (id: string) =>
     client.get<ApiResponse<unknown>>(`/integration/assess/${id}`),
+
+  // Architecture Assessment
+  analyseArchitecture: (data: Record<string, unknown>) =>
+    client.post<ApiResponse<unknown>>('/architecture/analyse', data),
+  createArchitectureAssessment: (data: Record<string, unknown>) =>
+    client.post<ApiResponse<unknown>>('/architecture', data),
+  listArchitectureAssessments: () =>
+    client.get<ApiResponse<unknown[]>>('/architecture'),
+  getArchitectureAssessment: (id: string) =>
+    client.get<ApiResponse<unknown>>(`/architecture/${id}`),
+  deleteArchitectureAssessment: (id: string) =>
+    client.delete(`/architecture/${id}`),
+
+  // Value Analysis
+  calculateValue: (data: Record<string, unknown>) =>
+    client.post<ApiResponse<unknown>>('/value/calculate', data),
+  saveValueAnalysis: (data: Record<string, unknown>) =>
+    client.post<ApiResponse<unknown>>('/value', data),
+  listValueAnalyses: () =>
+    client.get<ApiResponse<unknown[]>>('/value'),
+  getValueAnalysis: (id: string) =>
+    client.get<ApiResponse<unknown>>(`/value/${id}`),
+  getValueBenchmarks: () =>
+    client.get<ApiResponse<Record<string, unknown>>>('/value/benchmarks'),
+
+  // Document Generator
+  generateDocumentPreview: (data: Record<string, unknown>) =>
+    client.post<ApiResponse<unknown>>('/documents/generate', data),
+  saveDocument: (data: Record<string, unknown>) =>
+    client.post<ApiResponse<unknown>>('/documents', data),
+  listDocuments: () =>
+    client.get<ApiResponse<unknown[]>>('/documents'),
+  getDocument: (id: string) =>
+    client.get<ApiResponse<unknown>>(`/documents/${id}`),
+  updateDocument: (id: string, data: Record<string, unknown>) =>
+    client.patch<ApiResponse<unknown>>(`/documents/${id}`, data),
+  deleteDocument: (id: string) =>
+    client.delete(`/documents/${id}`),
 };
