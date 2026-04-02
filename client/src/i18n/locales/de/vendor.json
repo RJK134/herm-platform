@@ -1,0 +1,36 @@
+{
+  "portal": {
+    "title": "Anbieterportal",
+    "subtitle": "Verwalten Sie Ihr Produktprofil, HERM-Punkte und Analysen",
+    "notLinked": "Ihr Konto wurde noch nicht mit einem System verknüpft."
+  },
+  "tabs": {
+    "dashboard": "Dashboard",
+    "profile": "Mein Profil",
+    "scores": "HERM-Punkte",
+    "subscription": "Abonnement"
+  },
+  "dashboard": {
+    "profileViews": "Profilaufrufe",
+    "comparisonInclusions": "Vergleichseinschlüsse",
+    "basketInclusions": "Korbeinschlüsse",
+    "hermScore": "HERM-Punkte",
+    "thisMonth": "Diesen Monat",
+    "recentSubmissions": "Aktuelle Einreichungen"
+  },
+  "tier": {
+    "BASIC": "Basis",
+    "ENHANCED": "Erweitert",
+    "PREMIUM": "Premium",
+    "basicDesc": "Kostenloser Eintrag",
+    "enhancedDesc": "Vollprofil + Analysen — 3.500 €/Jahr",
+    "premiumDesc": "Alles Erweitert + Prioritätsplatzierung — 12.000 €/Jahr"
+  },
+  "submissions": {
+    "scoreChallenge": "Punkteanfechtung",
+    "profileUpdate": "Profilaktualisierung",
+    "pending": "Wartet auf Überprüfung",
+    "approved": "Genehmigt",
+    "rejected": "Abgelehnt"
+  }
+}

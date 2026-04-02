@@ -1,0 +1,51 @@
+{
+  "systems": {
+    "title": "Systemverwaltung",
+    "addSystem": "System hinzufügen",
+    "editSystem": "System bearbeiten",
+    "deleteSystem": "System löschen"
+  },
+  "vendors": {
+    "title": "Anbieterverwaltung",
+    "pendingApproval": "Genehmigung ausstehend",
+    "approved": "Genehmigt",
+    "allVendors": "Alle Anbieter",
+    "submissions": "Einreichungen",
+    "approveVendor": "Anbieter genehmigen",
+    "rejectVendor": "Anbieter ablehnen",
+    "suspendVendor": "Anbieter sperren",
+    "reviewNotes": "Überprüfungsnotizen"
+  },
+  "subscriptions": {
+    "title": "Abonnements",
+    "currentPlan": "Aktueller Plan",
+    "upgrade": "Plan upgraden",
+    "cancel": "Abonnement kündigen",
+    "renewalDate": "Verlängerungsdatum",
+    "invoiceHistory": "Rechnungshistorie"
+  },
+  "apiKeys": {
+    "title": "API-Integration",
+    "createKey": "API-Schlüssel erstellen",
+    "keyName": "Schlüsselname",
+    "permissions": "Berechtigungen",
+    "expiresAt": "Ablaufdatum",
+    "lastUsed": "Zuletzt verwendet",
+    "neverUsed": "Nie verwendet",
+    "keyCreated": "API-Schlüssel erstellt",
+    "keyWarning": "Dieser Schlüssel wird nur einmal angezeigt. Kopieren und sicher aufbewahren.",
+    "copyKey": "Schlüssel kopieren",
+    "keyCopied": "Kopiert!",
+    "revokeKey": "Schlüssel widerrufen",
+    "noKeys": "Noch keine API-Schlüssel. Erstellen Sie einen, um HERM-Daten zu integrieren.",
+    "permissionReadSystems": "Systeme lesen",
+    "permissionReadCapabilities": "Fähigkeiten lesen",
+    "permissionReadScores": "Punkte lesen",
+    "permissionReadBaskets": "Körbe lesen"
+  },
+  "export": {
+    "title": "Berichte und Export",
+    "exportCSV": "Als CSV exportieren",
+    "exportPDF": "Als PDF exportieren"
+  }
+}

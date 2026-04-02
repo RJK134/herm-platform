@@ -1,0 +1,26 @@
+{
+  "title": "Classement des capacités HERM",
+  "subtitle": "Classé par couverture globale HERM v3.1",
+  "kpis": {
+    "totalSystems": "Systèmes totaux",
+    "hermCapabilities": "Capacités HERM",
+    "averageCoverage": "Couverture moyenne",
+    "topSystem": "Meilleur système"
+  },
+  "table": {
+    "rank": "Rang",
+    "system": "Système",
+    "vendor": "Éditeur",
+    "overallScore": "Score global",
+    "coverage": "Couverture %"
+  },
+  "filters": {
+    "allCategories": "Toutes catégories",
+    "searchSystems": "Rechercher des systèmes...",
+    "sortByScore": "Score (élevé à faible)",
+    "sortByName": "Nom (A–Z)"
+  },
+  "empty": "Aucun système disponible.",
+  "yourBenchmark": "Votre référence",
+  "industryAverage": "Moyenne du secteur"
+}

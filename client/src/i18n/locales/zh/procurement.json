@@ -1,0 +1,73 @@
+{
+  "stages": {
+    "planning": "规划",
+    "marketEngagement": "市场接触",
+    "specification": "规格制定",
+    "notice": "合同公告",
+    "evaluation": "评估",
+    "standstill": "暂停期",
+    "award": "授标",
+    "marketResearch": "市场调研",
+    "solicitation": "招标",
+    "marketAnalysis": "市场分析",
+    "approach": "市场准入"
+  },
+  "jurisdictions": {
+    "UK": "英国",
+    "EU": "欧盟",
+    "US_FEDERAL": "美国联邦",
+    "US_STATE": "美国州级",
+    "AU": "澳大利亚"
+  },
+  "routes": {
+    "openProcedure": "公开程序",
+    "restrictedProcedure": "限制性程序",
+    "competitiveFlexible": "竞争性灵活程序",
+    "negotiated": "谈判程序",
+    "lightTouch": "简化程序",
+    "framework": "框架协议"
+  },
+  "compliance": {
+    "title": "合规检查",
+    "passed": "合规检查通过",
+    "failed": "发现{{count}}个合规问题",
+    "runCheck": "运行合规检查",
+    "advanceStage": "进入下一阶段",
+    "cannotAdvance": "无法推进 — 必须先解决合规问题"
+  },
+  "evaluation": {
+    "title": "MEAT评估矩阵",
+    "technicalScore": "技术评分",
+    "commercialScore": "商业评分",
+    "implementationRisk": "实施风险",
+    "socialValue": "社会价值",
+    "references": "参考资料与经验",
+    "totalWeighting": "总权重",
+    "mustEqual100": "权重总和必须为100%",
+    "recommendation": "建议",
+    "award": "建议授标",
+    "shortlist": "建议入围",
+    "reserve": "备用",
+    "reject": "拒绝"
+  },
+  "timeline": {
+    "title": "采购时间表",
+    "startDate": "开始日期",
+    "targetAwardDate": "目标授标日期",
+    "minimumDays": "最少{{days}}天",
+    "statutory": "法定期间"
+  },
+  "documents": {
+    "BUSINESS_CASE": "商业论证",
+    "RFP_ITT": "招标文件",
+    "SHORTLIST_REPORT": "入围报告",
+    "REQUIREMENTS_SPEC": "需求规格说明书",
+    "EXECUTIVE_SUMMARY": "执行摘要"
+  },
+  "guide": {
+    "title": "采购指南",
+    "decisionTree": "路径决策工具",
+    "comparison": "司法管辖区比较",
+    "stageGuide": "分阶段指南"
+  }
+}

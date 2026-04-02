@@ -1,0 +1,45 @@
+{
+  "families": {
+    "F01": "Studentenrekrutierung und Zulassung",
+    "F02": "Immatrikulation und Registrierung",
+    "F03": "Lehrplan- und Programmverwaltung",
+    "F04": "Lehren, Lernen und Bewertung",
+    "F05": "Studentenbetreuung und Wohlbefinden",
+    "F06": "Forschungsmanagement",
+    "F07": "Finanz- und Ressourcenmanagement",
+    "F08": "Personalmanagement",
+    "F09": "Liegenschaften und Einrichtungen",
+    "F10": "Governance, Risiko und Compliance",
+    "F11": "Strategische Planung und Analyse"
+  },
+  "priority": {
+    "mustHave": "Muss-Kriterium",
+    "shouldHave": "Soll-Kriterium",
+    "couldHave": "Kann-Kriterium",
+    "wontHave": "Nicht im Umfang",
+    "mustHaveDesc": "Wesentlich — das System muss diese Fähigkeit liefern",
+    "shouldHaveDesc": "Wichtig, aber nicht kritisch — Alternativen existieren",
+    "couldHaveDesc": "Wünschenswerte Erweiterung",
+    "wontHaveDesc": "Außerhalb des Umfangs dieser Bewertung"
+  },
+  "scores": {
+    "full": "Volle Fähigkeit (100)",
+    "partial": "Teilweise Fähigkeit (50)",
+    "none": "Keine Fähigkeit (0)"
+  },
+  "heatmap": {
+    "title": "HERM-Fähigkeiten-Heatmap",
+    "high": "Hohe Abdeckung (>75%)",
+    "medium": "Mittlere Abdeckung (25–75%)",
+    "low": "Geringe Abdeckung (<25%)"
+  },
+  "basket": {
+    "title": "Fähigkeitskorb-Builder",
+    "subtitle": "Erstellen Sie ein gewichtetes Anforderungsset zur Bewertung",
+    "addCapability": "Fähigkeit hinzufügen",
+    "weight": "Gewichtung",
+    "priority": "Priorität",
+    "evaluate": "Korb bewerten",
+    "empty": "Ihr Korb ist leer. Fügen Sie Fähigkeiten hinzu, um zu beginnen."
+  }
+}

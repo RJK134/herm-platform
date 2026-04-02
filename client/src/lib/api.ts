@@ -315,6 +315,36 @@ export const api = {
   adminReviewSubmission: (id: string, data: { status: string; reviewNotes?: string }) =>
     client.patch<ApiResponse<unknown>>(`/admin/vendors/submissions/${id}`, data),
 
+  // Phase 6: Notifications
+  getNotifications: (page?: number) =>
+    client.get<ApiResponse<unknown[]>>('/notifications', { params: { page } }),
+  getNotificationCount: () =>
+    client.get<ApiResponse<{ count: number }>>('/notifications/count'),
+  markNotificationRead: (id: string) =>
+    client.patch<ApiResponse<unknown>>(`/notifications/${id}/read`, {}),
+  markAllNotificationsRead: () =>
+    client.post<ApiResponse<unknown>>('/notifications/read-all', {}),
+
+  // Phase 6: API Keys
+  createApiKey: (data: { name: string; permissions: string[]; expiresAt?: string }) =>
+    client.post<ApiResponse<unknown>>('/keys', data),
+  listApiKeys: () =>
+    client.get<ApiResponse<unknown[]>>('/keys'),
+  revokeApiKey: (id: string) =>
+    client.delete(`/keys/${id}`),
+
+  // Phase 6: Sector Analytics
+  getSectorOverview: () =>
+    client.get<ApiResponse<unknown>>('/sector/analytics/overview'),
+  getSectorSystems: () =>
+    client.get<ApiResponse<unknown[]>>('/sector/analytics/systems'),
+  getSectorCapabilities: () =>
+    client.get<ApiResponse<unknown[]>>('/sector/analytics/capabilities'),
+  getSectorJurisdictions: () =>
+    client.get<ApiResponse<unknown[]>>('/sector/analytics/jurisdictions'),
+  getSectorTrends: () =>
+    client.get<ApiResponse<unknown>>('/sector/analytics/trends'),
+
   // Architecture Assessment
   analyseArchitecture: (data: Record<string, unknown>) =>
     client.post<ApiResponse<unknown>>('/architecture/analyse', data),

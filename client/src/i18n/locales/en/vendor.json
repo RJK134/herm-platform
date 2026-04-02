@@ -1,0 +1,36 @@
+{
+  "portal": {
+    "title": "Vendor Portal",
+    "subtitle": "Manage your product listing, HERM scores, and analytics",
+    "notLinked": "Your account has not been linked to a system yet."
+  },
+  "tabs": {
+    "dashboard": "Dashboard",
+    "profile": "My Profile",
+    "scores": "HERM Scores",
+    "subscription": "Subscription"
+  },
+  "dashboard": {
+    "profileViews": "Profile Views",
+    "comparisonInclusions": "Comparison Inclusions",
+    "basketInclusions": "Basket Inclusions",
+    "hermScore": "HERM Score",
+    "thisMonth": "This month",
+    "recentSubmissions": "Recent Submissions"
+  },
+  "tier": {
+    "BASIC": "Basic",
+    "ENHANCED": "Enhanced",
+    "PREMIUM": "Premium",
+    "basicDesc": "Free listing",
+    "enhancedDesc": "Full profile + analytics — £3,500/yr",
+    "premiumDesc": "All Enhanced + priority placement — £12,000/yr"
+  },
+  "submissions": {
+    "scoreChallenge": "Score Challenge",
+    "profileUpdate": "Profile Update",
+    "pending": "Pending Review",
+    "approved": "Approved",
+    "rejected": "Rejected"
+  }
+}

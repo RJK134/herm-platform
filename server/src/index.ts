@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { errorHandler } from './middleware/errorHandler';
+import { helmetMiddleware, apiRateLimiter, authRateLimiter } from './middleware/security';
 import systemsRouter from './api/systems/systems.router';
 import capabilitiesRouter from './api/capabilities/capabilities.router';
 import scoresRouter from './api/scores/scores.router';
@@ -22,14 +23,19 @@ import vendorPortalRouter from './api/vendor-portal/vendor-portal.router';
 import evaluationsRouter from './api/evaluations/evaluations.router';
 import subscriptionsRouter from './api/subscriptions/subscriptions.router';
 import adminRouter from './api/admin/admin.router';
+import sectorAnalyticsRouter from './api/sector-analytics/sector-analytics.router';
+import notificationsRouter from './api/notifications/notifications.router';
+import keysRouter from './api/keys/keys.router';
 
 const app = express();
 const PORT = process.env['PORT'] || 3002;
 
 // Middleware
+app.use(helmetMiddleware);
 app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use('/api', apiRateLimiter);
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -43,8 +49,8 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-// Auth (unauthenticated)
-app.use('/api/auth', authRouter);
+// Auth (unauthenticated — stricter rate limit)
+app.use('/api/auth', authRateLimiter, authRouter);
 
 // Institution management (authenticated — guards inside router)
 app.use('/api/institutions', institutionsRouter);
@@ -77,6 +83,11 @@ app.use('/api/vendor-portal', vendorPortalRouter);
 app.use('/api/evaluations', evaluationsRouter);
 app.use('/api/subscriptions', subscriptionsRouter);
 app.use('/api/admin', adminRouter);
+
+// Phase 6 — Sector Analytics, Notifications, API Keys
+app.use('/api/sector/analytics', sectorAnalyticsRouter);
+app.use('/api/notifications', notificationsRouter);
+app.use('/api/keys', keysRouter);
 
 // 404
 app.use((_req, res) => {

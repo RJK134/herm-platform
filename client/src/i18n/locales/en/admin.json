@@ -1,0 +1,51 @@
+{
+  "systems": {
+    "title": "Systems Management",
+    "addSystem": "Add System",
+    "editSystem": "Edit System",
+    "deleteSystem": "Delete System"
+  },
+  "vendors": {
+    "title": "Vendor Management",
+    "pendingApproval": "Pending Approval",
+    "approved": "Approved",
+    "allVendors": "All Vendors",
+    "submissions": "Submissions",
+    "approveVendor": "Approve Vendor",
+    "rejectVendor": "Reject Vendor",
+    "suspendVendor": "Suspend Vendor",
+    "reviewNotes": "Review Notes"
+  },
+  "subscriptions": {
+    "title": "Subscriptions",
+    "currentPlan": "Current Plan",
+    "upgrade": "Upgrade Plan",
+    "cancel": "Cancel Subscription",
+    "renewalDate": "Renewal Date",
+    "invoiceHistory": "Invoice History"
+  },
+  "apiKeys": {
+    "title": "API Integration",
+    "createKey": "Create API Key",
+    "keyName": "Key Name",
+    "permissions": "Permissions",
+    "expiresAt": "Expiry Date",
+    "lastUsed": "Last Used",
+    "neverUsed": "Never used",
+    "keyCreated": "API Key Created",
+    "keyWarning": "This key will only be shown once. Copy and store it securely.",
+    "copyKey": "Copy Key",
+    "keyCopied": "Copied!",
+    "revokeKey": "Revoke Key",
+    "noKeys": "No API keys yet. Create one to integrate HERM data with your systems.",
+    "permissionReadSystems": "Read Systems",
+    "permissionReadCapabilities": "Read Capabilities",
+    "permissionReadScores": "Read Scores",
+    "permissionReadBaskets": "Read Baskets"
+  },
+  "export": {
+    "title": "Reports & Export",
+    "exportCSV": "Export CSV",
+    "exportPDF": "Export PDF"
+  }
+}

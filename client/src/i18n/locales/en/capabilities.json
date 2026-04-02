@@ -1,0 +1,45 @@
+{
+  "families": {
+    "F01": "Student Recruitment & Admissions",
+    "F02": "Student Enrolment & Registration",
+    "F03": "Curriculum & Programme Management",
+    "F04": "Teaching, Learning & Assessment",
+    "F05": "Student Support & Wellbeing",
+    "F06": "Research Management",
+    "F07": "Finance & Resource Management",
+    "F08": "Human Capital Management",
+    "F09": "Estates & Facilities",
+    "F10": "Governance, Risk & Compliance",
+    "F11": "Strategic Planning & Analytics"
+  },
+  "priority": {
+    "mustHave": "Must Have",
+    "shouldHave": "Should Have",
+    "couldHave": "Could Have",
+    "wontHave": "Won't Have",
+    "mustHaveDesc": "Essential — system must deliver this capability",
+    "shouldHaveDesc": "Important but not critical — workarounds exist",
+    "couldHaveDesc": "Desirable enhancement",
+    "wontHaveDesc": "Out of scope for this evaluation"
+  },
+  "scores": {
+    "full": "Full capability (100)",
+    "partial": "Partial capability (50)",
+    "none": "No capability (0)"
+  },
+  "heatmap": {
+    "title": "HERM Capability Heatmap",
+    "high": "High coverage (>75%)",
+    "medium": "Medium coverage (25–75%)",
+    "low": "Low coverage (<25%)"
+  },
+  "basket": {
+    "title": "Capability Basket Builder",
+    "subtitle": "Build a weighted requirement set for evaluation",
+    "addCapability": "Add Capability",
+    "weight": "Weight",
+    "priority": "Priority",
+    "evaluate": "Evaluate Basket",
+    "empty": "Your basket is empty. Add capabilities to begin."
+  }
+}

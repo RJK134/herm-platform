@@ -1,0 +1,73 @@
+{
+  "stages": {
+    "planning": "Planning",
+    "marketEngagement": "Market Engagement",
+    "specification": "Specification",
+    "notice": "Contract Notice",
+    "evaluation": "Evaluation",
+    "standstill": "Standstill Period",
+    "award": "Award",
+    "marketResearch": "Market Research",
+    "solicitation": "Solicitation",
+    "marketAnalysis": "Market Analysis",
+    "approach": "Approach to Market"
+  },
+  "jurisdictions": {
+    "UK": "United Kingdom",
+    "EU": "European Union",
+    "US_FEDERAL": "US Federal",
+    "US_STATE": "US State",
+    "AU": "Australia"
+  },
+  "routes": {
+    "openProcedure": "Open Procedure",
+    "restrictedProcedure": "Restricted Procedure",
+    "competitiveFlexible": "Competitive Flexible Procedure",
+    "negotiated": "Negotiated Procedure",
+    "lightTouch": "Light Touch Regime",
+    "framework": "Framework Agreement"
+  },
+  "compliance": {
+    "title": "Compliance Check",
+    "passed": "Compliance check passed",
+    "failed": "{{count}} compliance issue(s) found",
+    "runCheck": "Run Compliance Check",
+    "advanceStage": "Advance to Next Stage",
+    "cannotAdvance": "Cannot advance — compliance issues must be resolved first"
+  },
+  "evaluation": {
+    "title": "MEAT Evaluation Matrix",
+    "technicalScore": "Technical Score",
+    "commercialScore": "Commercial Score",
+    "implementationRisk": "Implementation Risk",
+    "socialValue": "Social Value",
+    "references": "References & Experience",
+    "totalWeighting": "Total Weighting",
+    "mustEqual100": "Weightings must sum to 100%",
+    "recommendation": "Recommendation",
+    "award": "Recommend Award",
+    "shortlist": "Recommend Shortlist",
+    "reserve": "Reserve",
+    "reject": "Reject"
+  },
+  "timeline": {
+    "title": "Procurement Timeline",
+    "startDate": "Start Date",
+    "targetAwardDate": "Target Award Date",
+    "minimumDays": "Minimum {{days}} days",
+    "statutory": "Statutory period"
+  },
+  "documents": {
+    "BUSINESS_CASE": "Business Case",
+    "RFP_ITT": "RFP / ITT",
+    "SHORTLIST_REPORT": "Shortlist Report",
+    "REQUIREMENTS_SPEC": "Requirements Specification",
+    "EXECUTIVE_SUMMARY": "Executive Summary"
+  },
+  "guide": {
+    "title": "Procurement Guide",
+    "decisionTree": "Route Decision Tool",
+    "comparison": "Jurisdiction Comparison",
+    "stageGuide": "Stage-by-Stage Guide"
+  }
+}

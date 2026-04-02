@@ -1,0 +1,51 @@
+{
+  "systems": {
+    "title": "系统管理",
+    "addSystem": "添加系统",
+    "editSystem": "编辑系统",
+    "deleteSystem": "删除系统"
+  },
+  "vendors": {
+    "title": "供应商管理",
+    "pendingApproval": "待审批",
+    "approved": "已批准",
+    "allVendors": "所有供应商",
+    "submissions": "提交内容",
+    "approveVendor": "批准供应商",
+    "rejectVendor": "拒绝供应商",
+    "suspendVendor": "暂停供应商",
+    "reviewNotes": "审核备注"
+  },
+  "subscriptions": {
+    "title": "订阅",
+    "currentPlan": "当前计划",
+    "upgrade": "升级计划",
+    "cancel": "取消订阅",
+    "renewalDate": "续订日期",
+    "invoiceHistory": "发票历史"
+  },
+  "apiKeys": {
+    "title": "API集成",
+    "createKey": "创建API密钥",
+    "keyName": "密钥名称",
+    "permissions": "权限",
+    "expiresAt": "过期日期",
+    "lastUsed": "最后使用",
+    "neverUsed": "从未使用",
+    "keyCreated": "API密钥已创建",
+    "keyWarning": "此密钥只显示一次，请复制并妥善保存。",
+    "copyKey": "复制密钥",
+    "keyCopied": "已复制！",
+    "revokeKey": "撤销密钥",
+    "noKeys": "尚无API密钥。创建一个以将HERM数据集成到您的系统中。",
+    "permissionReadSystems": "读取系统",
+    "permissionReadCapabilities": "读取能力",
+    "permissionReadScores": "读取评分",
+    "permissionReadBaskets": "读取清单"
+  },
+  "export": {
+    "title": "报告与导出",
+    "exportCSV": "导出CSV",
+    "exportPDF": "导出PDF"
+  }
+}

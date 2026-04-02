@@ -1,0 +1,26 @@
+{
+  "title": "HERM Capability Leaderboard",
+  "subtitle": "Ranked by overall HERM v3.1 capability coverage",
+  "kpis": {
+    "totalSystems": "Total Systems",
+    "hermCapabilities": "HERM Capabilities",
+    "averageCoverage": "Average Coverage",
+    "topSystem": "Top System"
+  },
+  "table": {
+    "rank": "Rank",
+    "system": "System",
+    "vendor": "Vendor",
+    "overallScore": "Overall Score",
+    "coverage": "Coverage %"
+  },
+  "filters": {
+    "allCategories": "All Categories",
+    "searchSystems": "Search systems...",
+    "sortByScore": "Score (high to low)",
+    "sortByName": "Name (A–Z)"
+  },
+  "empty": "No systems available yet.",
+  "yourBenchmark": "Your benchmark",
+  "industryAverage": "Industry average"
+}

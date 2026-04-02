@@ -2,12 +2,15 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   BarChart3, Radar, Grid3X3, Building2, Search, ShoppingBasket,
   Download, Settings, Sun, Moon, Store, HelpCircle, BookOpen, Bot,
-  Calculator, Briefcase, Network, LogIn, LogOut, User, Crown,
+  LogIn, LogOut, User, Crown,
   Layers, TrendingUp, FileText, FolderKanban, Map,
-  Users, CreditCard, Shield, Package,
+  Users, CreditCard, Shield, PieChart, Key,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../hooks/useAuth';
+import { NotificationBell } from '../NotificationBell';
+import { LanguageSelector } from '../LanguageSelector';
 
 const analyticsItems = [
   { to: '/', icon: BarChart3, label: 'Leaderboard' },
@@ -16,33 +19,34 @@ const analyticsItems = [
   { to: '/system', icon: Building2, label: 'System Detail' },
   { to: '/capability', icon: Search, label: 'Capability View' },
   { to: '/basket', icon: ShoppingBasket, label: 'Capability Basket' },
-  { to: '/tco', icon: Calculator, label: 'TCO Calculator' },
-  { to: '/integration', icon: Network, label: 'Integration Assessment' },
+];
+
+const intelligenceItems = [
+  { to: '/vendor', icon: Store, label: 'Vendor Showcase' },
+  { to: '/how-it-works', icon: HelpCircle, label: 'How It Works' },
   { to: '/architecture', icon: Layers, label: 'Architecture Assessment' },
-  { to: '/value', icon: TrendingUp, label: 'Value Analysis' },
+  { to: '/value', icon: TrendingUp, label: 'Cost & Value Analysis' },
+  { to: '/research', icon: BookOpen, label: 'Research & Evidence' },
+  { to: '/assistant', icon: Bot, label: 'AI Assistant' },
 ];
 
 const procurementItems = [
   { to: '/projects', icon: FolderKanban, label: 'Procurement Projects' },
   { to: '/guide', icon: Map, label: 'Procurement Guide' },
   { to: '/workspaces', icon: Users, label: 'Team Workspaces' },
-  { to: '/documents', icon: FileText, label: 'Document Generator' },
-  { to: '/procurement', icon: Briefcase, label: 'Procurement Workflow' },
+  { to: '/documents', icon: FileText, label: 'Documents' },
 ];
 
-const intelligenceItems = [
-  { to: '/vendor', icon: Store, label: 'Vendor Showcase' },
-  { to: '/vendor-portal', icon: Package, label: 'Vendor Portal' },
-  { to: '/how-it-works', icon: HelpCircle, label: 'How It Works' },
-  { to: '/research', icon: BookOpen, label: 'Research & Evidence' },
-  { to: '/assistant', icon: Bot, label: 'AI Assistant' },
+const insightsItems = [
+  { to: '/sector', icon: PieChart, label: 'Sector Analytics' },
 ];
 
 const adminItems = [
   { to: '/admin', icon: Settings, label: 'Systems Management' },
   { to: '/admin/vendors', icon: Shield, label: 'Vendor Management' },
   { to: '/subscription', icon: CreditCard, label: 'Subscriptions' },
-  { to: '/export', icon: Download, label: 'Export & Download' },
+  { to: '/api-keys', icon: Key, label: 'API Integration' },
+  { to: '/export', icon: Download, label: 'Reports & Export' },
 ];
 
 function NavSection({
@@ -88,6 +92,7 @@ export function Sidebar() {
   const { theme, toggleTheme } = useTheme();
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const handleLogout = () => {
     logout();
@@ -111,13 +116,15 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 py-3 overflow-y-auto space-y-2">
-        <NavSection title="Analytics" items={analyticsItems} />
+        <NavSection title={t('nav.analytics', 'Analytics')} items={analyticsItems} />
         <div className="mx-4 border-t border-white/10" />
-        <NavSection title="Procurement Engine" items={procurementItems} />
+        <NavSection title={t('nav.procurement', 'Procurement')} items={procurementItems} />
         <div className="mx-4 border-t border-white/10" />
-        <NavSection title="Intelligence" items={intelligenceItems} />
+        <NavSection title={t('nav.intelligence', 'Intelligence')} items={intelligenceItems} />
         <div className="mx-4 border-t border-white/10" />
-        <NavSection title="Admin" items={adminItems} />
+        <NavSection title={t('nav.insights', 'Insights')} items={insightsItems} />
+        <div className="mx-4 border-t border-white/10" />
+        <NavSection title={t('nav.admin', 'Admin')} items={adminItems} />
       </nav>
 
       {/* Footer */}
@@ -162,16 +169,22 @@ export function Sidebar() {
           </button>
         )}
 
+        {/* Notification + Language */}
+        <div className="flex items-center justify-between mb-2">
+          <NotificationBell />
+          <LanguageSelector />
+        </div>
+
         {/* Theme toggle */}
         <button
           onClick={toggleTheme}
           className="flex items-center gap-2 text-white/60 hover:text-white text-sm w-full transition-colors"
         >
           {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+          {theme === 'dark' ? t('theme.lightMode', 'Light Mode') : t('theme.darkMode', 'Dark Mode')}
         </button>
 
-        <div className="text-white/20 text-xs">HERM Platform v3.0.0</div>
+        <div className="text-white/20 text-xs">HERM v3.1 · 165 Capabilities · 21 Systems</div>
       </div>
     </aside>
   );

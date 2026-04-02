@@ -1,0 +1,45 @@
+{
+  "families": {
+    "F01": "Captación y admisión de estudiantes",
+    "F02": "Matriculación y registro",
+    "F03": "Gestión de planes de estudio",
+    "F04": "Enseñanza, aprendizaje y evaluación",
+    "F05": "Apoyo y bienestar estudiantil",
+    "F06": "Gestión de la investigación",
+    "F07": "Gestión financiera y de recursos",
+    "F08": "Gestión de capital humano",
+    "F09": "Instalaciones y patrimonio",
+    "F10": "Gobernanza, riesgo y cumplimiento",
+    "F11": "Planificación estratégica y análisis"
+  },
+  "priority": {
+    "mustHave": "Imprescindible",
+    "shouldHave": "Importante",
+    "couldHave": "Deseable",
+    "wontHave": "Fuera del alcance",
+    "mustHaveDesc": "Esencial — el sistema debe ofrecer esta capacidad",
+    "shouldHaveDesc": "Importante pero no crítico — existen alternativas",
+    "couldHaveDesc": "Mejora deseable",
+    "wontHaveDesc": "Fuera del alcance de esta evaluación"
+  },
+  "scores": {
+    "full": "Capacidad completa (100)",
+    "partial": "Capacidad parcial (50)",
+    "none": "Sin capacidad (0)"
+  },
+  "heatmap": {
+    "title": "Mapa de calor de capacidades HERM",
+    "high": "Cobertura alta (>75%)",
+    "medium": "Cobertura media (25–75%)",
+    "low": "Cobertura baja (<25%)"
+  },
+  "basket": {
+    "title": "Constructor de cesta de capacidades",
+    "subtitle": "Cree un conjunto de requisitos ponderados para la evaluación",
+    "addCapability": "Añadir capacidad",
+    "weight": "Peso",
+    "priority": "Prioridad",
+    "evaluate": "Evaluar cesta",
+    "empty": "Su cesta está vacía. Añada capacidades para comenzar."
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "portal": {
+    "title": "Portail éditeur",
+    "subtitle": "Gérez votre fiche produit, scores HERM et analyses",
+    "notLinked": "Votre compte n'est pas encore lié à un système."
+  },
+  "tabs": {
+    "dashboard": "Tableau de bord",
+    "profile": "Mon profil",
+    "scores": "Scores HERM",
+    "subscription": "Abonnement"
+  },
+  "dashboard": {
+    "profileViews": "Vues du profil",
+    "comparisonInclusions": "Inclusions dans les comparaisons",
+    "basketInclusions": "Inclusions dans les paniers",
+    "hermScore": "Score HERM",
+    "thisMonth": "Ce mois-ci",
+    "recentSubmissions": "Soumissions récentes"
+  },
+  "tier": {
+    "BASIC": "Basic",
+    "ENHANCED": "Avancé",
+    "PREMIUM": "Premium",
+    "basicDesc": "Fiche gratuite",
+    "enhancedDesc": "Profil complet + analyses — 3 500 €/an",
+    "premiumDesc": "Tout Avancé + positionnement prioritaire — 12 000 €/an"
+  },
+  "submissions": {
+    "scoreChallenge": "Contestation de score",
+    "profileUpdate": "Mise à jour du profil",
+    "pending": "En attente de révision",
+    "approved": "Approuvé",
+    "rejected": "Rejeté"
+  }
+}

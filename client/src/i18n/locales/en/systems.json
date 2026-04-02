@@ -1,0 +1,26 @@
+{
+  "categories": {
+    "SIS": "Student Information System",
+    "LMS": "Learning Management System",
+    "CRM": "CRM & Engagement",
+    "HCM": "Human Capital Management",
+    "ERP": "Enterprise Resource Planning"
+  },
+  "deployment": {
+    "cloud": "Cloud SaaS",
+    "onPremise": "On-Premise",
+    "hybrid": "Hybrid"
+  },
+  "profile": {
+    "overview": "System Overview",
+    "capabilities": "Capabilities",
+    "scores": "HERM Scores",
+    "vendor": "Vendor Profile",
+    "versions": "Version History"
+  },
+  "compare": {
+    "addToCompare": "Add to Comparison",
+    "compareSelected": "Compare Selected ({{count}})",
+    "clearComparison": "Clear Comparison"
+  }
+}

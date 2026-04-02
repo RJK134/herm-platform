@@ -1,0 +1,36 @@
+{
+  "portal": {
+    "title": "供应商门户",
+    "subtitle": "管理您的产品列表、HERM评分和分析",
+    "notLinked": "您的账户尚未与任何系统关联。"
+  },
+  "tabs": {
+    "dashboard": "仪表板",
+    "profile": "我的资料",
+    "scores": "HERM评分",
+    "subscription": "订阅"
+  },
+  "dashboard": {
+    "profileViews": "资料浏览量",
+    "comparisonInclusions": "比较中的纳入次数",
+    "basketInclusions": "清单中的纳入次数",
+    "hermScore": "HERM评分",
+    "thisMonth": "本月",
+    "recentSubmissions": "最近提交"
+  },
+  "tier": {
+    "BASIC": "基础版",
+    "ENHANCED": "增强版",
+    "PREMIUM": "旗舰版",
+    "basicDesc": "免费列表",
+    "enhancedDesc": "完整资料 + 分析 — £3,500/年",
+    "premiumDesc": "所有增强版 + 优先展示 — £12,000/年"
+  },
+  "submissions": {
+    "scoreChallenge": "评分申诉",
+    "profileUpdate": "资料更新",
+    "pending": "待审核",
+    "approved": "已批准",
+    "rejected": "已拒绝"
+  }
+}

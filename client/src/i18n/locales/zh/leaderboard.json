@@ -1,0 +1,26 @@
+{
+  "title": "HERM能力排行榜",
+  "subtitle": "按HERM v3.1整体能力覆盖率排名",
+  "kpis": {
+    "totalSystems": "系统总数",
+    "hermCapabilities": "HERM能力",
+    "averageCoverage": "平均覆盖率",
+    "topSystem": "最佳系统"
+  },
+  "table": {
+    "rank": "排名",
+    "system": "系统",
+    "vendor": "供应商",
+    "overallScore": "总分",
+    "coverage": "覆盖率%"
+  },
+  "filters": {
+    "allCategories": "所有类别",
+    "searchSystems": "搜索系统...",
+    "sortByScore": "分数（高到低）",
+    "sortByName": "名称（A–Z）"
+  },
+  "empty": "暂无系统。",
+  "yourBenchmark": "您的基准",
+  "industryAverage": "行业平均"
+}

@@ -1,0 +1,26 @@
+{
+  "categories": {
+    "SIS": "Sistema de información estudiantil",
+    "LMS": "Sistema de gestión del aprendizaje",
+    "CRM": "CRM y compromiso",
+    "HCM": "Gestión de capital humano",
+    "ERP": "Planificación de recursos empresariales"
+  },
+  "deployment": {
+    "cloud": "SaaS en la nube",
+    "onPremise": "Local",
+    "hybrid": "Híbrido"
+  },
+  "profile": {
+    "overview": "Descripción del sistema",
+    "capabilities": "Capacidades",
+    "scores": "Puntuaciones HERM",
+    "vendor": "Perfil del proveedor",
+    "versions": "Historial de versiones"
+  },
+  "compare": {
+    "addToCompare": "Añadir a comparación",
+    "compareSelected": "Comparar selección ({{count}})",
+    "clearComparison": "Limpiar comparación"
+  }
+}

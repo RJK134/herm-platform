@@ -1,0 +1,45 @@
+{
+  "families": {
+    "F01": "Recrutement et admissions",
+    "F02": "Inscription et enregistrement",
+    "F03": "Gestion des programmes",
+    "F04": "Enseignement et évaluation",
+    "F05": "Accompagnement étudiant",
+    "F06": "Gestion de la recherche",
+    "F07": "Finances et ressources",
+    "F08": "Gestion des ressources humaines",
+    "F09": "Patrimoine et installations",
+    "F10": "Gouvernance, risques et conformité",
+    "F11": "Planification stratégique et analytique"
+  },
+  "priority": {
+    "mustHave": "Indispensable",
+    "shouldHave": "Important",
+    "couldHave": "Souhaitable",
+    "wontHave": "Hors périmètre",
+    "mustHaveDesc": "Essentiel — le système doit fournir cette capacité",
+    "shouldHaveDesc": "Important mais non critique — des solutions alternatives existent",
+    "couldHaveDesc": "Amélioration souhaitable",
+    "wontHaveDesc": "Hors périmètre de cette évaluation"
+  },
+  "scores": {
+    "full": "Capacité complète (100)",
+    "partial": "Capacité partielle (50)",
+    "none": "Aucune capacité (0)"
+  },
+  "heatmap": {
+    "title": "Carte thermique des capacités HERM",
+    "high": "Couverture élevée (>75%)",
+    "medium": "Couverture moyenne (25–75%)",
+    "low": "Faible couverture (<25%)"
+  },
+  "basket": {
+    "title": "Constructeur de panier",
+    "subtitle": "Créez un ensemble pondéré d'exigences pour l'évaluation",
+    "addCapability": "Ajouter une capacité",
+    "weight": "Pondération",
+    "priority": "Priorité",
+    "evaluate": "Évaluer le panier",
+    "empty": "Votre panier est vide."
+  }
+}

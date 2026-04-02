@@ -1,0 +1,36 @@
+{
+  "portal": {
+    "title": "Portal de proveedores",
+    "subtitle": "Gestione su ficha de producto, puntuaciones HERM y análisis",
+    "notLinked": "Su cuenta todavía no está vinculada a ningún sistema."
+  },
+  "tabs": {
+    "dashboard": "Panel",
+    "profile": "Mi perfil",
+    "scores": "Puntuaciones HERM",
+    "subscription": "Suscripción"
+  },
+  "dashboard": {
+    "profileViews": "Vistas del perfil",
+    "comparisonInclusions": "Inclusiones en comparaciones",
+    "basketInclusions": "Inclusiones en cestas",
+    "hermScore": "Puntuación HERM",
+    "thisMonth": "Este mes",
+    "recentSubmissions": "Envíos recientes"
+  },
+  "tier": {
+    "BASIC": "Básico",
+    "ENHANCED": "Avanzado",
+    "PREMIUM": "Premium",
+    "basicDesc": "Ficha gratuita",
+    "enhancedDesc": "Perfil completo + análisis — 3.500 €/año",
+    "premiumDesc": "Todo Avanzado + posicionamiento prioritario — 12.000 €/año"
+  },
+  "submissions": {
+    "scoreChallenge": "Impugnación de puntuación",
+    "profileUpdate": "Actualización de perfil",
+    "pending": "Pendiente de revisión",
+    "approved": "Aprobado",
+    "rejected": "Rechazado"
+  }
+}

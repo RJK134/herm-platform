@@ -1,0 +1,73 @@
+{
+  "stages": {
+    "planning": "Planification",
+    "marketEngagement": "Engagement du marché",
+    "specification": "Spécification",
+    "notice": "Avis de marché",
+    "evaluation": "Évaluation",
+    "standstill": "Période de suspension",
+    "award": "Attribution",
+    "marketResearch": "Étude de marché",
+    "solicitation": "Appel d'offres",
+    "marketAnalysis": "Analyse de marché",
+    "approach": "Approche du marché"
+  },
+  "jurisdictions": {
+    "UK": "Royaume-Uni",
+    "EU": "Union européenne",
+    "US_FEDERAL": "Fédéral américain",
+    "US_STATE": "État américain",
+    "AU": "Australie"
+  },
+  "routes": {
+    "openProcedure": "Procédure ouverte",
+    "restrictedProcedure": "Procédure restreinte",
+    "competitiveFlexible": "Procédure concurrentielle flexible",
+    "negotiated": "Procédure négociée",
+    "lightTouch": "Régime allégé",
+    "framework": "Accord-cadre"
+  },
+  "compliance": {
+    "title": "Vérification de conformité",
+    "passed": "Vérification réussie",
+    "failed": "{{count}} problème(s) de conformité détecté(s)",
+    "runCheck": "Lancer la vérification",
+    "advanceStage": "Passer à l'étape suivante",
+    "cannotAdvance": "Impossible d'avancer — les problèmes de conformité doivent être résolus d'abord"
+  },
+  "evaluation": {
+    "title": "Matrice d'évaluation MEAT",
+    "technicalScore": "Score technique",
+    "commercialScore": "Score commercial",
+    "implementationRisk": "Risque d'implémentation",
+    "socialValue": "Valeur sociale",
+    "references": "Références et expérience",
+    "totalWeighting": "Pondération totale",
+    "mustEqual100": "Les pondérations doivent totaliser 100%",
+    "recommendation": "Recommandation",
+    "award": "Recommander l'attribution",
+    "shortlist": "Recommander la présélection",
+    "reserve": "Réserve",
+    "reject": "Rejeter"
+  },
+  "timeline": {
+    "title": "Calendrier de passation",
+    "startDate": "Date de début",
+    "targetAwardDate": "Date cible d'attribution",
+    "minimumDays": "Minimum {{days}} jours",
+    "statutory": "Période réglementaire"
+  },
+  "documents": {
+    "BUSINESS_CASE": "Dossier d'opportunité",
+    "RFP_ITT": "RFP / AO",
+    "SHORTLIST_REPORT": "Rapport de présélection",
+    "REQUIREMENTS_SPEC": "Cahier des charges",
+    "EXECUTIVE_SUMMARY": "Résumé exécutif"
+  },
+  "guide": {
+    "title": "Guide d'approvisionnement",
+    "decisionTree": "Outil de décision",
+    "comparison": "Comparaison des juridictions",
+    "stageGuide": "Guide étape par étape"
+  }
+}

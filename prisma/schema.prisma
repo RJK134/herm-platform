@@ -20,6 +20,7 @@ model Institution {
   projects     ProcurementProject[]
   subscription        Subscription?
   evaluationProjects  EvaluationProject[]
+  apiKeys      ApiKey[]
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
 }
@@ -55,6 +56,7 @@ model User {
   institution   Institution @relation(fields: [institutionId], references: [id])
   evaluationMemberships      EvaluationMember[]
   domainAssignments          EvaluationDomainAssignment[] @relation("DomainAssignments")
+  notifications Notification[]
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   @@index([institutionId])
@@ -744,4 +746,34 @@ model Payment {
   invoiceUrl      String?
   paidAt          DateTime?
   createdAt       DateTime     @default(now())
+}
+
+// ── Phase 6: Notifications & API Keys ────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  message   String
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  @@index([userId, isRead])
+}
+
+model ApiKey {
+  id            String      @id @default(cuid())
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  name          String
+  keyHash       String      @unique
+  keyPrefix     String
+  permissions   String[]
+  lastUsedAt    DateTime?
+  expiresAt     DateTime?
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  @@index([institutionId])
 }

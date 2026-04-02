@@ -1,0 +1,73 @@
+{
+  "stages": {
+    "planning": "Planificación",
+    "marketEngagement": "Compromiso de mercado",
+    "specification": "Especificación",
+    "notice": "Anuncio de contrato",
+    "evaluation": "Evaluación",
+    "standstill": "Período de suspensión",
+    "award": "Adjudicación",
+    "marketResearch": "Investigación de mercado",
+    "solicitation": "Solicitud de ofertas",
+    "marketAnalysis": "Análisis de mercado",
+    "approach": "Acceso al mercado"
+  },
+  "jurisdictions": {
+    "UK": "Reino Unido",
+    "EU": "Unión Europea",
+    "US_FEDERAL": "Federal de EE.UU.",
+    "US_STATE": "Estado de EE.UU.",
+    "AU": "Australia"
+  },
+  "routes": {
+    "openProcedure": "Procedimiento abierto",
+    "restrictedProcedure": "Procedimiento restringido",
+    "competitiveFlexible": "Procedimiento competitivo flexible",
+    "negotiated": "Procedimiento negociado",
+    "lightTouch": "Régimen simplificado",
+    "framework": "Acuerdo marco"
+  },
+  "compliance": {
+    "title": "Verificación de cumplimiento",
+    "passed": "Verificación de cumplimiento superada",
+    "failed": "Se encontraron {{count}} problema(s) de cumplimiento",
+    "runCheck": "Ejecutar verificación",
+    "advanceStage": "Avanzar a la siguiente etapa",
+    "cannotAdvance": "No se puede avanzar — los problemas de cumplimiento deben resolverse primero"
+  },
+  "evaluation": {
+    "title": "Matriz de evaluación MEAT",
+    "technicalScore": "Puntuación técnica",
+    "commercialScore": "Puntuación comercial",
+    "implementationRisk": "Riesgo de implementación",
+    "socialValue": "Valor social",
+    "references": "Referencias y experiencia",
+    "totalWeighting": "Ponderación total",
+    "mustEqual100": "Las ponderaciones deben sumar 100%",
+    "recommendation": "Recomendación",
+    "award": "Recomendar adjudicación",
+    "shortlist": "Recomendar preselección",
+    "reserve": "Reserva",
+    "reject": "Rechazar"
+  },
+  "timeline": {
+    "title": "Calendario de adquisición",
+    "startDate": "Fecha de inicio",
+    "targetAwardDate": "Fecha objetivo de adjudicación",
+    "minimumDays": "Mínimo {{days}} días",
+    "statutory": "Período reglamentario"
+  },
+  "documents": {
+    "BUSINESS_CASE": "Justificación del proyecto",
+    "RFP_ITT": "RFP / Invitación a licitar",
+    "SHORTLIST_REPORT": "Informe de preselección",
+    "REQUIREMENTS_SPEC": "Especificación de requisitos",
+    "EXECUTIVE_SUMMARY": "Resumen ejecutivo"
+  },
+  "guide": {
+    "title": "Guía de adquisición",
+    "decisionTree": "Herramienta de decisión de ruta",
+    "comparison": "Comparación de jurisdicciones",
+    "stageGuide": "Guía etapa por etapa"
+  }
+}

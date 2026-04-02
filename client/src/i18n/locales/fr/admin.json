@@ -1,0 +1,51 @@
+{
+  "systems": {
+    "title": "Gestion des systèmes",
+    "addSystem": "Ajouter un système",
+    "editSystem": "Modifier le système",
+    "deleteSystem": "Supprimer le système"
+  },
+  "vendors": {
+    "title": "Gestion des éditeurs",
+    "pendingApproval": "En attente d'approbation",
+    "approved": "Approuvés",
+    "allVendors": "Tous les éditeurs",
+    "submissions": "Soumissions",
+    "approveVendor": "Approuver l'éditeur",
+    "rejectVendor": "Rejeter l'éditeur",
+    "suspendVendor": "Suspendre l'éditeur",
+    "reviewNotes": "Notes de révision"
+  },
+  "subscriptions": {
+    "title": "Abonnements",
+    "currentPlan": "Forfait actuel",
+    "upgrade": "Changer de forfait",
+    "cancel": "Annuler l'abonnement",
+    "renewalDate": "Date de renouvellement",
+    "invoiceHistory": "Historique des factures"
+  },
+  "apiKeys": {
+    "title": "Intégration API",
+    "createKey": "Créer une clé API",
+    "keyName": "Nom de la clé",
+    "permissions": "Autorisations",
+    "expiresAt": "Date d'expiration",
+    "lastUsed": "Dernière utilisation",
+    "neverUsed": "Jamais utilisée",
+    "keyCreated": "Clé API créée",
+    "keyWarning": "Cette clé ne sera affichée qu'une seule fois. Copiez-la et conservez-la en lieu sûr.",
+    "copyKey": "Copier la clé",
+    "keyCopied": "Copié !",
+    "revokeKey": "Révoquer la clé",
+    "noKeys": "Aucune clé API pour l'instant.",
+    "permissionReadSystems": "Lire les systèmes",
+    "permissionReadCapabilities": "Lire les capacités",
+    "permissionReadScores": "Lire les scores",
+    "permissionReadBaskets": "Lire les paniers"
+  },
+  "export": {
+    "title": "Rapports et exports",
+    "exportCSV": "Exporter en CSV",
+    "exportPDF": "Exporter en PDF"
+  }
+}

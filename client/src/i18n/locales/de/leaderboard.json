@@ -1,0 +1,26 @@
+{
+  "title": "HERM-Fähigkeiten-Rangliste",
+  "subtitle": "Sortiert nach HERM v3.1-Gesamtabdeckung",
+  "kpis": {
+    "totalSystems": "Gesamtsysteme",
+    "hermCapabilities": "HERM-Fähigkeiten",
+    "averageCoverage": "Durchschnittliche Abdeckung",
+    "topSystem": "Top-System"
+  },
+  "table": {
+    "rank": "Rang",
+    "system": "System",
+    "vendor": "Anbieter",
+    "overallScore": "Gesamtpunkte",
+    "coverage": "Abdeckung %"
+  },
+  "filters": {
+    "allCategories": "Alle Kategorien",
+    "searchSystems": "Systeme suchen...",
+    "sortByScore": "Punkte (hoch nach niedrig)",
+    "sortByName": "Name (A–Z)"
+  },
+  "empty": "Noch keine Systeme verfügbar.",
+  "yourBenchmark": "Ihr Benchmark",
+  "industryAverage": "Branchendurchschnitt"
+}

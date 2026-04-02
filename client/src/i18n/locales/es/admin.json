@@ -1,0 +1,51 @@
+{
+  "systems": {
+    "title": "Gestión de sistemas",
+    "addSystem": "Añadir sistema",
+    "editSystem": "Editar sistema",
+    "deleteSystem": "Eliminar sistema"
+  },
+  "vendors": {
+    "title": "Gestión de proveedores",
+    "pendingApproval": "Pendiente de aprobación",
+    "approved": "Aprobados",
+    "allVendors": "Todos los proveedores",
+    "submissions": "Envíos",
+    "approveVendor": "Aprobar proveedor",
+    "rejectVendor": "Rechazar proveedor",
+    "suspendVendor": "Suspender proveedor",
+    "reviewNotes": "Notas de revisión"
+  },
+  "subscriptions": {
+    "title": "Suscripciones",
+    "currentPlan": "Plan actual",
+    "upgrade": "Cambiar plan",
+    "cancel": "Cancelar suscripción",
+    "renewalDate": "Fecha de renovación",
+    "invoiceHistory": "Historial de facturas"
+  },
+  "apiKeys": {
+    "title": "Integración API",
+    "createKey": "Crear clave API",
+    "keyName": "Nombre de la clave",
+    "permissions": "Permisos",
+    "expiresAt": "Fecha de expiración",
+    "lastUsed": "Último uso",
+    "neverUsed": "Nunca usada",
+    "keyCreated": "Clave API creada",
+    "keyWarning": "Esta clave solo se mostrará una vez. Cópiela y guárdela de forma segura.",
+    "copyKey": "Copiar clave",
+    "keyCopied": "¡Copiado!",
+    "revokeKey": "Revocar clave",
+    "noKeys": "Aún no hay claves API. Cree una para integrar datos HERM con sus sistemas.",
+    "permissionReadSystems": "Leer sistemas",
+    "permissionReadCapabilities": "Leer capacidades",
+    "permissionReadScores": "Leer puntuaciones",
+    "permissionReadBaskets": "Leer cestas"
+  },
+  "export": {
+    "title": "Informes y exportación",
+    "exportCSV": "Exportar CSV",
+    "exportPDF": "Exportar PDF"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "categories": {
+    "SIS": "学生信息系统",
+    "LMS": "学习管理系统",
+    "CRM": "客户关系管理",
+    "HCM": "人力资源管理",
+    "ERP": "企业资源规划"
+  },
+  "deployment": {
+    "cloud": "云端SaaS",
+    "onPremise": "本地部署",
+    "hybrid": "混合部署"
+  },
+  "profile": {
+    "overview": "系统概览",
+    "capabilities": "能力",
+    "scores": "HERM评分",
+    "vendor": "供应商资料",
+    "versions": "版本历史"
+  },
+  "compare": {
+    "addToCompare": "添加到比较",
+    "compareSelected": "比较已选择 ({{count}})",
+    "clearComparison": "清除比较"
+  }
+}

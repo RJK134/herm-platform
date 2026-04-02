@@ -1,0 +1,73 @@
+{
+  "stages": {
+    "planning": "Planung",
+    "marketEngagement": "Marktengagement",
+    "specification": "Spezifikation",
+    "notice": "Auftragsbekanntmachung",
+    "evaluation": "Auswertung",
+    "standstill": "Stillhalteperiode",
+    "award": "Zuschlag",
+    "marketResearch": "Marktforschung",
+    "solicitation": "Ausschreibung",
+    "marketAnalysis": "Marktanalyse",
+    "approach": "Marktzugang"
+  },
+  "jurisdictions": {
+    "UK": "Vereinigtes Königreich",
+    "EU": "Europäische Union",
+    "US_FEDERAL": "US-Bundesebene",
+    "US_STATE": "US-Staatsebene",
+    "AU": "Australien"
+  },
+  "routes": {
+    "openProcedure": "Offenes Verfahren",
+    "restrictedProcedure": "Nicht offenes Verfahren",
+    "competitiveFlexible": "Wettbewerbliches Verhandlungsverfahren",
+    "negotiated": "Verhandlungsverfahren",
+    "lightTouch": "Vereinfachtes Verfahren",
+    "framework": "Rahmenvereinbarung"
+  },
+  "compliance": {
+    "title": "Konformitätsprüfung",
+    "passed": "Konformitätsprüfung bestanden",
+    "failed": "{{count}} Konformitätsproblem(e) gefunden",
+    "runCheck": "Prüfung starten",
+    "advanceStage": "Zur nächsten Phase",
+    "cannotAdvance": "Kann nicht voranschreiten — Konformitätsprobleme müssen zuerst behoben werden"
+  },
+  "evaluation": {
+    "title": "MEAT-Bewertungsmatrix",
+    "technicalScore": "Technische Bewertung",
+    "commercialScore": "Kommerzielle Bewertung",
+    "implementationRisk": "Implementierungsrisiko",
+    "socialValue": "Sozialer Wert",
+    "references": "Referenzen und Erfahrungen",
+    "totalWeighting": "Gesamtgewichtung",
+    "mustEqual100": "Gewichtungen müssen 100% ergeben",
+    "recommendation": "Empfehlung",
+    "award": "Zuschlag empfehlen",
+    "shortlist": "Vorauswahl empfehlen",
+    "reserve": "Reserve",
+    "reject": "Ablehnen"
+  },
+  "timeline": {
+    "title": "Beschaffungszeitplan",
+    "startDate": "Startdatum",
+    "targetAwardDate": "Angestrebtes Zuschlagsdatum",
+    "minimumDays": "Mindestens {{days}} Tage",
+    "statutory": "Gesetzliche Frist"
+  },
+  "documents": {
+    "BUSINESS_CASE": "Geschäftsfall",
+    "RFP_ITT": "Ausschreibungsunterlagen",
+    "SHORTLIST_REPORT": "Vorauswahl-Bericht",
+    "REQUIREMENTS_SPEC": "Anforderungsspezifikation",
+    "EXECUTIVE_SUMMARY": "Zusammenfassung für das Management"
+  },
+  "guide": {
+    "title": "Beschaffungsleitfaden",
+    "decisionTree": "Verfahrensentscheidungstool",
+    "comparison": "Rechtsordnungsvergleich",
+    "stageGuide": "Phasenweiser Leitfaden"
+  }
+}
