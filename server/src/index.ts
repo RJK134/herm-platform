@@ -18,6 +18,10 @@ import institutionsRouter from './api/institutions/institutions.router';
 import architectureRouter from './api/architecture/architecture.router';
 import valueRouter from './api/value/value.router';
 import documentsRouter from './api/documents/documents.router';
+import vendorPortalRouter from './api/vendor-portal/vendor-portal.router';
+import evaluationsRouter from './api/evaluations/evaluations.router';
+import subscriptionsRouter from './api/subscriptions/subscriptions.router';
+import adminRouter from './api/admin/admin.router';
 
 const app = express();
 const PORT = process.env['PORT'] || 3002;
@@ -67,6 +71,12 @@ app.use('/api/integration', integrationRouter);
 app.use('/api/architecture', architectureRouter);
 app.use('/api/value', valueRouter);
 app.use('/api/documents', documentsRouter);
+
+// Phase 5 — Vendor Portal, Team Workspaces, Payments
+app.use('/api/vendor-portal', vendorPortalRouter);
+app.use('/api/evaluations', evaluationsRouter);
+app.use('/api/subscriptions', subscriptionsRouter);
+app.use('/api/admin', adminRouter);
 
 // 404
 app.use((_req, res) => {

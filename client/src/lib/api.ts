@@ -247,6 +247,74 @@ export const api = {
   getProjectSpecification: (id: string) =>
     client.get<ApiResponse<unknown>>(`/procurement/v2/projects/${id}/specification`),
 
+  // Phase 5: Vendor Portal (vendor-scoped auth — uses separate vendor_auth_token)
+  vendorRegister: (data: { email: string; password: string; companyName: string; contactName: string; websiteUrl?: string }) =>
+    client.post<ApiResponse<{ token: string; user: Record<string, unknown> }>>('/vendor-portal/register', data),
+  vendorLogin: (email: string, password: string) =>
+    client.post<ApiResponse<{ token: string; user: Record<string, unknown> }>>('/vendor-portal/login', { email, password }),
+  getVendorPortalProfile: () =>
+    client.get<ApiResponse<unknown>>('/vendor-portal/profile'),
+  updateVendorPortalProfile: (data: Record<string, unknown>) =>
+    client.put<ApiResponse<unknown>>('/vendor-portal/profile', data),
+  getVendorPortalScores: () =>
+    client.get<ApiResponse<unknown>>('/vendor-portal/scores'),
+  getVendorPortalAnalytics: () =>
+    client.get<ApiResponse<unknown>>('/vendor-portal/analytics'),
+  createVendorSubmission: (data: { type: string; data: Record<string, unknown> }) =>
+    client.post<ApiResponse<unknown>>('/vendor-portal/submissions', data),
+  listVendorSubmissions: () =>
+    client.get<ApiResponse<unknown[]>>('/vendor-portal/submissions'),
+
+  // Phase 5: Evaluation Projects (Team Workspaces)
+  createEvaluationProject: (data: Record<string, unknown>) =>
+    client.post<ApiResponse<unknown>>('/evaluations', data),
+  listEvaluationProjects: (institutionId?: string) =>
+    client.get<ApiResponse<unknown[]>>('/evaluations', { params: institutionId ? { institutionId } : {} }),
+  getEvaluationProject: (id: string) =>
+    client.get<ApiResponse<unknown>>(`/evaluations/${id}`),
+  updateEvaluationProject: (id: string, data: Record<string, unknown>) =>
+    client.patch<ApiResponse<unknown>>(`/evaluations/${id}`, data),
+  addEvaluationMember: (id: string, data: { userId?: string; email?: string; role?: string }) =>
+    client.post<ApiResponse<unknown>>(`/evaluations/${id}/members`, data),
+  removeEvaluationMember: (id: string, memberId: string) =>
+    client.delete(`/evaluations/${id}/members/${memberId}`),
+  addEvaluationSystemEntry: (id: string, systemId: string) =>
+    client.post<ApiResponse<unknown>>(`/evaluations/${id}/systems`, { systemId }),
+  removeEvaluationSystemEntry: (id: string, systemId: string) =>
+    client.delete(`/evaluations/${id}/systems/${systemId}`),
+  assignEvaluationDomains: (id: string, assignments: Array<{ familyId: string; userId: string }>) =>
+    client.post<ApiResponse<unknown>>(`/evaluations/${id}/domains/assign`, { assignments }),
+  getEvaluationDomainProgress: (id: string) =>
+    client.get<ApiResponse<unknown[]>>(`/evaluations/${id}/domains`),
+  submitEvaluationDomainScores: (id: string, domainId: string, scores: Array<{ systemId: string; capabilityId: string; value: number; notes?: string }>) =>
+    client.post<ApiResponse<unknown>>(`/evaluations/${id}/domains/${domainId}/scores`, { scores }),
+  getEvaluationAggregatedScores: (id: string) =>
+    client.get<ApiResponse<unknown[]>>(`/evaluations/${id}/aggregate`),
+  getEvaluationTeamProgress: (id: string) =>
+    client.get<ApiResponse<unknown[]>>(`/evaluations/${id}/progress`),
+
+  // Phase 5: Subscriptions
+  getSubscription: () =>
+    client.get<ApiResponse<unknown>>('/subscriptions/me'),
+  createSubscriptionCheckout: (tier: string) =>
+    client.post<ApiResponse<{ url?: string; configured: boolean; message?: string }>>('/subscriptions/checkout', { tier }),
+  cancelSubscription: () =>
+    client.post<ApiResponse<unknown>>('/subscriptions/cancel'),
+  getInvoices: () =>
+    client.get<ApiResponse<unknown[]>>('/subscriptions/invoices'),
+
+  // Phase 5: Admin — Vendor Management
+  adminListVendorAccounts: (params?: { status?: string; search?: string }) =>
+    client.get<ApiResponse<unknown[]>>('/admin/vendors', { params }),
+  adminGetVendorAccount: (id: string) =>
+    client.get<ApiResponse<unknown>>(`/admin/vendors/${id}`),
+  adminUpdateVendorAccount: (id: string, data: { status?: string; tier?: string; systemId?: string | null }) =>
+    client.patch<ApiResponse<unknown>>(`/admin/vendors/${id}`, data),
+  adminListVendorSubmissions: (params?: { status?: string }) =>
+    client.get<ApiResponse<unknown[]>>('/admin/vendors/submissions', { params }),
+  adminReviewSubmission: (id: string, data: { status: string; reviewNotes?: string }) =>
+    client.patch<ApiResponse<unknown>>(`/admin/vendors/submissions/${id}`, data),
+
   // Architecture Assessment
   analyseArchitecture: (data: Record<string, unknown>) =>
     client.post<ApiResponse<unknown>>('/architecture/analyse', data),

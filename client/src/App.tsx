@@ -25,6 +25,10 @@ import { ValueAnalysis } from './pages/ValueAnalysis';
 import { DocumentGenerator } from './pages/DocumentGenerator';
 import { ProcurementProjects } from './pages/ProcurementProjects';
 import { ProcurementGuide } from './pages/ProcurementGuide';
+import { VendorPortal } from './pages/VendorPortal';
+import { TeamWorkspaces } from './pages/TeamWorkspaces';
+import { AdminVendors } from './pages/AdminVendors';
+import { Subscriptions } from './pages/Subscriptions';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 5 * 60 * 1000, retry: 1 } },
@@ -77,6 +81,10 @@ export default function App() {
                     <Route path="/documents" element={<DocumentGenerator />} />
                     <Route path="/projects" element={<ProcurementProjects />} />
                     <Route path="/guide" element={<ProcurementGuide />} />
+                    <Route path="/vendor-portal" element={<VendorPortal />} />
+                    <Route path="/workspaces" element={<TeamWorkspaces />} />
+                    <Route path="/admin/vendors" element={<AdminVendors />} />
+                    <Route path="/subscription" element={<Subscriptions />} />
                   </Routes>
                 </AppShell>
               }

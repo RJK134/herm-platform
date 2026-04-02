@@ -4,6 +4,7 @@ import {
   Download, Settings, Sun, Moon, Store, HelpCircle, BookOpen, Bot,
   Calculator, Briefcase, Network, LogIn, LogOut, User, Crown,
   Layers, TrendingUp, FileText, FolderKanban, Map,
+  Users, CreditCard, Shield, Package,
 } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../hooks/useAuth';
@@ -16,27 +17,31 @@ const analyticsItems = [
   { to: '/capability', icon: Search, label: 'Capability View' },
   { to: '/basket', icon: ShoppingBasket, label: 'Capability Basket' },
   { to: '/tco', icon: Calculator, label: 'TCO Calculator' },
-  { to: '/procurement', icon: Briefcase, label: 'Procurement Workflow' },
   { to: '/integration', icon: Network, label: 'Integration Assessment' },
   { to: '/architecture', icon: Layers, label: 'Architecture Assessment' },
   { to: '/value', icon: TrendingUp, label: 'Value Analysis' },
-  { to: '/documents', icon: FileText, label: 'Document Generator' },
 ];
 
 const procurementItems = [
   { to: '/projects', icon: FolderKanban, label: 'Procurement Projects' },
   { to: '/guide', icon: Map, label: 'Procurement Guide' },
+  { to: '/workspaces', icon: Users, label: 'Team Workspaces' },
+  { to: '/documents', icon: FileText, label: 'Document Generator' },
+  { to: '/procurement', icon: Briefcase, label: 'Procurement Workflow' },
 ];
 
 const intelligenceItems = [
   { to: '/vendor', icon: Store, label: 'Vendor Showcase' },
+  { to: '/vendor-portal', icon: Package, label: 'Vendor Portal' },
   { to: '/how-it-works', icon: HelpCircle, label: 'How It Works' },
   { to: '/research', icon: BookOpen, label: 'Research & Evidence' },
   { to: '/assistant', icon: Bot, label: 'AI Assistant' },
 ];
 
 const adminItems = [
-  { to: '/admin', icon: Settings, label: 'Admin — Systems' },
+  { to: '/admin', icon: Settings, label: 'Systems Management' },
+  { to: '/admin/vendors', icon: Shield, label: 'Vendor Management' },
+  { to: '/subscription', icon: CreditCard, label: 'Subscriptions' },
   { to: '/export', icon: Download, label: 'Export & Download' },
 ];
 

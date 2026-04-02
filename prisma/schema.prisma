@@ -18,7 +18,8 @@ model Institution {
   users        User[]
   baskets      CapabilityBasket[]
   projects     ProcurementProject[]
-  subscription Subscription?
+  subscription        Subscription?
+  evaluationProjects  EvaluationProject[]
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
 }
@@ -33,6 +34,7 @@ model Subscription {
   stripeSubscriptionId String?
   currentPeriodStart   DateTime?
   currentPeriodEnd     DateTime?
+  payments             Payment[]
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 }
@@ -51,6 +53,8 @@ model User {
   role          UserRole    @default(VIEWER)
   institutionId String
   institution   Institution @relation(fields: [institutionId], references: [id])
+  evaluationMemberships      EvaluationMember[]
+  domainAssignments          EvaluationDomainAssignment[] @relation("DomainAssignments")
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   @@index([institutionId])
@@ -72,7 +76,8 @@ model HermFamily {
   name         String
   category     String
   sortOrder    Int
-  capabilities HermCapability[]
+  capabilities      HermCapability[]
+  domainAssignments EvaluationDomainAssignment[]
 }
 
 model HermCapability {
@@ -109,6 +114,8 @@ model VendorSystem {
   architectureAssessments ArchitectureAssessment[]
   valueAnalyses           ValueAnalysis[]
   evaluations             ProcurementEvaluation[]
+  vendorAccount           VendorAccount?
+  evaluationEntries       EvaluationSystem[]
   createdAt               DateTime                @default(now())
   updatedAt               DateTime                @updatedAt
 }
@@ -588,4 +595,153 @@ model ComplianceCheck {
   checkedAt      DateTime?
   checkedBy      String?
   @@index([projectId])
+}
+
+// ── Phase 5: Vendor Portal, Team Workspaces, Payments ────────────────────────
+
+model VendorAccount {
+  id                   String             @id @default(cuid())
+  companyName          String
+  contactEmail         String             @unique
+  contactName          String
+  systemId             String?            @unique
+  system               VendorSystem?      @relation(fields: [systemId], references: [id])
+  tier                 VendorTier         @default(BASIC)
+  status               String             @default("pending")
+  websiteUrl           String?
+  phone                String?
+  address              String?
+  logoUrl              String?
+  description          String?
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  approvedAt           DateTime?
+  approvedBy           String?
+  users                VendorUser[]
+  submissions          VendorSubmission[]
+  analytics            VendorAnalytic[]
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+}
+
+enum VendorTier {
+  BASIC
+  ENHANCED
+  PREMIUM
+}
+
+model VendorUser {
+  id              String        @id @default(cuid())
+  email           String        @unique
+  name            String
+  role            String        @default("contributor")
+  vendorAccountId String
+  vendorAccount   VendorAccount @relation(fields: [vendorAccountId], references: [id])
+  passwordHash    String
+  lastLogin       DateTime?
+  createdAt       DateTime      @default(now())
+  @@index([vendorAccountId])
+}
+
+model VendorSubmission {
+  id              String        @id @default(cuid())
+  vendorAccountId String
+  vendorAccount   VendorAccount @relation(fields: [vendorAccountId], references: [id])
+  type            String
+  data            Json
+  status          String        @default("pending")
+  reviewedBy      String?
+  reviewNotes     String?
+  submittedAt     DateTime      @default(now())
+  reviewedAt      DateTime?
+  @@index([vendorAccountId])
+}
+
+model VendorAnalytic {
+  id              String        @id @default(cuid())
+  vendorAccountId String
+  vendorAccount   VendorAccount @relation(fields: [vendorAccountId], references: [id])
+  metric          String
+  value           Int
+  period          String
+  createdAt       DateTime      @default(now())
+  @@index([vendorAccountId, metric, period])
+}
+
+model EvaluationProject {
+  id                String                       @id @default(cuid())
+  name              String
+  description       String?
+  institutionId     String
+  institution       Institution                  @relation(fields: [institutionId], references: [id])
+  leadUserId        String
+  status            String                       @default("planning")
+  basketId          String?
+  deadline          DateTime?
+  systems           EvaluationSystem[]
+  members           EvaluationMember[]
+  domainAssignments EvaluationDomainAssignment[]
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+  @@index([institutionId])
+}
+
+model EvaluationSystem {
+  id        String            @id @default(cuid())
+  projectId String
+  project   EvaluationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  systemId  String
+  system    VendorSystem      @relation(fields: [systemId], references: [id])
+  @@unique([projectId, systemId])
+}
+
+model EvaluationMember {
+  id              String            @id @default(cuid())
+  projectId       String
+  project         EvaluationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User              @relation(fields: [userId], references: [id])
+  role            String            @default("evaluator")
+  assignedDomains String[]
+  @@unique([projectId, userId])
+}
+
+model EvaluationDomainAssignment {
+  id           String            @id @default(cuid())
+  projectId    String
+  project      EvaluationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  familyId     String
+  family       HermFamily        @relation(fields: [familyId], references: [id])
+  assignedToId String
+  assignedTo   User              @relation("DomainAssignments", fields: [assignedToId], references: [id])
+  status       String            @default("pending")
+  score        Json?
+  completedAt  DateTime?
+  scores       EvaluationDomainScore[]
+  @@unique([projectId, familyId])
+}
+
+model EvaluationDomainScore {
+  id           String                     @id @default(cuid())
+  assignmentId String
+  assignment   EvaluationDomainAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  systemId     String
+  capabilityId String
+  value        Int
+  notes        String?
+  scoredAt     DateTime                   @default(now())
+  @@unique([assignmentId, systemId, capabilityId])
+}
+
+model Payment {
+  id              String       @id @default(cuid())
+  subscriptionId  String
+  subscription    Subscription @relation(fields: [subscriptionId], references: [id])
+  amount          Decimal      @db.Decimal(10, 2)
+  currency        String       @default("GBP")
+  status          String
+  stripePaymentId String?      @unique
+  invoiceUrl      String?
+  paidAt          DateTime?
+  createdAt       DateTime     @default(now())
 }
