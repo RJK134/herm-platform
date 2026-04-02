@@ -130,5 +130,91 @@
     "version": "UCISA HERM v3.1",
     "capabilities": "165 Capacités",
     "systems": "21 Systèmes"
+  },
+  "notFound": {
+    "title": "Page introuvable",
+    "description": "La page recherchée n'existe pas ou a été déplacée.",
+    "goToLeaderboard": "Aller au classement",
+    "goBack": "Retour"
+  },
+  "sector": {
+    "title": "Analytique sectorielle",
+    "subtitle": "Données anonymisées de benchmarking.",
+    "activeInstitutions": "Établissements actifs",
+    "evaluationsCompleted": "Évaluations terminées",
+    "totalProcurements": "Total des marchés",
+    "mostComparedSystem": "Système le plus comparé",
+    "mostComparedSystems": "Systèmes les plus comparés (Top 10)",
+    "mostRequestedCapabilities": "Capacités les plus demandées (Top 15)",
+    "procurementByJurisdiction": "Activité par juridiction",
+    "platformUsage": "Utilisation — 12 derniers mois",
+    "legendEvaluations": "Évaluations",
+    "legendProcurements": "Marchés",
+    "dataNote": "Données anonymisées. Minimum 5 établissements."
+  },
+  "workspaces": {
+    "title": "Espaces d'évaluation",
+    "subtitle": "Collaborez sur des évaluations HERM structurées",
+    "newProject": "Nouveau projet",
+    "newProjectTitle": "Nouveau projet d'évaluation",
+    "noProjects": "Aucun projet. Créez-en un.",
+    "projectName": "Nom du projet",
+    "description": "Description",
+    "systemsToEvaluate": "Systèmes à évaluer",
+    "teamMemberEmails": "Emails des membres",
+    "commaSeparated": "Séparés par des virgules",
+    "basketLink": "Lien panier (facultatif)",
+    "deadline": "Date limite (facultatif)",
+    "cancel": "Annuler",
+    "creating": "Création…",
+    "createProject": "Créer le projet",
+    "members": "membres",
+    "systems": "systèmes",
+    "complete": "terminé"
+  },
+  "howItWorks": {
+    "title": "Comment ça marche",
+    "subtitle": "Méthodologie de notation, normes de preuve et explication du cadre",
+    "tabs": {
+      "scoringModel": "Modèle de notation",
+      "evidenceTypes": "Types de preuves",
+      "reviewProcess": "Processus de révision",
+      "faq": "FAQ"
+    },
+    "scoringTitle": "Le système de notation 0 / 50 / 100",
+    "fullSupport": "Support complet",
+    "partialSupport": "Support partiel",
+    "noSupport": "Pas de support",
+    "scoreCalculation": "Calcul du score"
+  },
+  "research": {
+    "title": "Centre de recherche et de preuves",
+    "subtitle": "Rapports d'analystes, recherches universitaires, études de cas et données de benchmark",
+    "tabs": {
+      "all": "Tous",
+      "analystReports": "Rapports d'analystes",
+      "academicResearch": "Recherche universitaire",
+      "caseStudies": "Études de cas",
+      "benchmarking": "Benchmarking",
+      "sectorSurvey": "Enquête sectorielle"
+    },
+    "searchPlaceholder": "Rechercher...",
+    "loading": "Chargement des éléments de recherche...",
+    "backToList": "← Retour à la liste",
+    "viewSource": "Voir la source",
+    "readMore": "En savoir plus →",
+    "noResults": "Aucun élément trouvé. Ajustez vos filtres."
+  },
+  "assistant": {
+    "title": "Assistant IA d'approvisionnement",
+    "subtitle": "Posez des questions sur les capacités HERM, les comparaisons de systèmes et la stratégie",
+    "suggestedQuestions": "Questions suggérées",
+    "sessionControls": "Contrôles de session",
+    "clearConversation": "Effacer la conversation",
+    "placeholder": "Posez une question sur les capacités HERM...",
+    "sendHint": "Appuyez sur Entrée pour envoyer · Maj+Entrée pour un saut de ligne",
+    "assistantName": "Assistant d'approvisionnement HERM",
+    "assistantIntro": "Interrogez-moi sur les capacités, le cadre HERM ou les comparaisons.",
+    "errorMessage": "Désolé, une erreur s'est produite. Vérifiez que le serveur est en marche."
   }
 }

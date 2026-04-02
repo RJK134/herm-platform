@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import {
@@ -75,6 +76,7 @@ function StatusBadge({ status }: { status: string }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export function AdminVendors() {
+  const { t } = useTranslation("admin");
   const qc = useQueryClient();
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('All');
   const [search, setSearch] = useState('');
@@ -163,7 +165,7 @@ export function AdminVendors() {
 
   return (
     <div className="space-y-6">
-      <Header title="Vendor Management" subtitle="Review and manage vendor accounts, profiles, and submissions" />
+      <Header title={t("vendors.title", "Vendor Management")} subtitle={t("vendors.subtitle", "Review and manage vendor accounts, profiles, and submissions")} />
 
       <div className="flex gap-4 h-[calc(100vh-200px)]">
         {/* ── Left Sidebar ─────────────────────────────────────────── */}
@@ -175,7 +177,7 @@ export function AdminVendors() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="w-full pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-teal-500 outline-none"
-              placeholder="Search vendors…"
+              placeholder={t("vendors.searchPlaceholder", "Search vendors…")}
             />
           </div>
 
@@ -240,7 +242,7 @@ export function AdminVendors() {
               ))
             )}
             {sidebarTab !== 'Submissions' && filteredVendors.length === 0 && (
-              <p className="p-4 text-sm text-gray-500 dark:text-gray-400 text-center">No vendors found</p>
+              <p className="p-4 text-sm text-gray-500 dark:text-gray-400 text-center">{t("vendors.noVendorsFound", "No vendors found")}</p>
             )}
           </div>
         </div>
@@ -252,10 +254,10 @@ export function AdminVendors() {
               {/* Stats row */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
-                  { label: 'Total Vendors', value: stats.total, icon: Building2, colour: 'text-teal-500' },
-                  { label: 'Pending Approval', value: stats.pending, icon: AlertTriangle, colour: 'text-amber-500' },
-                  { label: 'Approved', value: stats.approved, icon: CheckCircle, colour: 'text-emerald-500' },
-                  { label: 'Submissions Pending', value: stats.submissionsPending, icon: BarChart2, colour: 'text-blue-500' },
+                  { label: t('vendors.totalVendors', 'Total Vendors'), value: stats.total, icon: Building2, colour: 'text-teal-500' },
+                  { label: t('vendors.pendingApproval', 'Pending Approval'), value: stats.pending, icon: AlertTriangle, colour: 'text-amber-500' },
+                  { label: t('vendors.approved', 'Approved'), value: stats.approved, icon: CheckCircle, colour: 'text-emerald-500' },
+                  { label: t('vendors.submissionsPending', 'Submissions Pending'), value: stats.submissionsPending, icon: BarChart2, colour: 'text-blue-500' },
                 ].map(({ label, value, icon: Icon, colour }) => (
                   <Card key={label} className="p-4">
                     <div className="flex items-start justify-between">
@@ -271,7 +273,7 @@ export function AdminVendors() {
 
               {/* Status bar chart */}
               <Card>
-                <h3 className="font-semibold dark:text-white text-sm mb-4">Vendors by Status</h3>
+                <h3 className="font-semibold dark:text-white text-sm mb-4">{t("vendors.vendorsByStatus", "Vendors by Status")}</h3>
                 {(['pending', 'approved', 'rejected', 'suspended'] as const).map(status => {
                   const count = vendors.filter(v => v.status === status).length;
                   const pct = vendors.length > 0 ? (count / vendors.length) * 100 : 0;
@@ -296,7 +298,7 @@ export function AdminVendors() {
 
               <Card className="text-center py-8">
                 <Building2 className="w-10 h-10 text-gray-400 mx-auto mb-2" />
-                <p className="text-gray-500 dark:text-gray-400 text-sm">Select a vendor from the list to view details</p>
+                <p className="text-gray-500 dark:text-gray-400 text-sm">{t("vendors.selectVendor", "Select a vendor from the list to view details")}</p>
               </Card>
             </div>
           ) : (
@@ -334,6 +336,7 @@ function VendorDetail({
   vendor, systems, submissions,
   onStatusChange, onLinkSystem, onTierChange, onSubmissionAction, isPending,
 }: VendorDetailProps) {
+  const { t } = useTranslation("admin");
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -351,7 +354,7 @@ function VendorDetail({
             </div>
           </div>
           <p className="text-xs text-gray-400 dark:text-gray-500">
-            Joined {new Date(vendor.createdAt).toLocaleDateString('en-GB')}
+            {t("vendors.joined", "Joined")} {new Date(vendor.createdAt).toLocaleDateString('en-GB')}
           </p>
         </div>
 
@@ -373,7 +376,7 @@ function VendorDetail({
 
         {/* System link */}
         <div className="mb-4">
-          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Linked System</label>
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t("vendors.linkedSystem", "Linked System")}</label>
           <div className="flex items-center gap-2">
             {vendor.system && (
               <span className="text-sm font-medium dark:text-white mr-2">
@@ -385,7 +388,7 @@ function VendorDetail({
               onChange={e => e.target.value && onLinkSystem(e.target.value)}
               className="flex-1 px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-teal-500 outline-none"
             >
-              <option value="">— Select system to link —</option>
+              <option value="">{t("vendors.selectSystemToLink", "— Select system to link —")}</option>
               {systems.map(s => (
                 <option key={s.id} value={s.id}>{s.name} ({s.vendor})</option>
               ))}
@@ -395,7 +398,7 @@ function VendorDetail({
 
         {/* Tier selector */}
         <div className="mb-5">
-          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Tier</label>
+          {t("vendors.tier", "Tier")}
           <select
             defaultValue={vendor.tier}
             onChange={e => onTierChange(e.target.value)}
@@ -414,21 +417,21 @@ function VendorDetail({
             onClick={() => onStatusChange('approved')}
             disabled={isPending || vendor.status === 'approved'}
           >
-            <CheckCircle className="w-4 h-4" /> Approve
+            <CheckCircle className="w-4 h-4" /> {t("vendors.approve", "Approve")}
           </Button>
           <Button
             className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-1.5"
             onClick={() => onStatusChange('rejected')}
             disabled={isPending || vendor.status === 'rejected'}
           >
-            <XCircle className="w-4 h-4" /> Reject
+            <XCircle className="w-4 h-4" /> {t("vendors.reject", "Reject")}
           </Button>
           <Button
             className="bg-orange-500 hover:bg-orange-600 text-white flex items-center gap-1.5"
             onClick={() => onStatusChange('suspended')}
             disabled={isPending || vendor.status === 'suspended'}
           >
-            <AlertTriangle className="w-4 h-4" /> Suspend
+            <AlertTriangle className="w-4 h-4" /> {t("vendors.suspend", "Suspend")}
           </Button>
         </div>
       </Card>
@@ -436,7 +439,7 @@ function VendorDetail({
       {/* Submissions */}
       {submissions.length > 0 && (
         <Card>
-          <h3 className="font-semibold dark:text-white text-sm mb-3">Submissions</h3>
+          <h3 className="font-semibold dark:text-white text-sm mb-3">{t("vendors.submissions", "Submissions")}</h3>
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
@@ -475,9 +478,7 @@ function VendorDetail({
                           size="sm"
                           variant="secondary"
                           onClick={() => onSubmissionAction(sub.id, 'changes_requested')}
-                        >
-                          Request Changes
-                        </Button>
+                        >{t("vendors.requestChanges", "Request Changes")}                        </Button>
                       </div>
                     )}
                     {sub.status !== 'pending' && (

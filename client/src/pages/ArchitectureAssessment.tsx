@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   Plus, Trash2, Save, ChevronRight, ChevronLeft, Layers, AlertTriangle,
@@ -105,6 +106,7 @@ function RiskBar({ label, value, onChange }: { label: string; value: number; onC
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function ArchitectureAssessment() {
+  const { t } = useTranslation('systems');
   const [step, setStep] = useState(1);
   const [assessmentName, setAssessmentName] = useState('');
   const [systems, setSystems] = useState<SystemNode[]>([]);
@@ -180,8 +182,8 @@ export function ArchitectureAssessment() {
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Architecture & System Landscape Assessment</h1>
-        <p className="text-gray-500 dark:text-gray-400 mt-1">Map your current IT estate, identify integration patterns, and get a readiness score for SIS replacement.</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('architecture.title', 'Architecture & System Landscape Assessment')}</h1>
+        <p className="text-gray-500 dark:text-gray-400 mt-1">{t('architecture.subtitle', 'Map your current IT estate, identify integration patterns, and get a readiness score for SIS replacement.')}</p>
       </div>
 
       {/* Stepper */}

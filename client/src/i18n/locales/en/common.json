@@ -130,5 +130,91 @@
     "version": "UCISA HERM v3.1",
     "capabilities": "165 Capabilities",
     "systems": "21 Systems"
+  },
+  "howItWorks": {
+    "title": "How It Works",
+    "subtitle": "Scoring methodology, evidence standards, and framework explanation",
+    "tabs": {
+      "scoringModel": "Scoring Model",
+      "evidenceTypes": "Evidence Types",
+      "reviewProcess": "Review Process",
+      "faq": "FAQ"
+    },
+    "scoringTitle": "The 0 / 50 / 100 Scoring System",
+    "fullSupport": "Full Support",
+    "partialSupport": "Partial Support",
+    "noSupport": "No Support",
+    "scoreCalculation": "Score Calculation"
+  },
+  "research": {
+    "title": "Research & Evidence Hub",
+    "subtitle": "Analyst reports, academic research, case studies, and benchmarking data",
+    "tabs": {
+      "all": "All",
+      "analystReports": "Analyst Reports",
+      "academicResearch": "Academic Research",
+      "caseStudies": "Case Studies",
+      "benchmarking": "Benchmarking",
+      "sectorSurvey": "Sector Survey"
+    },
+    "searchPlaceholder": "Search research...",
+    "loading": "Loading research items...",
+    "backToList": "← Back to research list",
+    "viewSource": "View Source",
+    "readMore": "Read more →",
+    "noResults": "No research items found. Try adjusting filters or run the seed to populate data."
+  },
+  "assistant": {
+    "title": "AI Procurement Assistant",
+    "subtitle": "Ask questions about HERM capabilities, system comparisons, and procurement strategy",
+    "suggestedQuestions": "Suggested Questions",
+    "sessionControls": "Session Controls",
+    "clearConversation": "Clear Conversation",
+    "placeholder": "Ask about HERM capabilities, system comparisons, procurement strategy...",
+    "sendHint": "Press Enter to send · Shift+Enter for new line",
+    "assistantName": "HERM Procurement Assistant",
+    "assistantIntro": "Ask me about system capabilities, HERM framework, procurement strategy, or vendor comparisons.",
+    "errorMessage": "Sorry, I encountered an error. Please check that the server is running and your ANTHROPIC_API_KEY is set in .env."
+  },
+  "notFound": {
+    "title": "Page not found",
+    "description": "The page you're looking for doesn't exist or has been moved.",
+    "goToLeaderboard": "Go to Leaderboard",
+    "goBack": "Go Back"
+  },
+  "sector": {
+    "title": "Sector Analytics",
+    "subtitle": "Anonymised benchmarking data across all platform users. Minimum 5 institutions required for any aggregate.",
+    "activeInstitutions": "Active Institutions",
+    "evaluationsCompleted": "Evaluations Completed",
+    "totalProcurements": "Total Procurements",
+    "mostComparedSystem": "Most Compared System",
+    "mostComparedSystems": "Most Compared Systems (Top 10)",
+    "mostRequestedCapabilities": "Most Requested Capabilities (Top 15)",
+    "procurementByJurisdiction": "Procurement Activity by Jurisdiction",
+    "platformUsage": "Platform Usage — Last 12 Months",
+    "legendEvaluations": "Evaluations",
+    "legendProcurements": "Procurements",
+    "dataNote": "Data anonymised across all platform users. Minimum 5 institutions required for any aggregate. Updated in real-time."
+  },
+  "workspaces": {
+    "title": "Team Evaluation Workspaces",
+    "subtitle": "Collaborate on structured HERM capability evaluations with your team",
+    "newProject": "New Evaluation Project",
+    "newProjectTitle": "New Evaluation Project",
+    "noProjects": "No evaluation projects yet. Create one to get started.",
+    "projectName": "Project Name",
+    "description": "Description",
+    "systemsToEvaluate": "Systems to Evaluate",
+    "teamMemberEmails": "Team Member Emails",
+    "commaSeparated": "Comma-separated",
+    "basketLink": "Basket Link (optional)",
+    "deadline": "Deadline (optional)",
+    "cancel": "Cancel",
+    "creating": "Creating…",
+    "createProject": "Create Project",
+    "members": "members",
+    "systems": "systems",
+    "complete": "complete"
   }
 }

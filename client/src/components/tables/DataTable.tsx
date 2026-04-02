@@ -13,9 +13,10 @@ interface DataTableProps<T> {
   columns: Column<T>[];
   data: T[];
   getRowClass?: (row: T) => string;
+  onRowClick?: (row: T) => void;
 }
 
-export function DataTable<T>({ columns, data, getRowClass }: DataTableProps<T>) {
+export function DataTable<T>({ columns, data, getRowClass, onRowClick }: DataTableProps<T>) {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -63,7 +64,10 @@ export function DataTable<T>({ columns, data, getRowClass }: DataTableProps<T>) 
           {sorted.map((row, i) => (
             <tr
               key={i}
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
               className={`border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 ${
+                onRowClick ? 'cursor-pointer' : ''
+              } ${
                 getRowClass?.(row) || ''
               }`}
             >

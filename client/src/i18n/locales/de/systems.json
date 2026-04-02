@@ -22,5 +22,40 @@
     "addToCompare": "Zum Vergleich hinzufügen",
     "compareSelected": "Auswahl vergleichen ({{count}})",
     "clearComparison": "Vergleich löschen"
+  },
+  "detail": {
+    "title": "Systemdetail",
+    "subtitle": "Tiefenanalyse des HERM-Fähigkeitsprofils",
+    "selectSystem": "System auswählen",
+    "loadingSystems": "Systeme werden geladen...",
+    "yourSystem": "IHR SYSTEM",
+    "vendor": "Anbieter",
+    "cloud": "Cloud",
+    "cloudNative": "Nativ",
+    "cloudOnPremise": "On-Premise",
+    "regions": "Regionen",
+    "hermCoverage": "HERM-Abdeckung",
+    "coverageByFamily": "Abdeckung nach Familie",
+    "loadingScores": "Punkte werden geladen...",
+    "topStrengths": "Stärken",
+    "capabilityGaps": "Lücken",
+    "allScoresByFamily": "Alle Punkte nach Familie"
+  },
+  "architecture": {
+    "title": "Architektur- und Systemlandschaftsbewertung",
+    "subtitle": "Kartieren Sie Ihren IT-Bestand und erhalten Sie einen Bereitschafts-Score."
+  },
+  "tco": {
+    "title": "TCO-Rechner",
+    "subtitle": "Modellieren Sie die Gesamtbetriebskosten über Systeme und Zeithorizonte",
+    "configuration": "Konfiguration",
+    "singleSystem": "Einzelsystem",
+    "compare": "Vergleichen",
+    "calculateTco": "TCO berechnen",
+    "calculating": "Wird berechnet…"
+  },
+  "value": {
+    "title": "Kosten- und Wertanalyse",
+    "subtitle": "Erstellen Sie einen Business Case mit der HM Treasury Green Book-Methodik."
   }
 }

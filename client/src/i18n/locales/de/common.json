@@ -130,5 +130,91 @@
     "version": "UCISA HERM v3.1",
     "capabilities": "165 Fähigkeiten",
     "systems": "21 Systeme"
+  },
+  "notFound": {
+    "title": "Seite nicht gefunden",
+    "description": "Die gesuchte Seite existiert nicht oder wurde verschoben.",
+    "goToLeaderboard": "Zum Ranking",
+    "goBack": "Zurück"
+  },
+  "sector": {
+    "title": "Sektoranalyse",
+    "subtitle": "Anonymisierte Benchmarking-Daten.",
+    "activeInstitutions": "Aktive Einrichtungen",
+    "evaluationsCompleted": "Abgeschlossene Bewertungen",
+    "totalProcurements": "Beschaffungen gesamt",
+    "mostComparedSystem": "Meistvergleichenes System",
+    "mostComparedSystems": "Meistvergleichene Systeme (Top 10)",
+    "mostRequestedCapabilities": "Meistgefragte Fähigkeiten (Top 15)",
+    "procurementByJurisdiction": "Beschaffung nach Jurisdiktion",
+    "platformUsage": "Plattformnutzung — Letzte 12 Monate",
+    "legendEvaluations": "Bewertungen",
+    "legendProcurements": "Beschaffungen",
+    "dataNote": "Anonymisierte Daten. Mindestens 5 Einrichtungen."
+  },
+  "workspaces": {
+    "title": "Team-Bewertungsbereiche",
+    "subtitle": "Zusammenarbeit an strukturierten HERM-Bewertungen",
+    "newProject": "Neues Projekt",
+    "newProjectTitle": "Neues Bewertungsprojekt",
+    "noProjects": "Keine Projekte vorhanden.",
+    "projectName": "Projektname",
+    "description": "Beschreibung",
+    "systemsToEvaluate": "Zu bewertende Systeme",
+    "teamMemberEmails": "E-Mail-Adressen der Teammitglieder",
+    "commaSeparated": "Kommagetrennt",
+    "basketLink": "Korb-Link (optional)",
+    "deadline": "Frist (optional)",
+    "cancel": "Abbrechen",
+    "creating": "Wird erstellt…",
+    "createProject": "Projekt erstellen",
+    "members": "Mitglieder",
+    "systems": "Systeme",
+    "complete": "abgeschlossen"
+  },
+  "howItWorks": {
+    "title": "So funktioniert es",
+    "subtitle": "Bewertungsmethodik, Evidenzstandards und Framework-Erklärung",
+    "tabs": {
+      "scoringModel": "Bewertungsmodell",
+      "evidenceTypes": "Evidenztypen",
+      "reviewProcess": "Überprüfungsprozess",
+      "faq": "FAQ"
+    },
+    "scoringTitle": "Das 0 / 50 / 100 Bewertungssystem",
+    "fullSupport": "Volle Unterstützung",
+    "partialSupport": "Teilweise Unterstützung",
+    "noSupport": "Keine Unterstützung",
+    "scoreCalculation": "Punkteberechnung"
+  },
+  "research": {
+    "title": "Forschungs- und Evidenzzentrum",
+    "subtitle": "Analystenberichte, akademische Forschung, Fallstudien und Benchmark-Daten",
+    "tabs": {
+      "all": "Alle",
+      "analystReports": "Analystenberichte",
+      "academicResearch": "Akademische Forschung",
+      "caseStudies": "Fallstudien",
+      "benchmarking": "Benchmarking",
+      "sectorSurvey": "Branchenumfrage"
+    },
+    "searchPlaceholder": "Suchen...",
+    "loading": "Forschungsbeiträge werden geladen...",
+    "backToList": "← Zurück zur Liste",
+    "viewSource": "Quelle anzeigen",
+    "readMore": "Mehr lesen →",
+    "noResults": "Keine Beiträge gefunden. Passen Sie die Filter an."
+  },
+  "assistant": {
+    "title": "KI-Beschaffungsassistent",
+    "subtitle": "Stellen Sie Fragen zu HERM-Fähigkeiten, Systemvergleichen und Beschaffungsstrategie",
+    "suggestedQuestions": "Vorgeschlagene Fragen",
+    "sessionControls": "Sitzungssteuerung",
+    "clearConversation": "Gespräch löschen",
+    "placeholder": "Fragen zu HERM-Fähigkeiten, Systemvergleichen...",
+    "sendHint": "Enter zum Senden · Shift+Enter für neue Zeile",
+    "assistantName": "HERM-Beschaffungsassistent",
+    "assistantIntro": "Fragen Sie mich zu Systemfähigkeiten, dem HERM-Framework oder Anbietervergleichen.",
+    "errorMessage": "Entschuldigung, ein Fehler ist aufgetreten. Prüfen Sie, ob der Server läuft."
   }
 }

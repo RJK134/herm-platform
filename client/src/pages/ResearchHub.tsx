@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useResearch } from '../hooks/useApi';
 import { Header } from '../components/layout/Header';
 import { Card } from '../components/ui/Card';
@@ -24,6 +25,7 @@ const PUBLISHER_COLORS: Record<string, string> = {
 };
 
 export function ResearchHub() {
+  const { t } = useTranslation('common');
   const { data: items, isLoading } = useResearch();
   const [activeTab, setActiveTab] = useState<string>('All');
   const [search, setSearch] = useState('');
@@ -41,7 +43,7 @@ export function ResearchHub() {
 
   return (
     <div>
-      <Header title="Research & Evidence Hub" subtitle="Analyst reports, academic research, case studies, and benchmarking data" />
+      <Header title={t('research.title', 'Research & Evidence Hub')} subtitle={t('research.subtitle', 'Analyst reports, academic research, case studies, and benchmarking data')} />
 
       {/* Tabs */}
       <div className="flex flex-wrap gap-1 mb-4">
@@ -49,7 +51,7 @@ export function ResearchHub() {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${activeTab === tab ? 'bg-teal text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'}`}
+            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all duration-200 ${activeTab === tab ? 'bg-teal text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-teal/10 hover:text-teal-700 dark:hover:text-teal-300'}`}
           >
             {tab}
             {tab !== 'All' && <span className="ml-1 opacity-60">({(items ?? []).filter(i => i.category === tab).length})</span>}
@@ -62,11 +64,11 @@ export function ResearchHub() {
         <SearchInput value={search} onChange={setSearch} placeholder="Search research..." />
       </div>
 
-      {isLoading && <div className="text-gray-400 text-center py-12">Loading research items...</div>}
+      {isLoading && <div className="text-gray-400 text-center py-12">{t('research.loading', 'Loading research items...')}</div>}
 
       {selectedItem ? (
         <div>
-          <button onClick={() => setSelectedItem(null)} className="text-sm text-teal hover:underline mb-4 block">← Back to research list</button>
+          <button onClick={() => setSelectedItem(null)} className="text-sm text-teal hover:underline mb-4 block">{t('research.backToList', '\u2190 Back to research list')}</button>
           <Card>
             <div className="flex justify-between items-start mb-4">
               <div>

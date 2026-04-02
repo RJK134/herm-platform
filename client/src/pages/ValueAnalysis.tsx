@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   TrendingUp, PoundSterling, Clock, BarChart2, Save, RefreshCw,
@@ -284,6 +285,7 @@ function CashflowChart({ data }: { data: CashflowYear[] }) {
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 export function ValueAnalysis() {
+  const { t } = useTranslation('systems');
   const [step, setStep] = useState<number>(0);
   const [form, setForm] = useState<ValueInput>(DEFAULT);
   const [result, setResult] = useState<ValueResult | null>(null);
@@ -339,7 +341,7 @@ export function ValueAnalysis() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
           <TrendingUp className="w-6 h-6 text-teal-600" />
-          Cost &amp; Value Analysis
+          {t('value.title', 'Cost & Value Analysis')}
         </h1>
         <p className="text-gray-600 dark:text-gray-400 mt-1">
           Build a business case using HM Treasury Green Book methodology. Calculate ROI, NPV, and payback period with UK HE sector benchmarks.

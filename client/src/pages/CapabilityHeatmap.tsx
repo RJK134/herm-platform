@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Header } from '../components/layout/Header';
 import { Card } from '../components/ui/Card';
 import { useHeatmap, useFamilies } from '../hooks/useApi';
@@ -11,6 +12,7 @@ function scoreToHex(value: number): string {
 }
 
 export function CapabilityHeatmap() {
+  const { t } = useTranslation('capabilities');
   const { data, isLoading } = useHeatmap();
   const { data: families } = useFamilies();
   const [familyFilter, setFamilyFilter] = useState('');
@@ -25,9 +27,9 @@ export function CapabilityHeatmap() {
   if (isLoading) {
     return (
       <div>
-        <Header title="Capability Heatmap" subtitle="Full HERM capability coverage matrix" />
+        <Header title={t('heatmap.title', 'Capability Heatmap')} subtitle={t('heatmap.subtitleLoading', 'Full HERM capability coverage matrix')} />
         <Card>
-          <div className="text-center py-20 text-gray-400">Loading heatmap data — this may take a moment...</div>
+          <div className="text-center py-20 text-gray-400">{t('heatmap.loading', 'Loading heatmap data \u2014 this may take a moment...')}</div>
         </Card>
       </div>
     );
@@ -44,8 +46,8 @@ export function CapabilityHeatmap() {
   return (
     <div>
       <Header
-        title="Capability Heatmap"
-        subtitle={`${data.systems.length} systems × ${filteredCapabilities.length} capabilities`}
+        title={t('heatmap.title', 'Capability Heatmap')}
+        subtitle={t('heatmap.subtitle', '{{systems}} systems \u00d7 {{caps}} capabilities', { systems: data.systems.length, caps: filteredCapabilities.length })}
       />
 
       <div className="flex items-center gap-4 mb-4 flex-wrap">
@@ -54,7 +56,7 @@ export function CapabilityHeatmap() {
           onChange={e => setFamilyFilter(e.target.value)}
           className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white"
         >
-          <option value="">All Families ({data.capabilities.length} capabilities)</option>
+          <option value="">{t('heatmap.allFamilies', 'All Families ({{count}} capabilities)', { count: data.capabilities.length })}</option>
           {(families || []).map(f => (
             <option key={f.code} value={f.code}>
               {f.name} ({f._count?.capabilities || 0})
@@ -63,16 +65,27 @@ export function CapabilityHeatmap() {
         </select>
 
         <div className="flex items-center gap-3 text-xs text-gray-500">
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-500 inline-block" /> Full (100)</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-400 inline-block" /> Partial (50)</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-gray-200 inline-block" /> None (0)</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-500 inline-block" /> {t('heatmap.legendFull', 'Full (100)')}</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-400 inline-block" /> {t('heatmap.legendPartial', 'Partial (50)')}</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-gray-200 inline-block" /> {t('heatmap.legendNone', 'None (0)')}</span>
         </div>
 
         {hoveredCell && hoveredSystem && hoveredCap && (
-          <div className="ml-auto text-xs bg-gray-800 text-white px-3 py-1.5 rounded-lg">
-            <strong>{hoveredSystem.name}</strong> · {hoveredCap.code} {hoveredCap.name} ·{' '}
-            <span className={hoveredScore === 100 ? 'text-green-400' : hoveredScore === 50 ? 'text-amber-400' : 'text-red-400'}>
-              {hoveredScore === 100 ? 'Full' : hoveredScore === 50 ? 'Partial' : 'None'}
+          <div className="ml-auto flex items-center gap-2 text-sm bg-gray-900 text-white px-4 py-2 rounded-full shadow-lg">
+            <span className="font-semibold">{hoveredSystem.name}</span>
+            <span className="text-gray-400">|</span>
+            <span className="text-gray-300">{hoveredCap.code}</span>
+            <span className="text-gray-300 truncate max-w-[200px]">{hoveredCap.name}</span>
+            <span
+              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${
+                hoveredScore === 100
+                  ? 'bg-green-500/20 text-green-400'
+                  : hoveredScore === 50
+                  ? 'bg-amber-500/20 text-amber-400'
+                  : 'bg-red-500/20 text-red-400'
+              }`}
+            >
+              {hoveredScore === 100 ? t('heatmap.full', 'Full') : hoveredScore === 50 ? t('heatmap.partial', 'Partial') : t('heatmap.none', 'None')}
             </span>
           </div>
         )}
@@ -84,7 +97,7 @@ export function CapabilityHeatmap() {
             <thead className="sticky top-0 z-10">
               <tr>
                 <th className="sticky left-0 z-20 bg-gray-50 dark:bg-gray-800 border-b border-r border-gray-200 dark:border-gray-700 text-left py-2 px-3 font-medium text-gray-600 dark:text-gray-400 w-44">
-                  System
+                  {t('heatmap.systemColumn', 'System')}
                 </th>
                 {filteredCapabilities.map(cap => (
                   <th
@@ -107,7 +120,7 @@ export function CapabilityHeatmap() {
                 <tr key={system.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-700/20">
                   <td className="sticky left-0 bg-white dark:bg-gray-900 border-b border-r border-gray-200 dark:border-gray-700 py-1.5 px-3 font-medium text-gray-800 dark:text-gray-200 z-10">
                     <div className="truncate w-40">
-                      {system.isOwnSystem && <span className="text-teal mr-1">★</span>}
+                      {system.isOwnSystem && <span className="text-teal mr-1">\u2605</span>}
                       {system.name}
                     </div>
                   </td>
@@ -119,7 +132,7 @@ export function CapabilityHeatmap() {
                         className="border-b border-gray-100 dark:border-gray-800 p-0 cursor-pointer"
                         onMouseEnter={() => setHoveredCell({ systemId: system.id, capCode: cap.code })}
                         onMouseLeave={() => setHoveredCell(null)}
-                        title={`${system.name} — ${cap.code}: ${val === 100 ? 'Full' : val === 50 ? 'Partial' : 'None'}`}
+                        title={`${system.name} \u2014 ${cap.code}: ${val === 100 ? t('heatmap.full', 'Full') : val === 50 ? t('heatmap.partial', 'Partial') : t('heatmap.none', 'None')}`}
                       >
                         <div
                           className="w-5 h-5"
@@ -136,9 +149,8 @@ export function CapabilityHeatmap() {
       </Card>
 
       <div className="mt-2 text-xs text-gray-400 text-right">
-        Hover over a cell to see details · Green = Full · Amber = Partial · Light = None
+        {t('heatmap.hint', 'Hover over a cell to see details \u00b7 Green = Full \u00b7 Amber = Partial \u00b7 Light = None')}
       </div>
     </div>
   );
 }
-

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import type { ApiResponse } from '../types';
@@ -256,6 +257,7 @@ function PipelineView({
   project: ProcurementProject;
   onBack: () => void;
 }) {
+  const { t } = useTranslation("procurement");
   const qc = useQueryClient();
   const stages: ProjectStage[] = project.stages ?? [];
   const sorted = [...stages].sort((a, b) => a.stageOrder - b.stageOrder);
@@ -302,7 +304,7 @@ function PipelineView({
       axios.post<ApiResponse<unknown>>(`/api/procurement/v2/projects/${project.id}/advance`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['procurement-v2-project', project.id] });
-      showToast('Stage advanced successfully');
+      showToast(t("projects.stageAdvanced", "Stage advanced successfully"));
     },
   });
 
@@ -329,7 +331,7 @@ function PipelineView({
             onClick={onBack}
             className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 mb-1"
           >
-            <ChevronLeft className="w-4 h-4" /> Back to Projects
+            <ChevronLeft className="w-4 h-4" /> {t("projects.backToProjects", "Back to Projects")}
           </button>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">{project.name}</h2>
           <div className="flex items-center gap-2 mt-1">
@@ -380,12 +382,12 @@ function PipelineView({
           {/* Tasks */}
           <Card>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-gray-900 dark:text-white">Tasks</h3>
+              <h3 className="font-semibold text-gray-900 dark:text-white">{t("projects.tasks", "Tasks")}</h3>
               <span className="text-xs text-gray-500">{completedTasks}/{totalTasks} complete</span>
             </div>
             <div className="space-y-2">
               {selectedStage.tasks.length === 0 && (
-                <p className="text-xs text-gray-400">No tasks defined for this stage.</p>
+                <p className="text-xs text-gray-400">{t("projects.noTasks", "No tasks defined for this stage.")}</p>
               )}
               {selectedStage.tasks.map((task) => (
                 <label key={task.id} className="flex items-start gap-2 cursor-pointer group">
@@ -417,10 +419,10 @@ function PipelineView({
 
           {/* Approvals & Compliance */}
           <Card>
-            <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Approvals</h3>
+            <h3 className="font-semibold text-gray-900 dark:text-white mb-3">{t("projects.approvals", "Approvals")}</h3>
             <div className="space-y-2 mb-4">
               {selectedStage.approvals.length === 0 && (
-                <p className="text-xs text-gray-400">No approvals required for this stage.</p>
+                <p className="text-xs text-gray-400">{t("projects.noApprovals", "No approvals required for this stage.")}</p>
               )}
               {selectedStage.approvals.map((approval) => (
                 <div key={approval.id} className="flex items-center justify-between gap-2">
@@ -464,7 +466,7 @@ function PipelineView({
 
             <div className="border-t border-gray-200 dark:border-gray-700 pt-3">
               <div className="flex items-center justify-between mb-2">
-                <h4 className="font-medium text-sm text-gray-900 dark:text-white">Compliance Check</h4>
+                <h4 className="font-medium text-sm text-gray-900 dark:text-white">{t("compliance.title", "Compliance Check")}</h4>
                 <Button
                   size="sm"
                   variant="secondary"
@@ -487,7 +489,7 @@ function PipelineView({
                   {complianceResult.passed ? (
                     <div className="flex items-center gap-1">
                       <CheckCircle className="w-3.5 h-3.5" />
-                      <span>All compliance checks passed</span>
+                      <span>{t("compliance.passed", "All compliance checks passed")}</span>
                     </div>
                   ) : (
                     <div>
@@ -534,7 +536,7 @@ function PipelineView({
                 }
                 className="flex items-center gap-2"
               >
-                Advance to {nextStage.stageName}
+                {t("projects.advanceTo", "Advance to")} {nextStage.stageName}
                 <ChevronRight className="w-4 h-4" />
               </Button>
             )}
@@ -546,6 +548,7 @@ function PipelineView({
 }
 
 function TimelineView({ projectId }: { projectId: string }) {
+  const { t } = useTranslation("procurement");
   const [startDateOverride, setStartDateOverride] = useState('');
 
   const { data: timelineStages, isLoading } = useQuery({
@@ -568,7 +571,7 @@ function TimelineView({ projectId }: { projectId: string }) {
     return (
       <Card className="text-center py-8 text-gray-400">
         <CalendarDays className="w-8 h-8 mx-auto mb-2 opacity-50" />
-        <p>No timeline data available for this project.</p>
+        <p>{t("timeline.noData", "No timeline data available for this project.")}</p>
       </Card>
     );
   }
@@ -588,7 +591,7 @@ function TimelineView({ projectId }: { projectId: string }) {
     <div className="space-y-4">
       <Card>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-gray-900 dark:text-white">Project Timeline</h3>
+          <h3 className="font-semibold text-gray-900 dark:text-white">{t("timeline.title", "Project Timeline")}</h3>
           <div className="flex items-center gap-3">
             <label className="text-sm text-gray-600 dark:text-gray-400">Start Date:</label>
             <input
@@ -641,7 +644,7 @@ function TimelineView({ projectId }: { projectId: string }) {
         <div className="flex items-center gap-4 mt-4 pt-3 border-t border-gray-200 dark:border-gray-700 text-xs">
           <div className="flex items-center gap-1.5">
             <div className="w-4 h-3 rounded bg-blue-500" />
-            <span className="text-gray-600 dark:text-gray-400">In Progress / Future</span>
+            <span className="text-gray-600 dark:text-gray-400">{t("timeline.inProgressFuture", "In Progress / Future")}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="w-4 h-3 rounded bg-emerald-500" />
@@ -649,7 +652,7 @@ function TimelineView({ projectId }: { projectId: string }) {
           </div>
           <div className="flex items-center gap-1.5">
             <div className="w-4 h-3 rounded bg-amber-400" />
-            <span className="text-gray-600 dark:text-gray-400">Statutory Minimum</span>
+            <span className="text-gray-600 dark:text-gray-400">{t("timeline.statutoryMinimum", "Statutory Minimum")}</span>
           </div>
         </div>
       </Card>
@@ -658,7 +661,7 @@ function TimelineView({ projectId }: { projectId: string }) {
         <div className="flex items-center gap-2">
           <Flag className="w-5 h-5 text-emerald-600" />
           <div>
-            <p className="text-xs text-gray-500">Earliest Award Date</p>
+            <p className="text-xs text-gray-500">{t("timeline.earliestAwardDate", "Earliest Award Date")}</p>
             <p className="text-lg font-bold text-gray-900 dark:text-white">{earliestAward}</p>
           </div>
         </div>
@@ -668,6 +671,7 @@ function TimelineView({ projectId }: { projectId: string }) {
 }
 
 function EvaluationView({ projectId }: { projectId: string }) {
+  const { t } = useTranslation("procurement");
   const qc = useQueryClient();
   const [weights, setWeights] = useState<WeightingProfile>({
     herm: 40, technical: 25, commercial: 20, implementation: 10, references: 5,
@@ -738,7 +742,7 @@ function EvaluationView({ projectId }: { projectId: string }) {
       {/* Weighting profile */}
       <Card>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-gray-900 dark:text-white">Weighting Profile</h3>
+          <h3 className="font-semibold text-gray-900 dark:text-white">{t("evaluation.weightingProfile", "Weighting Profile")}</h3>
           {weightTotal !== 100 && (
             <span className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
               <AlertCircle className="w-3.5 h-3.5" />
@@ -766,7 +770,7 @@ function EvaluationView({ projectId }: { projectId: string }) {
 
       {/* Add system */}
       <Card>
-        <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Add System to Evaluation</h3>
+        <h3 className="font-semibold text-gray-900 dark:text-white mb-3">{t("evaluation.addSystemToEvaluation", "Add System to Evaluation")}</h3>
         <div className="flex items-center gap-2">
           <select
             value={addSystemId}
@@ -795,7 +799,7 @@ function EvaluationView({ projectId }: { projectId: string }) {
       ) : entries.length === 0 ? (
         <Card className="text-center py-8 text-gray-400">
           <BarChart2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
-          <p>No systems added to evaluation yet.</p>
+          <p>{t("evaluation.noSystems", "No systems added to evaluation yet.")}</p>
         </Card>
       ) : (
         <Card className="overflow-x-auto p-0">
@@ -852,7 +856,7 @@ function EvaluationView({ projectId }: { projectId: string }) {
       {/* Ranked bar chart */}
       {sorted.length > 0 && (
         <Card>
-          <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Overall Score Ranking</h3>
+          <h3 className="font-semibold text-gray-900 dark:text-white mb-4">{t("evaluation.overallScoreRanking", "Overall Score Ranking")}</h3>
           <div className="space-y-3">
             {sorted.map((entry, i) => (
               <div key={entry.id} className="flex items-center gap-3">
@@ -899,6 +903,7 @@ function CreateProjectWizard({
   onClose: () => void;
   onCreated: (id: string) => void;
 }) {
+  const { t } = useTranslation("procurement");
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<WizardState>({
     name: '', description: '', jurisdiction: '', estimatedValue: '',
@@ -1196,6 +1201,7 @@ function CreateProjectWizard({
 type ActiveTab = 'projects' | 'pipeline' | 'timeline' | 'evaluation';
 
 export function ProcurementProjects() {
+  const { t } = useTranslation("procurement");
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<ActiveTab>('projects');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -1231,17 +1237,17 @@ export function ProcurementProjects() {
   };
 
   const TABS: { key: ActiveTab; label: string; icon: React.ReactNode; requiresProject: boolean }[] = [
-    { key: 'projects', label: 'Projects', icon: <Layers className="w-4 h-4" />, requiresProject: false },
-    { key: 'pipeline', label: 'Pipeline', icon: <ChevronRight className="w-4 h-4" />, requiresProject: true },
-    { key: 'timeline', label: 'Timeline', icon: <CalendarDays className="w-4 h-4" />, requiresProject: true },
-    { key: 'evaluation', label: 'Evaluation', icon: <BarChart2 className="w-4 h-4" />, requiresProject: true },
+    { key: 'projects', label: t("projects.tabProjects", "Projects"), icon: <Layers className="w-4 h-4" />, requiresProject: false },
+    { key: 'pipeline', label: t("projects.tabPipeline", "Pipeline"), icon: <ChevronRight className="w-4 h-4" />, requiresProject: true },
+    { key: 'timeline', label: t("projects.tabTimeline", "Timeline"), icon: <CalendarDays className="w-4 h-4" />, requiresProject: true },
+    { key: 'evaluation', label: t("projects.tabEvaluation", "Evaluation"), icon: <BarChart2 className="w-4 h-4" />, requiresProject: true },
   ];
 
   return (
     <div>
       <Header
-        title="Procurement Projects"
-        subtitle="Manage end-to-end procurement projects across jurisdictions with full compliance tracking"
+        title={t("projects.title", "Procurement Projects")}
+        subtitle={t("projects.subtitle", "Manage end-to-end procurement projects across jurisdictions with full compliance tracking")}
       />
 
       {/* Tabs */}
@@ -1254,12 +1260,12 @@ export function ProcurementProjects() {
               setActiveTab(tab.key);
             }}
             disabled={tab.requiresProject && !selectedProjectId}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-all duration-200 -mb-px ${
               activeTab === tab.key
                 ? 'border-teal-600 text-teal-700 dark:text-teal-400'
                 : tab.requiresProject && !selectedProjectId
                 ? 'border-transparent text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                : 'border-transparent text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white hover:border-gray-300'
+                : 'border-transparent text-gray-600 hover:text-teal-600 dark:text-gray-400 dark:hover:text-teal-300 hover:border-teal-300'
             }`}
           >
             {tab.icon}
@@ -1273,7 +1279,7 @@ export function ProcurementProjects() {
         <div className="space-y-4">
           <div className="flex justify-end">
             <Button onClick={() => setWizardOpen(true)}>
-              <Plus className="w-4 h-4 mr-2" /> Create New Project
+              <Plus className="w-4 h-4 mr-2" /> {t("projects.createNewProject", "Create New Project")}
             </Button>
           </div>
 
@@ -1286,10 +1292,10 @@ export function ProcurementProjects() {
           {!isLoading && (projects ?? []).length === 0 && (
             <Card className="text-center py-12">
               <Layers className="w-10 h-10 mx-auto mb-3 text-gray-300" />
-              <p className="font-medium text-gray-600 dark:text-gray-400">No procurement projects yet</p>
-              <p className="text-sm text-gray-400 mt-1 mb-4">Create your first project to get started.</p>
+              <p className="font-medium text-gray-600 dark:text-gray-400">{t("projects.noProjects", "No procurement projects yet")}</p>
+              <p className="text-sm text-gray-400 mt-1 mb-4">{t("projects.createFirst", "Create your first project to get started.")}</p>
               <Button onClick={() => setWizardOpen(true)}>
-                <Plus className="w-4 h-4 mr-2" /> Create Project
+                <Plus className="w-4 h-4 mr-2" /> {t("projects.createProject", "Create Project")}
               </Button>
             </Card>
           )}
@@ -1329,7 +1335,7 @@ export function ProcurementProjects() {
                     className="mt-3 w-full"
                     onClick={() => handleViewPipeline(project.id)}
                   >
-                    View Pipeline <ChevronRight className="w-3 h-3 ml-1" />
+                    {t("projects.viewPipeline", "View Pipeline")} <ChevronRight className="w-3 h-3 ml-1" />
                   </Button>
                 </Card>
               );
@@ -1366,7 +1372,7 @@ export function ProcurementProjects() {
       <Modal
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}
-        title="Create Procurement Project"
+        title={t("projects.createProcurementProject", "Create Procurement Project")}
       >
         <CreateProjectWizard
           onClose={() => setWizardOpen(false)}

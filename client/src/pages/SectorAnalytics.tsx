@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 
 interface Overview {
@@ -52,7 +53,7 @@ function HorizontalBar({ label, value, max, sub }: { label: string; value: numbe
     <div className="flex items-center gap-3">
       <div className="w-40 text-xs text-gray-700 dark:text-gray-300 truncate flex-shrink-0">{label}</div>
       <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
-        <div className="h-full bg-teal-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+        <div className="h-full bg-teal-500 rounded-full" style={{ width: `${pct}%`, transition: 'width 500ms ease-out' }} />
       </div>
       <div className="w-12 text-right text-xs text-gray-500 dark:text-gray-400">{value}</div>
       {sub && <div className="w-24 text-xs text-gray-400 dark:text-gray-500 truncate">{sub}</div>}
@@ -61,6 +62,7 @@ function HorizontalBar({ label, value, max, sub }: { label: string; value: numbe
 }
 
 export function SectorAnalytics() {
+  const { t } = useTranslation('common');
   const overviewQ = useQuery<Overview>({
     queryKey: ['sector-overview'],
     queryFn: () => axios.get<{ success: boolean; data: Overview }>('/api/sector/analytics/overview').then(r => r.data.data),
@@ -113,24 +115,24 @@ export function SectorAnalytics() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Sector Analytics</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('sector.title', 'Sector Analytics')}</h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Anonymised benchmarking data across all platform users. Minimum 5 institutions required for any aggregate.
+          {t('sector.subtitle', 'Anonymised benchmarking data across all platform users. Minimum 5 institutions required for any aggregate.')}
         </p>
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard label="Active Institutions" value={overview?.institutions ?? '—'} />
-        <KpiCard label="Evaluations Completed" value={overview?.evaluations ?? '—'} />
-        <KpiCard label="Total Procurements" value={overview?.procurements ?? '—'} />
-        <KpiCard label="Most Compared System" value={topSystem} />
+        <KpiCard label={t('sector.activeInstitutions', 'Active Institutions')} value={overview?.institutions ?? '—'} />
+        <KpiCard label={t('sector.evaluationsCompleted', 'Evaluations Completed')} value={overview?.evaluations ?? '—'} />
+        <KpiCard label={t('sector.totalProcurements', 'Total Procurements')} value={overview?.procurements ?? '—'} />
+        <KpiCard label={t('sector.mostComparedSystem', 'Most Compared System')} value={topSystem} />
       </div>
 
       {/* Most Compared Systems */}
       {systems.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-4">Most Compared Systems (Top 10)</h2>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-4">{t('sector.mostComparedSystems', 'Most Compared Systems (Top 10)')}</h2>
           <div className="space-y-3">
             {systems.slice(0, 10).map(s => (
               <HorizontalBar key={s.id} label={s.name} value={s._count.scores} max={maxSystems} sub={s.vendor} />
@@ -142,7 +144,7 @@ export function SectorAnalytics() {
       {/* Most Requested Capabilities */}
       {capabilities.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-4">Most Requested Capabilities (Top 15)</h2>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-4">{t('sector.mostRequestedCapabilities', 'Most Requested Capabilities (Top 15)')}</h2>
           <div className="space-y-3">
             {capabilities.slice(0, 15).map(c => (
               <HorizontalBar key={c.code} label={c.name || c.code} value={c.count} max={maxCaps} sub={c.family} />
@@ -154,7 +156,7 @@ export function SectorAnalytics() {
       {/* Procurement by Jurisdiction */}
       {jurisdictions.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-4">Procurement Activity by Jurisdiction</h2>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-4">{t('sector.procurementByJurisdiction', 'Procurement Activity by Jurisdiction')}</h2>
           <div className="space-y-3">
             {jurisdictions.map(j => (
               <HorizontalBar key={j.code} label={j.name} value={j.count} max={maxJurisd} />
@@ -166,7 +168,7 @@ export function SectorAnalytics() {
       {/* Trends */}
       {trends && (
         <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-4">Platform Usage — Last 12 Months</h2>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-4">{t('sector.platformUsage', 'Platform Usage — Last 12 Months')}</h2>
           <div className="flex items-end gap-1 h-40">
             {trendMonths.map(month => {
               const evalCount = trends.evaluations[month] ?? 0;
@@ -188,15 +190,15 @@ export function SectorAnalytics() {
             })}
           </div>
           <div className="flex items-center gap-4 mt-4 text-xs text-gray-500 dark:text-gray-400">
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-teal-500 inline-block" />Evaluations</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-blue-500 inline-block" />Procurements</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-teal-500 inline-block" />{t('sector.legendEvaluations', 'Evaluations')}</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-blue-500 inline-block" />{t('sector.legendProcurements', 'Procurements')}</span>
           </div>
         </div>
       )}
 
       {/* Data note */}
       <p className="text-xs text-gray-400 dark:text-gray-500 text-center pb-4">
-        Data anonymised across all platform users. Minimum 5 institutions required for any aggregate. Updated in real-time.
+        {t('sector.dataNote', 'Data anonymised across all platform users. Minimum 5 institutions required for any aggregate. Updated in real-time.')}
       </p>
     </div>
   );

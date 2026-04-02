@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import {
@@ -120,6 +121,7 @@ interface AuthPanelProps {
 }
 
 function AuthPanel({ onAuth }: AuthPanelProps) {
+  const { t } = useTranslation("vendor");
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -159,7 +161,7 @@ function AuthPanel({ onAuth }: AuthPanelProps) {
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-6">
         <Card className="max-w-md w-full text-center">
           <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold dark:text-white mb-2">Registration Submitted</h2>
+          <h2 className="text-xl font-bold dark:text-white mb-2">{t("portal.registrationSubmitted", "Registration Submitted")}</h2>
           <p className="text-gray-600 dark:text-gray-400">
             Your account has been submitted for review. You&apos;ll receive an email when approved.
           </p>
@@ -178,9 +180,9 @@ function AuthPanel({ onAuth }: AuthPanelProps) {
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 mb-3">
             <Building2 className="w-8 h-8 text-teal-600 dark:text-teal-400" />
-            <span className="text-2xl font-bold dark:text-white">Vendor Portal</span>
+            <span className="text-2xl font-bold dark:text-white">{t("portal.title", "Vendor Portal")}</span>
           </div>
-          <p className="text-gray-500 dark:text-gray-400 text-sm">Manage your HERM platform profile and track performance</p>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">{t("portal.subtitle", "Manage your HERM platform profile and track performance")}</p>
         </div>
 
         {/* Mobile toggle */}
@@ -202,7 +204,7 @@ function AuthPanel({ onAuth }: AuthPanelProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Login */}
           <Card className={`${mode === 'register' ? 'hidden md:block' : ''}`}>
-            <h2 className="text-lg font-bold dark:text-white mb-4">Vendor Portal Login</h2>
+            <h2 className="text-lg font-bold dark:text-white mb-4">{t("portal.loginTitle", "Vendor Portal Login")}</h2>
             {error && mode === 'login' && (
               <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">{error}</div>
             )}
@@ -232,7 +234,7 @@ function AuthPanel({ onAuth }: AuthPanelProps) {
                 onClick={() => { setError(''); loginMutation.mutate(); }}
                 disabled={loginMutation.isPending || !email || !password}
               >
-                {loginMutation.isPending ? 'Signing in…' : 'Sign in'}
+                {loginMutation.isPending ? t("portal.signingIn", "Signing in…") : t("portal.signIn", "Sign in")}
               </Button>
             </div>
             <p className="mt-4 text-xs text-center text-gray-500 dark:text-gray-400 md:hidden">
@@ -243,7 +245,7 @@ function AuthPanel({ onAuth }: AuthPanelProps) {
 
           {/* Register */}
           <Card className={`${mode === 'login' ? 'hidden md:block' : ''}`}>
-            <h2 className="text-lg font-bold dark:text-white mb-4">Register as a Vendor</h2>
+            <h2 className="text-lg font-bold dark:text-white mb-4">{t("portal.registerTitle", "Register as a Vendor")}</h2>
             {error && mode === 'register' && (
               <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">{error}</div>
             )}
@@ -314,7 +316,7 @@ function AuthPanel({ onAuth }: AuthPanelProps) {
                   !companyName || !contactName || !email || password.length < 8
                 }
               >
-                {registerMutation.isPending ? 'Submitting…' : 'Register'}
+                {registerMutation.isPending ? t("portal.submitting", "Submitting…") : t("portal.register", "Register")}
               </Button>
             </div>
             <p className="mt-4 text-xs text-center text-gray-500 dark:text-gray-400 md:hidden">
@@ -337,6 +339,7 @@ interface DashboardProps {
 }
 
 function VendorDashboard({ user, token, onSignOut }: DashboardProps) {
+  const { t } = useTranslation("vendor");
   const [activeTab, setActiveTab] = useState<Tab>('Dashboard');
   const qc = useQueryClient();
 
@@ -396,21 +399,21 @@ function VendorDashboard({ user, token, onSignOut }: DashboardProps) {
           onClick={onSignOut}
           className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
         >
-          <LogOut className="w-4 h-4" /> Sign out
+          <LogOut className="w-4 h-4" /> {t("portal.signOut", "Sign out")}
         </button>
       </header>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Tabs */}
-        <div className="flex flex-wrap gap-2 mb-6">
+        <div className="flex flex-wrap gap-1 mb-6 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit">
           {TABS.map(t => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
                 activeTab === t
-                  ? 'bg-teal-600 text-white'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  ? 'bg-teal text-white shadow-sm'
+                  : 'text-gray-500 dark:text-gray-400 hover:bg-teal/10 hover:text-teal-700 dark:hover:text-teal-300'
               }`}
             >
               {t}
@@ -448,10 +451,10 @@ function VendorDashboard({ user, token, onSignOut }: DashboardProps) {
             {/* KPI cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {[
-                { label: 'HERM Score', value: scores ? `${scores.percentage.toFixed(1)}%` : '—', icon: Star, colour: 'text-amber-500' },
-                { label: 'Profile Views', value: analytics?.currentMonth.profileViews ?? '—', icon: Eye, colour: 'text-blue-500' },
-                { label: 'Comparison Inclusions', value: analytics?.currentMonth.comparisonInclusions ?? '—', icon: BarChart2, colour: 'text-teal-500' },
-                { label: 'Basket Inclusions', value: analytics?.currentMonth.basketInclusions ?? '—', icon: ShoppingCart, colour: 'text-purple-500' },
+                { label: t("dashboard.hermScore", "HERM Score"), value: scores ? `${scores.percentage.toFixed(1)}%` : '—', icon: Star, colour: 'text-amber-500' },
+                { label: t("dashboard.profileViews", "Profile Views"), value: analytics?.currentMonth.profileViews ?? '—', icon: Eye, colour: 'text-blue-500' },
+                { label: t("dashboard.comparisonInclusions", "Comparison Inclusions"), value: analytics?.currentMonth.comparisonInclusions ?? '—', icon: BarChart2, colour: 'text-teal-500' },
+                { label: t("dashboard.basketInclusions", "Basket Inclusions"), value: analytics?.currentMonth.basketInclusions ?? '—', icon: ShoppingCart, colour: 'text-purple-500' },
               ].map(({ label, value, icon: Icon, colour }) => (
                 <Card key={label} className="p-4">
                   <div className="flex items-start justify-between">
@@ -470,7 +473,7 @@ function VendorDashboard({ user, token, onSignOut }: DashboardProps) {
               <Card>
                 <div className="flex items-center gap-2 mb-4">
                   <TrendingUp className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                  <h3 className="font-semibold dark:text-white text-sm">Profile Views — 6 Months</h3>
+                  <h3 className="font-semibold dark:text-white text-sm">{t("dashboard.profileViewsTrend", "Profile Views — 6 Months")}</h3>
                 </div>
                 <div className="flex items-end gap-2 h-32">
                   {analytics.trends.profile_views.map((val, i) => {
@@ -496,7 +499,7 @@ function VendorDashboard({ user, token, onSignOut }: DashboardProps) {
             {/* Recent submissions */}
             {submissions.length > 0 && (
               <Card>
-                <h3 className="font-semibold dark:text-white text-sm mb-3">Recent Submissions</h3>
+                <h3 className="font-semibold dark:text-white text-sm mb-3">{t("dashboard.recentSubmissions", "Recent Submissions")}</h3>
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
@@ -548,6 +551,7 @@ function VendorDashboard({ user, token, onSignOut }: DashboardProps) {
 // ── Profile Tab ───────────────────────────────────────────────────────────────
 
 function ProfileTab({ profile, token, onSaved }: { profile: VendorProfile; token: string; onSaved: () => void }) {
+  const { t } = useTranslation('vendor');
   const [form, setForm] = useState({
     companyName: profile.companyName,
     contactName: profile.contactName,
@@ -568,7 +572,7 @@ function ProfileTab({ profile, token, onSaved }: { profile: VendorProfile; token
   return (
     <div className="max-w-2xl space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold dark:text-white">My Profile</h2>
+        <h2 className="text-lg font-bold dark:text-white">{t("profile.myProfile", "My Profile")}</h2>
         <div className="flex items-center gap-2">
           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOURS[profile.status] ?? 'bg-gray-100 text-gray-600'}`}>
             {profile.status}
@@ -587,7 +591,7 @@ function ProfileTab({ profile, token, onSaved }: { profile: VendorProfile; token
 
       {profile.system && (
         <Card className="p-4">
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Linked System</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t("profile.linkedSystem", "Linked System")}</p>
           <p className="font-semibold dark:text-white">{profile.system.name}</p>
           <p className="text-sm text-gray-500 dark:text-gray-400">{profile.system.vendor} · {profile.system.category}</p>
         </Card>
@@ -628,9 +632,9 @@ function ProfileTab({ profile, token, onSaved }: { profile: VendorProfile; token
               onClick={() => saveMutation.mutate()}
               disabled={saveMutation.isPending}
             >
-              {saveMutation.isPending ? 'Saving…' : 'Save Profile'}
+              {saveMutation.isPending ? t("profile.saving", "Saving…") : t("profile.saveProfile", "Save Profile")}
             </Button>
-            {saved && <span className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1"><CheckCircle className="w-4 h-4" /> Saved</span>}
+            {saved && <span className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1"><CheckCircle className="w-4 h-4" /> {t("profile.saved", "Saved")}</span>}
           </div>
         </div>
       </Card>
@@ -648,6 +652,7 @@ interface ChallengeForm {
 }
 
 function ScoresTab({ scores, token, onSubmitted }: { scores: ScoreResponse | undefined; token: string; onSubmitted: () => void }) {
+  const { t } = useTranslation('vendor');
   const [openFamily, setOpenFamily] = useState<string | null>(null);
   const [challengeForm, setChallengeForm] = useState<ChallengeForm | null>(null);
 
@@ -681,7 +686,7 @@ function ScoresTab({ scores, token, onSubmitted }: { scores: ScoreResponse | und
         <div className="flex items-center gap-6">
           <div className="text-center">
             <p className="text-4xl font-bold text-teal-600 dark:text-teal-400">{scores.percentage.toFixed(1)}%</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Overall HERM Score</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t("scores.overallHermScore", "Overall HERM Score")}</p>
           </div>
           <div className="flex-1">
             <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -743,7 +748,7 @@ function ScoresTab({ scores, token, onSubmitted }: { scores: ScoreResponse | und
       <Modal
         open={challengeForm !== null}
         onClose={() => setChallengeForm(null)}
-        title="Challenge Score"
+        title={t("scores.challengeScore", "Challenge Score")}
       >
         {challengeForm && (
           <div className="space-y-4">
@@ -780,7 +785,7 @@ function ScoresTab({ scores, token, onSubmitted }: { scores: ScoreResponse | und
                 onClick={() => challengeMutation.mutate(challengeForm)}
                 disabled={challengeMutation.isPending || !challengeForm.evidence.trim()}
               >
-                {challengeMutation.isPending ? 'Submitting…' : 'Submit Challenge'}
+                {challengeMutation.isPending ? t("scores.submitting", "Submitting…") : t("scores.submitChallenge", "Submit Challenge")}
               </Button>
             </div>
           </div>
@@ -799,6 +804,7 @@ interface CheckoutResponse {
 }
 
 function SubscriptionTab({ tier, token, submissions }: { tier: 'BASIC' | 'ENHANCED' | 'PREMIUM'; token: string; submissions: Submission[] }) {
+  const { t } = useTranslation('vendor');
   const [upgradeMsg, setUpgradeMsg] = useState('');
   const [upgradeMsgOpen, setUpgradeMsgOpen] = useState(false);
 
@@ -832,12 +838,12 @@ function SubscriptionTab({ tier, token, submissions }: { tier: 'BASIC' | 'ENHANC
 
       {/* Feature comparison */}
       <Card>
-        <h3 className="font-semibold dark:text-white text-sm mb-4">Plan Comparison</h3>
+        <h3 className="font-semibold dark:text-white text-sm mb-4">{t("subscription.planComparison", "Plan Comparison")}</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left border-b border-gray-100 dark:border-gray-700">
-                <th className="pb-3 font-medium text-gray-600 dark:text-gray-400 text-xs w-1/2">Feature</th>
+                <th className="pb-3 font-medium text-gray-600 dark:text-gray-400 text-xs w-1/2">{t("subscription.feature", "Feature")}</th>
                 <th className="pb-3 font-medium text-xs text-center">Basic<br /><span className="font-normal text-gray-400">Free</span></th>
                 <th className="pb-3 font-medium text-xs text-center">Enhanced<br /><span className="font-normal text-gray-400">£3,500/yr</span></th>
                 <th className="pb-3 font-medium text-xs text-center">Premium<br /><span className="font-normal text-gray-400">£12,000/yr</span></th>
@@ -865,14 +871,14 @@ function SubscriptionTab({ tier, token, submissions }: { tier: 'BASIC' | 'ENHANC
                 onClick={() => checkoutMutation.mutate('vendorEnhanced')}
                 disabled={checkoutMutation.isPending}
               >
-                Upgrade to Enhanced — £3,500/yr
+                {t("subscription.upgradeEnhanced", "Upgrade to Enhanced — £3,500/yr")}
               </Button>
               <Button
                 className="bg-amber-600 hover:bg-amber-700 text-white"
                 onClick={() => checkoutMutation.mutate('vendorPremium')}
                 disabled={checkoutMutation.isPending}
               >
-                Upgrade to Premium — £12,000/yr
+                {t("subscription.upgradePremium", "Upgrade to Premium — £12,000/yr")}
               </Button>
             </>
           )}
@@ -882,12 +888,12 @@ function SubscriptionTab({ tier, token, submissions }: { tier: 'BASIC' | 'ENHANC
               onClick={() => checkoutMutation.mutate('vendorPremium')}
               disabled={checkoutMutation.isPending}
             >
-              Upgrade to Premium — £12,000/yr
+              {t("subscription.upgradePremium", "Upgrade to Premium — £12,000/yr")}
             </Button>
           )}
           {tier === 'PREMIUM' && (
             <span className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-              <CheckCircle className="w-4 h-4" /> You are on the Premium plan
+              <CheckCircle className="w-4 h-4" /> {t("subscription.onPremium", "You are on the Premium plan")}
             </span>
           )}
         </div>
@@ -896,7 +902,7 @@ function SubscriptionTab({ tier, token, submissions }: { tier: 'BASIC' | 'ENHANC
       {/* Submissions history */}
       {submissions.length > 0 && (
         <Card>
-          <h3 className="font-semibold dark:text-white text-sm mb-3">Submission History</h3>
+          <h3 className="font-semibold dark:text-white text-sm mb-3">{t("subscription.submissionHistory", "Submission History")}</h3>
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
@@ -926,7 +932,7 @@ function SubscriptionTab({ tier, token, submissions }: { tier: 'BASIC' | 'ENHANC
         </Card>
       )}
 
-      <Modal open={upgradeMsgOpen} onClose={() => setUpgradeMsgOpen(false)} title="Upgrade Unavailable">
+      <Modal open={upgradeMsgOpen} onClose={() => setUpgradeMsgOpen(false)} title={t("subscription.upgradeUnavailable", "Upgrade Unavailable")}>
         <p className="text-sm text-gray-600 dark:text-gray-400">{upgradeMsg}</p>
         <div className="mt-4 flex justify-end">
           <Button variant="secondary" onClick={() => setUpgradeMsgOpen(false)}>Close</Button>
@@ -939,6 +945,7 @@ function SubscriptionTab({ tier, token, submissions }: { tier: 'BASIC' | 'ENHANC
 // ── Root export ───────────────────────────────────────────────────────────────
 
 export function VendorPortal() {
+  const { t } = useTranslation('vendor');
   const [vendorToken, setVendorToken] = useState<string | null>(
     () => localStorage.getItem('vendor_auth_token')
   );
@@ -972,7 +979,7 @@ export function VendorPortal() {
   if (vendorToken && !resolvedUser && meQuery.isPending) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <p className="text-gray-500 dark:text-gray-400 text-sm">Loading…</p>
+        <p className="text-gray-500 dark:text-gray-400 text-sm">{t("portal.loading", "Loading…")}</p>
       </div>
     );
   }

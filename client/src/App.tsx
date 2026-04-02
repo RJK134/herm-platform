@@ -1,7 +1,9 @@
 import './i18n/config';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Menu } from 'lucide-react';
 import { AuthProvider } from './contexts/AuthContext';
+import { SidebarProvider, useSidebar } from './contexts/SidebarContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
@@ -39,14 +41,31 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 5 * 60 * 1000, retry: 1 } },
 });
 
+/** Mobile hamburger button — visible only below md breakpoint */
+function MobileMenuButton() {
+  const { openMobile } = useSidebar();
+  return (
+    <button
+      onClick={openMobile}
+      className="fixed top-4 left-4 z-30 md:hidden p-2 bg-sidebar text-white rounded-lg shadow-lg hover:bg-sidebar/90 transition-colors"
+      aria-label="Open navigation menu"
+    >
+      <Menu className="w-5 h-5" />
+    </button>
+  );
+}
+
 /** Full-screen layout: sidebar + content */
 function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 font-sans">
-      <a href="#main-content" className="skip-link">Skip to main content</a>
-      <Sidebar />
-      <main id="main-content" className="flex-1 overflow-auto p-8">{children}</main>
-    </div>
+    <SidebarProvider>
+      <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 font-sans">
+        <a href="#main-content" className="skip-link">Skip to main content</a>
+        <Sidebar />
+        <MobileMenuButton />
+        <main id="main-content" className="flex-1 overflow-auto p-4 md:p-8">{children}</main>
+      </div>
+    </SidebarProvider>
   );
 }
 

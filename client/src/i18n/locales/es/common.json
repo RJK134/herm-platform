@@ -130,5 +130,91 @@
     "version": "UCISA HERM v3.1",
     "capabilities": "165 Capacidades",
     "systems": "21 Sistemas"
+  },
+  "notFound": {
+    "title": "Página no encontrada",
+    "description": "La página no existe o ha sido movida.",
+    "goToLeaderboard": "Ir al ranking",
+    "goBack": "Volver"
+  },
+  "sector": {
+    "title": "Análisis sectorial",
+    "subtitle": "Datos de benchmarking anonimizados.",
+    "activeInstitutions": "Instituciones activas",
+    "evaluationsCompleted": "Evaluaciones completadas",
+    "totalProcurements": "Total de contrataciones",
+    "mostComparedSystem": "Sistema más comparado",
+    "mostComparedSystems": "Sistemas más comparados (Top 10)",
+    "mostRequestedCapabilities": "Capacidades más solicitadas (Top 15)",
+    "procurementByJurisdiction": "Actividad por jurisdicción",
+    "platformUsage": "Uso de la plataforma — Últimos 12 meses",
+    "legendEvaluations": "Evaluaciones",
+    "legendProcurements": "Contrataciones",
+    "dataNote": "Datos anonimizados. Mínimo 5 instituciones."
+  },
+  "workspaces": {
+    "title": "Espacios de evaluación",
+    "subtitle": "Colabore en evaluaciones HERM estructuradas",
+    "newProject": "Nuevo proyecto",
+    "newProjectTitle": "Nuevo proyecto de evaluación",
+    "noProjects": "Sin proyectos. Cree uno.",
+    "projectName": "Nombre del proyecto",
+    "description": "Descripción",
+    "systemsToEvaluate": "Sistemas a evaluar",
+    "teamMemberEmails": "Correos de miembros",
+    "commaSeparated": "Separados por comas",
+    "basketLink": "Enlace a cesta (opcional)",
+    "deadline": "Fecha límite (opcional)",
+    "cancel": "Cancelar",
+    "creating": "Creando…",
+    "createProject": "Crear proyecto",
+    "members": "miembros",
+    "systems": "sistemas",
+    "complete": "completo"
+  },
+  "howItWorks": {
+    "title": "Cómo funciona",
+    "subtitle": "Metodología de puntuación, estándares de evidencia y explicación del marco",
+    "tabs": {
+      "scoringModel": "Modelo de puntuación",
+      "evidenceTypes": "Tipos de evidencia",
+      "reviewProcess": "Proceso de revisión",
+      "faq": "Preguntas frecuentes"
+    },
+    "scoringTitle": "El sistema de puntuación 0 / 50 / 100",
+    "fullSupport": "Soporte completo",
+    "partialSupport": "Soporte parcial",
+    "noSupport": "Sin soporte",
+    "scoreCalculation": "Cálculo de la puntuación"
+  },
+  "research": {
+    "title": "Centro de investigación y evidencia",
+    "subtitle": "Informes de analistas, investigación académica, estudios de caso y datos de referencia",
+    "tabs": {
+      "all": "Todos",
+      "analystReports": "Informes de analistas",
+      "academicResearch": "Investigación académica",
+      "caseStudies": "Estudios de caso",
+      "benchmarking": "Benchmarking",
+      "sectorSurvey": "Encuesta sectorial"
+    },
+    "searchPlaceholder": "Buscar...",
+    "loading": "Cargando elementos de investigación...",
+    "backToList": "← Volver a la lista",
+    "viewSource": "Ver fuente",
+    "readMore": "Leer más →",
+    "noResults": "No se encontraron elementos. Ajuste los filtros."
+  },
+  "assistant": {
+    "title": "Asistente IA de adquisición",
+    "subtitle": "Haga preguntas sobre capacidades HERM, comparaciones de sistemas y estrategia de adquisición",
+    "suggestedQuestions": "Preguntas sugeridas",
+    "sessionControls": "Controles de sesión",
+    "clearConversation": "Limpiar conversación",
+    "placeholder": "Pregunte sobre capacidades HERM, comparaciones de sistemas...",
+    "sendHint": "Pulse Enter para enviar · Shift+Enter para nueva línea",
+    "assistantName": "Asistente de adquisición HERM",
+    "assistantIntro": "Pregúnteme sobre capacidades, el marco HERM o comparaciones de proveedores.",
+    "errorMessage": "Lo sentimos, se produjo un error. Compruebe que el servidor esté en funcionamiento."
   }
 }

@@ -1,16 +1,21 @@
 {
   "title": "HERM Capability Leaderboard",
-  "subtitle": "Ranked by overall HERM v3.1 capability coverage",
+  "subtitle": "Ranked coverage of all 165 UCISA HERM v3.1 capabilities across 21 systems",
   "kpis": {
     "totalSystems": "Total Systems",
     "hermCapabilities": "HERM Capabilities",
-    "averageCoverage": "Average Coverage",
-    "topSystem": "Top System"
+    "averageCoverage": "Avg Coverage",
+    "topSystem": "Top System",
+    "sjmsScore": "SJMS Score"
   },
   "table": {
     "rank": "Rank",
     "system": "System",
     "vendor": "Vendor",
+    "category": "Category",
+    "cloud": "Cloud",
+    "hermScore": "HERM Score",
+    "points": "Points",
     "overallScore": "Overall Score",
     "coverage": "Coverage %"
   },
@@ -18,8 +23,14 @@
     "allCategories": "All Categories",
     "searchSystems": "Search systems...",
     "sortByScore": "Score (high to low)",
-    "sortByName": "Name (A–Z)"
+    "sortByName": "Name (A\u2013Z)"
   },
+  "yourSystem": "YOUR SYSTEM",
+  "cloudNative": "Native",
+  "cloudOnPrem": "On-prem",
+  "systemsCount": "{{count}} systems",
+  "loading": "Loading leaderboard data...",
+  "error": "Failed to load leaderboard. Is the server running?",
   "empty": "No systems available yet.",
   "yourBenchmark": "Your benchmark",
   "industryAverage": "Industry average"

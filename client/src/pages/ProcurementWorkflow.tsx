@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Header } from '../components/layout/Header';
 import { Card } from '../components/ui/Card';
@@ -117,6 +118,7 @@ interface ProjectDetail {
 }
 
 export function ProcurementWorkflow() {
+  const { t } = useTranslation("procurement");
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
@@ -173,24 +175,21 @@ export function ProcurementWorkflow() {
   return (
     <div>
       <Header
-        title="Procurement Workflow"
-        subtitle="Manage the 8-stage HE procurement process from requirements to contract award"
+        title={t("workflow.title", "Procurement Workflow")}
+        subtitle={t("workflow.subtitle", "Manage the 8-stage HE procurement process from requirements to contract award")}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Project list sidebar */}
         <div>
           <div className="flex justify-between items-center mb-3">
-            <h3 className="font-semibold text-sm text-gray-900 dark:text-white">
-              Projects
-            </h3>
+            <h3 className="font-semibold text-sm text-gray-900 dark:text-white">{t("workflow.projects", "Projects")}</h3>
             <Button
               size="sm"
               variant="ghost"
               onClick={() => setShowCreate(true)}
             >
-              <Plus className="w-3 h-3 mr-1" />
-              New
+              <Plus className="w-3 h-3 mr-1" />{t("workflow.new", "New")}
             </Button>
           </div>
           <div className="space-y-2">
@@ -216,9 +215,7 @@ export function ProcurementWorkflow() {
               )
             )}
             {((projects as unknown[]) ?? []).length === 0 && (
-              <p className="text-xs text-gray-400 text-center py-4">
-                No projects yet
-              </p>
+              <p className="text-xs text-gray-400 text-center py-4">{t("workflow.noProjectsYet", "No projects yet")}</p>
             )}
           </div>
         </div>
@@ -229,12 +226,9 @@ export function ProcurementWorkflow() {
             <Card className="flex items-center justify-center min-h-64 text-gray-400">
               <div className="text-center">
                 <div className="text-4xl mb-3">&#x1F4CB;</div>
-                <p className="font-medium">
-                  Select or create a procurement project
-                </p>
+                <p className="font-medium">{t("workflow.selectOrCreate", "Select or create a procurement project")}</p>
                 <Button className="mt-4" onClick={() => setShowCreate(true)}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  New Project
+                  <Plus className="w-4 h-4 mr-2" />{t("workflow.newProject", "New Project")}
                 </Button>
               </div>
             </Card>
@@ -262,8 +256,8 @@ export function ProcurementWorkflow() {
                   }
                 >
                   {currentStage < 8
-                    ? `Advance to Stage ${currentStage + 1}`
-                    : 'Complete'}
+                    ? t('workflow.advanceToStage', 'Advance to Stage {{stage}}', { stage: currentStage + 1 })
+                    : t('workflow.complete', 'Complete')}
                   {currentStage < 8 && (
                     <ChevronRight className="w-4 h-4 ml-1" />
                   )}
@@ -341,9 +335,7 @@ export function ProcurementWorkflow() {
                                   setEditingStage(stageDef.number);
                                   setStageNotes(stageData?.notes ?? '');
                                 }}
-                              >
-                                Add Notes
-                              </Button>
+                              >{t("workflow.addNotes", "Add Notes")}                              </Button>
                             )}
                           </div>
 
@@ -391,7 +383,7 @@ export function ProcurementWorkflow() {
 
           {selectedProjectId && !workflow && (
             <Card className="flex items-center justify-center min-h-32 text-gray-400">
-              <p className="text-sm">Loading project…</p>
+              <p className="text-sm">{t("workflow.loadingProject", "Loading project…")}</p>
             </Card>
           )}
         </div>
@@ -401,13 +393,11 @@ export function ProcurementWorkflow() {
       <Modal
         open={showCreate}
         onClose={() => setShowCreate(false)}
-        title="New Procurement Project"
+        title={t("workflow.newProcurementProject", "New Procurement Project")}
       >
         <div className="space-y-4">
           <div>
-            <label className="text-sm text-gray-700 dark:text-gray-300 block mb-1">
-              Project Name
-            </label>
+            <label className="text-sm text-gray-700 dark:text-gray-300 block mb-1">{t("workflow.projectName", "Project Name")}</label>
             <input
               value={newProjectName}
               onChange={(e) => setNewProjectName(e.target.value)}
@@ -421,15 +411,11 @@ export function ProcurementWorkflow() {
             />
           </div>
           <div className="flex gap-2 justify-end">
-            <Button variant="secondary" onClick={() => setShowCreate(false)}>
-              Cancel
-            </Button>
+            <Button variant="secondary" onClick={() => setShowCreate(false)}>{t("workflow.cancel", "Cancel")}</Button>
             <Button
               onClick={() => createMutation.mutate(newProjectName)}
               disabled={!newProjectName.trim() || createMutation.isPending}
-            >
-              Create Project
-            </Button>
+            >{t("workflow.createProject", "Create Project")}</Button>
           </div>
         </div>
       </Modal>
@@ -438,14 +424,14 @@ export function ProcurementWorkflow() {
       <Modal
         open={editingStage !== null}
         onClose={() => setEditingStage(null)}
-        title={`Stage ${editingStage} Notes`}
+        title={t("workflow.stageNotes", "Stage {{stage}} Notes", { stage: editingStage })}
       >
         <div className="space-y-4">
           <textarea
             value={stageNotes}
             onChange={(e) => setStageNotes(e.target.value)}
             rows={4}
-            placeholder="Record decisions, attendees, actions…"
+            placeholder={t("workflow.notesPlaceholder", "Record decisions, attendees, actions…")}
             className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white resize-none"
           />
           <div className="flex gap-2 justify-end">
@@ -460,9 +446,7 @@ export function ProcurementWorkflow() {
                 })
               }
               disabled={updateStageMutation.isPending}
-            >
-              Save Notes
-            </Button>
+            >{t("workflow.saveNotes", "Save Notes")}</Button>
           </div>
         </div>
       </Modal>

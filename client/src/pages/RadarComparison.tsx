@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Header } from '../components/layout/Header';
 import { Card } from '../components/ui/Card';
 import { RadarChart } from '../components/charts/RadarChart';
@@ -9,6 +10,7 @@ import { formatPercent } from '../lib/utils';
 const DEFAULT_IDS_SLUGS = ['sits', 'banner', 'workday_student', 'sjms'];
 
 export function RadarComparison() {
+  const { t } = useTranslation('capabilities');
   const { data: allSystems, isLoading: loadingSystems } = useSystems();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
@@ -56,17 +58,17 @@ export function RadarComparison() {
   return (
     <div>
       <Header
-        title="Radar Comparison"
-        subtitle="Compare up to 5 systems across all 11 HERM capability families"
+        title={t('radar.title', 'Radar Comparison')}
+        subtitle={t('radar.subtitle', 'Compare up to 5 systems across all 11 HERM capability families')}
       />
 
       {/* System selector */}
       <Card className="mb-6">
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-          Select Systems (2–5)
+          {t('radar.selectSystems', 'Select Systems (2\u20135)')}
         </h3>
         {loadingSystems ? (
-          <div className="text-gray-400 text-sm">Loading systems...</div>
+          <div className="text-gray-400 text-sm">{t('radar.loadingSystems', 'Loading systems...')}</div>
         ) : (
           <div className="flex flex-wrap gap-2">
             {(allSystems || []).map(sys => {
@@ -94,7 +96,7 @@ export function RadarComparison() {
         <Card className="xl:col-span-2 flex items-center justify-center">
           {loadingCompare || resolvedIds.length < 2 ? (
             <div className="text-gray-400 text-sm py-20">
-              {resolvedIds.length < 2 ? 'Select at least 2 systems' : 'Loading...'}
+              {resolvedIds.length < 2 ? t('radar.selectAtLeast2', 'Select at least 2 systems') : t('radar.loading', 'Loading...')}
             </div>
           ) : (
             <div className="w-full max-w-xl mx-auto">
@@ -105,9 +107,9 @@ export function RadarComparison() {
 
         {/* Score breakdown */}
         <Card>
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Score Breakdown</h3>
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">{t('radar.scoreBreakdown', 'Score Breakdown')}</h3>
           {loadingCompare ? (
-            <div className="text-gray-400 text-sm">Loading...</div>
+            <div className="text-gray-400 text-sm">{t('radar.loading', 'Loading...')}</div>
           ) : (
             <div className="space-y-4">
               {(comparison || []).map(entry => (

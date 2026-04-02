@@ -1,4 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useSystem, useSystemScores, useVendorProfile, useFamilies } from '../hooks/useApi';
 import { Header } from '../components/layout/Header';
 import { Card } from '../components/ui/Card';
@@ -8,6 +9,7 @@ import { CATEGORY_COLORS } from '../lib/constants';
 import { ArrowLeft, Globe, CheckCircle, XCircle, Building2, DollarSign, Cpu } from 'lucide-react';
 
 export function VendorProfile() {
+  const { t } = useTranslation('vendor');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: system, isLoading: sysLoading } = useSystem(id!);
@@ -15,8 +17,8 @@ export function VendorProfile() {
   const { data: scores } = useSystemScores(id!);
   const { data: families } = useFamilies();
 
-  if (sysLoading || profLoading) return <div className="text-gray-400 text-center py-12">Loading profile...</div>;
-  if (!system) return <div className="text-red-500 text-center py-12">System not found</div>;
+  if (sysLoading || profLoading) return <div className="text-gray-400 text-center py-12">{t('profile.loading', 'Loading profile...')}</div>;
+  if (!system) return <div className="text-red-500 text-center py-12">{t('profile.notFound', 'System not found')}</div>;
 
   const color = CATEGORY_COLORS[system.category] || '#6b7280';
 
@@ -40,7 +42,7 @@ export function VendorProfile() {
   return (
     <div>
       <Button variant="ghost" size="sm" onClick={() => navigate('/vendor')} className="mb-4">
-        <ArrowLeft className="w-4 h-4 mr-1" /> Back to Vendor Showcase
+        <ArrowLeft className="w-4 h-4 mr-1" /> {t('profile.backToShowcase', 'Back to Vendor Showcase')}
       </Button>
 
       {/* Header */}
@@ -72,7 +74,7 @@ export function VendorProfile() {
               {/* Company Info */}
               <Card>
                 <h2 className="font-heading font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                  <Building2 className="w-4 h-4" /> Company Information
+                  <Building2 className="w-4 h-4" /> {t('profile.companyInfo', 'Company Information')}
                 </h2>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   {profile.foundedYear && <InfoRow label="Founded" value={profile.foundedYear.toString()} />}
@@ -85,7 +87,7 @@ export function VendorProfile() {
               {/* Technical */}
               <Card>
                 <h2 className="font-heading font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                  <Cpu className="w-4 h-4" /> Technical Profile
+                  <Cpu className="w-4 h-4" /> {t('profile.technicalProfile', 'Technical Profile')}
                 </h2>
                 <div className="space-y-3 text-sm">
                   {profile.techStack && <InfoRow label="Technology Stack" value={profile.techStack} />}
@@ -111,7 +113,7 @@ export function VendorProfile() {
               {/* Commercial */}
               <Card>
                 <h2 className="font-heading font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                  <DollarSign className="w-4 h-4" /> Commercial Information
+                  <DollarSign className="w-4 h-4" /> {t('profile.commercialInfo', 'Commercial Information')}
                 </h2>
                 <div className="grid grid-cols-1 gap-3 text-sm">
                   {profile.pricingModel && <InfoRow label="Pricing Model" value={profile.pricingModel} />}
@@ -124,7 +126,7 @@ export function VendorProfile() {
               <div className="grid grid-cols-2 gap-6">
                 <Card>
                   <h3 className="font-semibold text-green-700 dark:text-green-400 mb-3 flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4" /> Key Strengths
+                    <CheckCircle className="w-4 h-4" /> {t('profile.keyStrengths', 'Key Strengths')}
                   </h3>
                   <ul className="space-y-2">
                     {profile.keyStrengths.map((s, i) => (
@@ -136,7 +138,7 @@ export function VendorProfile() {
                 </Card>
                 <Card>
                   <h3 className="font-semibold text-red-600 dark:text-red-400 mb-3 flex items-center gap-2">
-                    <XCircle className="w-4 h-4" /> Known Limitations
+                    <XCircle className="w-4 h-4" /> {t('profile.knownLimitations', 'Known Limitations')}
                   </h3>
                   <ul className="space-y-2">
                     {profile.knownLimitations.map((l, i) => (
@@ -169,7 +171,7 @@ export function VendorProfile() {
         {/* Right: HERM scores */}
         <div className="space-y-6">
           <Card>
-            <h2 className="font-heading font-semibold text-gray-900 dark:text-white mb-4">HERM Coverage</h2>
+            <h2 className="font-heading font-semibold text-gray-900 dark:text-white mb-4">{t('profile.hermCoverage', 'HERM Coverage')}</h2>
             <div className="space-y-3">
               {strengths.length > 0 && (
                 <>
@@ -203,16 +205,16 @@ export function VendorProfile() {
           </Card>
 
           <Card>
-            <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Quick Actions</h3>
+            <h3 className="font-semibold text-gray-900 dark:text-white mb-3">{t('profile.quickActions', 'Quick Actions')}</h3>
             <div className="space-y-2">
               <Button variant="secondary" size="sm" className="w-full" onClick={() => navigate(`/system?id=${id}`)}>
-                View Full Score Analysis
+                {t('profile.viewFullScore', 'View Full Score Analysis')}
               </Button>
               <Button variant="secondary" size="sm" className="w-full" onClick={() => navigate('/radar')}>
-                Add to Radar Comparison
+                {t('profile.addToRadar', 'Add to Radar Comparison')}
               </Button>
               <Button variant="secondary" size="sm" className="w-full" onClick={() => navigate('/basket')}>
-                Evaluate in Capability Basket
+                {t('profile.evaluateInBasket', 'Evaluate in Capability Basket')}
               </Button>
             </div>
           </Card>

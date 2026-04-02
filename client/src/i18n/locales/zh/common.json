@@ -130,5 +130,91 @@
     "version": "UCISA HERM v3.1",
     "capabilities": "165项能力",
     "systems": "21个系统"
+  },
+  "notFound": {
+    "title": "页面未找到",
+    "description": "您访问的页面不存在或已移动。",
+    "goToLeaderboard": "前往排行榜",
+    "goBack": "返回"
+  },
+  "sector": {
+    "title": "行业分析",
+    "subtitle": "匿名基准数据。",
+    "activeInstitutions": "活跃机构",
+    "evaluationsCompleted": "已完成评估",
+    "totalProcurements": "采购总数",
+    "mostComparedSystem": "最常比较系统",
+    "mostComparedSystems": "最常比较系统 (Top 10)",
+    "mostRequestedCapabilities": "最常请求能力 (Top 15)",
+    "procurementByJurisdiction": "按司法管辖区分布",
+    "platformUsage": "平台使用 — 近 12 个月",
+    "legendEvaluations": "评估",
+    "legendProcurements": "采购",
+    "dataNote": "匿名数据。最少需5家机构。"
+  },
+  "workspaces": {
+    "title": "团队评估工作区",
+    "subtitle": "协作进行HERM能力评估",
+    "newProject": "新项目",
+    "newProjectTitle": "新评估项目",
+    "noProjects": "暂无项目。",
+    "projectName": "项目名称",
+    "description": "描述",
+    "systemsToEvaluate": "待评估系统",
+    "teamMemberEmails": "成员邮箱",
+    "commaSeparated": "逗号分隔",
+    "basketLink": "能力篮链接（可选）",
+    "deadline": "截止日期（可选）",
+    "cancel": "取消",
+    "creating": "创建中…",
+    "createProject": "创建项目",
+    "members": "成员",
+    "systems": "系统",
+    "complete": "完成"
+  },
+  "howItWorks": {
+    "title": "使用说明",
+    "subtitle": "评分方法论、证据标准和框架解释",
+    "tabs": {
+      "scoringModel": "评分模型",
+      "evidenceTypes": "证据类型",
+      "reviewProcess": "评审流程",
+      "faq": "常见问题"
+    },
+    "scoringTitle": "0 / 50 / 100 评分系统",
+    "fullSupport": "完整支持",
+    "partialSupport": "部分支持",
+    "noSupport": "不支持",
+    "scoreCalculation": "分数计算"
+  },
+  "research": {
+    "title": "研究与证据中心",
+    "subtitle": "分析师报告、学术研究、案例研究和基准数据",
+    "tabs": {
+      "all": "全部",
+      "analystReports": "分析师报告",
+      "academicResearch": "学术研究",
+      "caseStudies": "案例研究",
+      "benchmarking": "基准测试",
+      "sectorSurvey": "行业调查"
+    },
+    "searchPlaceholder": "搜索...",
+    "loading": "正在加载研究项目...",
+    "backToList": "← 返回研究列表",
+    "viewSource": "查看来源",
+    "readMore": "阅读更多 →",
+    "noResults": "未找到研究项目。请调整过滤条件。"
+  },
+  "assistant": {
+    "title": "AI采购助手",
+    "subtitle": "询问有关HERM能力、系统比较和采购策略的问题",
+    "suggestedQuestions": "推荐问题",
+    "sessionControls": "会话控制",
+    "clearConversation": "清除对话",
+    "placeholder": "询问HERM能力、系统比较、采购策略...",
+    "sendHint": "按Enter发送 · Shift+Enter换行",
+    "assistantName": "HERM采购助手",
+    "assistantIntro": "向我咨询系统能力、HERM框架或供应商比较。",
+    "errorMessage": "抱歉，遇到错误。请检查服务器是否在运行。"
   }
 }

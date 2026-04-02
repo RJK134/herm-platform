@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Header } from '../components/layout/Header';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -18,6 +19,7 @@ const STARTERS = [
 ];
 
 export function AiAssistant() {
+  const { t } = useTranslation('common');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -77,7 +79,7 @@ export function AiAssistant() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
-      <Header title="AI Procurement Assistant" subtitle="Ask questions about HERM capabilities, system comparisons, and procurement strategy" />
+      <Header title={t('assistant.title', 'AI Procurement Assistant')} subtitle={t('assistant.subtitle', 'Ask questions about HERM capabilities, system comparisons, and procurement strategy')} />
 
       <div className="flex gap-6 flex-1 min-h-0">
         {/* Chat area */}
@@ -145,7 +147,7 @@ export function AiAssistant() {
           <Card>
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="w-4 h-4 text-teal" />
-              <h3 className="font-semibold text-sm text-gray-900 dark:text-white">Suggested Questions</h3>
+              <h3 className="font-semibold text-sm text-gray-900 dark:text-white">{t('assistant.suggestedQuestions', 'Suggested Questions')}</h3>
             </div>
             <div className="space-y-2">
               {STARTERS.map(s => (
@@ -156,9 +158,9 @@ export function AiAssistant() {
             </div>
           </Card>
           <Card>
-            <h3 className="font-semibold text-sm text-gray-900 dark:text-white mb-3">Session Controls</h3>
+            <h3 className="font-semibold text-sm text-gray-900 dark:text-white mb-3">{t('assistant.sessionControls', 'Session Controls')}</h3>
             <Button variant="secondary" size="sm" onClick={() => void clear()} className="w-full flex items-center gap-2">
-              <RotateCcw className="w-3 h-3" /> Clear Conversation
+              <RotateCcw className="w-3 h-3" /> {t('assistant.clearConversation', 'Clear Conversation')}
             </Button>
             <p className="text-xs text-gray-400 mt-2">Conversation history is stored per session and cleared on page refresh.</p>
           </Card>

@@ -1,25 +1,36 @@
 {
   "title": "HERM-Fähigkeiten-Rangliste",
-  "subtitle": "Sortiert nach HERM v3.1-Gesamtabdeckung",
+  "subtitle": "Rangfolge der Abdeckung aller 165 UCISA HERM v3.1-Fähigkeiten über 21 Systeme",
   "kpis": {
     "totalSystems": "Gesamtsysteme",
     "hermCapabilities": "HERM-Fähigkeiten",
-    "averageCoverage": "Durchschnittliche Abdeckung",
-    "topSystem": "Top-System"
+    "averageCoverage": "Ø Abdeckung",
+    "topSystem": "Bestes System",
+    "sjmsScore": "SJMS-Punktzahl"
   },
   "table": {
     "rank": "Rang",
     "system": "System",
     "vendor": "Anbieter",
-    "overallScore": "Gesamtpunkte",
+    "category": "Kategorie",
+    "cloud": "Cloud",
+    "hermScore": "HERM-Punktzahl",
+    "points": "Punkte",
+    "overallScore": "Gesamtpunktzahl",
     "coverage": "Abdeckung %"
   },
   "filters": {
     "allCategories": "Alle Kategorien",
     "searchSystems": "Systeme suchen...",
-    "sortByScore": "Punkte (hoch nach niedrig)",
+    "sortByScore": "Punktzahl (hoch bis niedrig)",
     "sortByName": "Name (A–Z)"
   },
+  "yourSystem": "IHR SYSTEM",
+  "cloudNative": "Nativ",
+  "cloudOnPrem": "On-Premise",
+  "systemsCount": "{{count}} Systeme",
+  "loading": "Rangliste wird geladen...",
+  "error": "Laden fehlgeschlagen. Läuft der Server?",
   "empty": "Noch keine Systeme verfügbar.",
   "yourBenchmark": "Ihr Benchmark",
   "industryAverage": "Branchendurchschnitt"

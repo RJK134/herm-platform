@@ -1,16 +1,21 @@
 {
   "title": "Classement des capacités HERM",
-  "subtitle": "Classé par couverture globale HERM v3.1",
+  "subtitle": "Couverture classée des 165 capacités UCISA HERM v3.1 sur 21 systèmes",
   "kpis": {
     "totalSystems": "Systèmes totaux",
     "hermCapabilities": "Capacités HERM",
-    "averageCoverage": "Couverture moyenne",
-    "topSystem": "Meilleur système"
+    "averageCoverage": "Couverture moy.",
+    "topSystem": "Meilleur système",
+    "sjmsScore": "Score SJMS"
   },
   "table": {
     "rank": "Rang",
     "system": "Système",
     "vendor": "Éditeur",
+    "category": "Catégorie",
+    "cloud": "Cloud",
+    "hermScore": "Score HERM",
+    "points": "Points",
     "overallScore": "Score global",
     "coverage": "Couverture %"
   },
@@ -20,6 +25,12 @@
     "sortByScore": "Score (élevé à faible)",
     "sortByName": "Nom (A–Z)"
   },
+  "yourSystem": "VOTRE SYSTÈME",
+  "cloudNative": "Natif",
+  "cloudOnPrem": "Sur site",
+  "systemsCount": "{{count}} systèmes",
+  "loading": "Chargement du classement...",
+  "error": "Échec du chargement. Le serveur est-il en marche ?",
   "empty": "Aucun système disponible.",
   "yourBenchmark": "Votre référence",
   "industryAverage": "Moyenne du secteur"

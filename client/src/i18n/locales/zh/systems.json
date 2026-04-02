@@ -22,5 +22,40 @@
     "addToCompare": "添加到比较",
     "compareSelected": "比较已选择 ({{count}})",
     "clearComparison": "清除比较"
+  },
+  "detail": {
+    "title": "系统详情",
+    "subtitle": "深入分析单个系统的HERM能力概况",
+    "selectSystem": "选择系统",
+    "loadingSystems": "正在加载系统...",
+    "yourSystem": "您的系统",
+    "vendor": "供应商",
+    "cloud": "云",
+    "cloudNative": "云原生",
+    "cloudOnPremise": "本地部署",
+    "regions": "地区",
+    "hermCoverage": "HERM覆盖率",
+    "coverageByFamily": "按家族的覆盖率",
+    "loadingScores": "正在加载得分...",
+    "topStrengths": "核心优势",
+    "capabilityGaps": "能力差距",
+    "allScoresByFamily": "按家族的所有得分"
+  },
+  "architecture": {
+    "title": "架构与系统全景评估",
+    "subtitle": "映射您的IT资产，获取SIS替换准备度评分。"
+  },
+  "tco": {
+    "title": "TCO计算器",
+    "subtitle": "按系统、机构规模和时间范围建模总拥有成本",
+    "configuration": "配置",
+    "singleSystem": "单一系统",
+    "compare": "对比",
+    "calculateTco": "计算TCO",
+    "calculating": "计算中…"
+  },
+  "value": {
+    "title": "成本与价值分析",
+    "subtitle": "使用HM Treasury绿皮书方法论构建商业案例。"
   }
 }

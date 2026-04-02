@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { Modal } from '../components/ui/Modal';
@@ -93,6 +94,7 @@ const RATE_LIMITS = [
 ];
 
 export function ApiIntegration() {
+  const { t } = useTranslation("admin");
   const [tab, setTab] = useState<'keys' | 'docs'>('keys');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
@@ -162,25 +164,25 @@ export function ApiIntegration() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">API Integration</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t("apiKeys.title", "API Integration")}</h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Manage API keys and integrate HERM data with your systems.
+          {t("apiKeys.subtitle", "Manage API keys and integrate HERM data with your systems.")}
         </p>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
-        {(['keys', 'docs'] as const).map(t => (
+        {(['keys', 'docs'] as const).map(tabKey => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
+            key={tabKey}
+            onClick={() => setTab(tabKey)}
             className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
-              tab === t
+              tab === tabKey
                 ? 'border-teal-500 text-teal-600 dark:text-teal-400'
                 : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
             }`}
           >
-            {t === 'keys' ? 'API Keys' : 'Documentation'}
+            {tabKey === 'keys' ? t('apiKeys.tabKeys', 'API Keys') : t('apiKeys.tabDocs', 'Documentation')}
           </button>
         ))}
       </div>
@@ -193,14 +195,14 @@ export function ApiIntegration() {
               {keys.length} key{keys.length !== 1 ? 's' : ''} configured
             </p>
             <Button onClick={() => { setCreatedKey(null); setShowCreateModal(true); }}>
-              Create API Key
+              {t("apiKeys.createKey", "Create API Key")}
             </Button>
           </div>
 
           {keys.length === 0 ? (
             <Card className="text-center py-12">
               <p className="text-gray-500 dark:text-gray-400 text-sm">
-                No API keys yet. Create one to integrate HERM data with your systems.
+                {t("apiKeys.noKeys", "No API keys yet. Create one to integrate HERM data with your systems.")}
               </p>
             </Card>
           ) : (
@@ -209,12 +211,12 @@ export function ApiIntegration() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-200 dark:border-gray-700">
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Key</th>
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Name</th>
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Permissions</th>
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Last Used</th>
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t("apiKeys.colKey", "Key")}</th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t("apiKeys.colName", "Name")}</th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t("apiKeys.colPermissions", "Permissions")}</th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t("apiKeys.colLastUsed", "Last Used")}</th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t("apiKeys.colStatus", "Status")}</th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t("apiKeys.colActions", "Actions")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -236,7 +238,7 @@ export function ApiIntegration() {
                           </div>
                         </td>
                         <td className="py-3 px-4 text-gray-500 dark:text-gray-400 text-xs">
-                          {k.lastUsedAt ? new Date(k.lastUsedAt).toLocaleDateString('en-GB') : 'Never used'}
+                          {k.lastUsedAt ? new Date(k.lastUsedAt).toLocaleDateString('en-GB') : t("apiKeys.neverUsed", "Never used")}
                         </td>
                         <td className="py-3 px-4">
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
@@ -244,7 +246,7 @@ export function ApiIntegration() {
                               ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
                               : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
                           }`}>
-                            {k.isActive ? 'Active' : 'Revoked'}
+                            {k.isActive ? t("apiKeys.active", "Active") : t("apiKeys.revoked", "Revoked")}
                           </span>
                         </td>
                         <td className="py-3 px-4">
@@ -254,9 +256,7 @@ export function ApiIntegration() {
                               size="sm"
                               onClick={() => revokeMutation.mutate(k.id)}
                               className="text-red-500 hover:text-red-600"
-                            >
-                              Revoke
-                            </Button>
+                            >{t("apiKeys.revokeKey", "Revoke")}                            </Button>
                           )}
                         </td>
                       </tr>
@@ -273,7 +273,7 @@ export function ApiIntegration() {
       {tab === 'docs' && (
         <div className="space-y-6">
           <Card>
-            <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-3">REST API Overview</h2>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-3">{t("apiKeys.restOverview", "REST API Overview")}</h2>
             <p className="text-sm text-gray-600 dark:text-gray-400">
               The HERM Platform REST API provides programmatic access to system capability data, leaderboard scores,
               and procurement intelligence. All endpoints return JSON and follow the{' '}
@@ -285,14 +285,14 @@ export function ApiIntegration() {
 
           {/* Endpoint reference */}
           <Card>
-            <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-4">Endpoint Reference</h2>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-4">{t("apiKeys.endpointReference", "Endpoint Reference")}</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700">
-                    <th className="text-left py-2 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Method</th>
-                    <th className="text-left py-2 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Endpoint</th>
-                    <th className="text-left py-2 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Description</th>
+                    <th className="text-left py-2 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t("apiKeys.colMethod", "Method")}</th>
+                    <th className="text-left py-2 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t("apiKeys.colEndpoint", "Endpoint")}</th>
+                    <th className="text-left py-2 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t("apiKeys.colDescription", "Description")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -316,7 +316,7 @@ export function ApiIntegration() {
 
           {/* Code examples */}
           <Card>
-            <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-4">Code Examples</h2>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-4">{t("apiKeys.codeExamples", "Code Examples")}</h2>
             <div className="flex gap-1 mb-4 border-b border-gray-200 dark:border-gray-700">
               {(['curl', 'python', 'javascript', 'ruby'] as const).map(lang => (
                 <button
@@ -339,13 +339,13 @@ export function ApiIntegration() {
 
           {/* Rate limits */}
           <Card>
-            <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-4">Rate Limits</h2>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-4">{t("apiKeys.rateLimits", "Rate Limits")}</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700">
-                    <th className="text-left py-2 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Plan</th>
-                    <th className="text-left py-2 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Limit</th>
+                    <th className="text-left py-2 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t("apiKeys.colPlan", "Plan")}</th>
+                    <th className="text-left py-2 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t("apiKeys.colLimit", "Limit")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -366,39 +366,38 @@ export function ApiIntegration() {
       <Modal
         open={showCreateModal}
         onClose={() => { setShowCreateModal(false); setCreatedKey(null); }}
-        title="Create API Key"
+        title={t("apiKeys.createKey", "Create API Key")}
       >
         {createdKey ? (
           <div className="space-y-4">
             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-3">
-              <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1">API Key Created</p>
+              <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1">{t("apiKeys.keyCreated", "API Key Created")}</p>
               <p className="text-xs text-amber-600 dark:text-amber-300">
-                This key will only be shown once. Copy and store it securely.
+                {t("apiKeys.keyWarning", "This key will only be shown once. Copy and store it securely.")}
               </p>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Your API Key</label>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{t("apiKeys.yourApiKey", "Your API Key")}</label>
               <div className="flex gap-2">
                 <code className="flex-1 bg-gray-900 text-green-400 px-3 py-2 rounded-lg text-xs font-mono break-all">
                   {createdKey.key}
                 </code>
                 <Button onClick={handleCopy} size="sm">
-                  {copied ? 'Copied!' : 'Copy Key'}
+                  {copied ? t("apiKeys.keyCopied", "Copied!") : t("apiKeys.copyKey", "Copy Key")}
                 </Button>
               </div>
             </div>
             <Button
               onClick={() => { setShowCreateModal(false); setCreatedKey(null); }}
               className="w-full"
-            >
-              Done
+            >{t("apiKeys.done", "Done")}
             </Button>
           </div>
         ) : (
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Key Name <span className="text-red-500">*</span>
+                {t("apiKeys.keyName", "Key Name")} <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -410,7 +409,7 @@ export function ApiIntegration() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Permissions</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t("apiKeys.permissions", "Permissions")}</label>
               <div className="space-y-2">
                 {PERMISSION_OPTIONS.map(p => (
                   <label key={p.value} className="flex items-center gap-2 cursor-pointer">
@@ -428,7 +427,7 @@ export function ApiIntegration() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Expiry Date <span className="text-gray-400 text-xs">(optional)</span>
+                {t("apiKeys.expiresAt", "Expiry Date")} <span className="text-gray-400 text-xs">({t("apiKeys.optional", "optional")})</span>
               </label>
               <input
                 type="date"
@@ -443,15 +442,14 @@ export function ApiIntegration() {
                 variant="ghost"
                 onClick={() => setShowCreateModal(false)}
                 className="flex-1"
-              >
-                Cancel
+              >{t("apiKeys.cancel", "Cancel")}
               </Button>
               <Button
                 onClick={handleCreate}
                 disabled={!newKeyName.trim() || createMutation.isPending}
                 className="flex-1"
               >
-                {createMutation.isPending ? 'Creating...' : 'Create Key'}
+                {createMutation.isPending ? t("apiKeys.creating", "Creating...") : t("apiKeys.createKeyBtn", "Create Key")}
               </Button>
             </div>
           </div>

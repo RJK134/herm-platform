@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   FileText, Download, Save, Eye, RefreshCw, Trash2, Edit3,
@@ -64,7 +65,7 @@ const DOC_TYPES: {
 }[] = [
   {
     id: 'BUSINESS_CASE',
-    label: 'Business Case',
+    label: "Business Case",
     desc: 'Full strategic business case for IT committee and governors. Includes options appraisal, NPV, and benefits realisation plan.',
     icon: Briefcase,
     colour: 'border-blue-500 bg-blue-50 dark:bg-blue-950/30',
@@ -72,7 +73,7 @@ const DOC_TYPES: {
   },
   {
     id: 'RFP_ITT',
-    label: 'RFP / ITT',
+    label: "RFP / ITT",
     desc: 'UK PCR 2015-compliant Invitation to Tender. Includes supplier instructions, scoring matrix, and compliance requirements.',
     icon: ClipboardList,
     colour: 'border-purple-500 bg-purple-50 dark:bg-purple-950/30',
@@ -80,7 +81,7 @@ const DOC_TYPES: {
   },
   {
     id: 'SHORTLIST_REPORT',
-    label: 'Shortlist Report',
+    label: "Shortlist Report",
     desc: 'Evaluation report comparing shortlisted suppliers. MEAT-based scoring with narrative justification for audit trail.',
     icon: Users,
     colour: 'border-amber-500 bg-amber-50 dark:bg-amber-950/30',
@@ -88,7 +89,7 @@ const DOC_TYPES: {
   },
   {
     id: 'REQUIREMENTS_SPEC',
-    label: 'Requirements Specification',
+    label: "Requirements Specification",
     desc: 'Functional and non-functional requirements drawn from your capability basket. MoSCoW prioritisation with scoring matrix.',
     icon: FileCheck,
     colour: 'border-teal-500 bg-teal-50 dark:bg-teal-950/30',
@@ -96,7 +97,7 @@ const DOC_TYPES: {
   },
   {
     id: 'EXECUTIVE_SUMMARY',
-    label: 'Executive Summary',
+    label: "Executive Summary",
     desc: 'Concise 2-page summary of the procurement case. Suitable for Vice-Chancellor briefings and board papers.',
     icon: AlignLeft,
     colour: 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30',
@@ -167,6 +168,7 @@ function SectionEditor({
   section: DocumentSection;
   onChange: (updated: DocumentSection) => void;
 }) {
+  const { t } = useTranslation('procurement');
   const [open, setOpen] = useState(false);
 
   return (
@@ -179,7 +181,7 @@ function SectionEditor({
           <span className="text-xs font-mono text-gray-400 dark:text-gray-500 w-5">{section.order}.</span>
           <span className="text-sm font-medium text-gray-900 dark:text-white">{section.title}</span>
           {section.locked && (
-            <span className="text-xs bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded">locked</span>
+            <span className="text-xs bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded">{t("docgen.locked", "locked")}</span>
           )}
         </div>
         <div className="flex items-center gap-2 text-gray-400">
@@ -213,6 +215,7 @@ function SavedDocRow({ doc, onOpen, onDelete }: {
   onOpen: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useTranslation('procurement');
   const typeConf = DOC_TYPES.find(d => d.id === doc.type);
   const Icon = typeConf?.icon ?? FileText;
   const statusConf = STATUS_CONFIG[doc.status];
@@ -225,7 +228,7 @@ function SavedDocRow({ doc, onOpen, onDelete }: {
         <div className="text-xs text-gray-500 dark:text-gray-400">{typeConf?.label} · {doc.wordCount.toLocaleString()} words · {fmtDate(doc.createdAt)}</div>
       </div>
       <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${statusConf.colour}`}>{statusConf.label}</span>
-      <button onClick={onOpen} className="text-xs text-teal-600 dark:text-teal-400 hover:underline flex-shrink-0">Open</button>
+      <button onClick={onOpen} className="text-xs text-teal-600 dark:text-teal-400 hover:underline flex-shrink-0">{t("docgen.open", "Open")}</button>
       <button onClick={onDelete} className="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0">
         <Trash2 className="w-3.5 h-3.5" />
       </button>
@@ -236,6 +239,7 @@ function SavedDocRow({ doc, onOpen, onDelete }: {
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 export function DocumentGenerator() {
+  const { t } = useTranslation("procurement");
   const queryClient = useQueryClient();
 
   // View state: 'select' | 'configure' | 'preview' | 'saved'
@@ -368,10 +372,10 @@ export function DocumentGenerator() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <FileText className="w-6 h-6 text-teal-600" />
-            Document Generator
+            {t("docgen.title", "Document Generator")}
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Generate professional procurement documents populated from your platform data. UK PCR 2015 compliant.
+            {t("docgen.subtitle", "Generate professional procurement documents populated from your platform data. UK PCR 2015 compliant.")}
           </p>
         </div>
         <button
@@ -379,21 +383,19 @@ export function DocumentGenerator() {
           className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white border border-gray-200 dark:border-gray-700 rounded-lg hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
         >
           <Archive className="w-4 h-4" />
-          Saved ({savedDocs.length})
+          {t("docgen.saved", "Saved")} ({savedDocs.length})
         </button>
       </div>
 
       {/* ── View: Saved documents ── */}
       {view === 'saved' && (
         <div className="space-y-3">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-white">Saved Documents</h2>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white">{t("docgen.savedDocuments", "Saved Documents")}</h2>
           {savedDocs.length === 0 ? (
             <div className="text-center py-12 text-gray-500 dark:text-gray-400">
               <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
-              <p>No documents saved yet.</p>
-              <button onClick={() => setView('select')} className="mt-3 text-teal-600 dark:text-teal-400 underline text-sm">
-                Generate your first document
-              </button>
+              <p>{t("docgen.noDocumentsSaved", "No documents saved yet.")}</p>
+              <button onClick={() => setView('select')} className="mt-3 text-teal-600 dark:text-teal-400 underline text-sm">{t("docgen.generateFirst", "Generate your first document")}              </button>
             </div>
           ) : (
             <div className="space-y-2">
@@ -416,7 +418,7 @@ export function DocumentGenerator() {
             onClick={() => setView('select')}
             className="flex items-center gap-2 text-teal-600 dark:text-teal-400 hover:underline text-sm font-medium"
           >
-            <PlusCircle className="w-4 h-4" /> Generate new document
+            <PlusCircle className="w-4 h-4" /> {t("docgen.generateNew", "Generate new document")}
           </button>
         </div>
       )}
@@ -424,7 +426,7 @@ export function DocumentGenerator() {
       {/* ── View: Select document type ── */}
       {view === 'select' && (
         <div className="space-y-4">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-white">Choose Document Type</h2>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white">{t("docgen.chooseDocType", "Choose Document Type")}</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {DOC_TYPES.map(dt => {
               const Icon = dt.icon;
@@ -465,11 +467,11 @@ export function DocumentGenerator() {
             {/* Document title */}
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 space-y-4">
               <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                {currentTypeConf?.label} — Configuration
+                {currentTypeConf?.label} — {t("docgen.configuration", "Configuration")}
               </h2>
 
               <div className="space-y-1">
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Document Title</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">{t("docgen.documentTitle", "Document Title")}</label>
                 <input
                   value={title}
                   onChange={e => setTitle(e.target.value)}
@@ -480,11 +482,11 @@ export function DocumentGenerator() {
 
               {/* Data connections */}
               <div>
-                <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-3">Connect Platform Data</div>
+                <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-3">{t("docgen.connectPlatformData", "Connect Platform Data")}</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {(selectedType === 'BUSINESS_CASE' || selectedType === 'RFP_ITT' || selectedType === 'SHORTLIST_REPORT') && (
                     <div className="space-y-1">
-                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Procurement Project</label>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">{t("docgen.procurementProject", "Procurement Project")}</label>
                       <select
                         value={projectId}
                         onChange={e => setProjectId(e.target.value)}
@@ -498,7 +500,7 @@ export function DocumentGenerator() {
 
                   {(selectedType === 'BUSINESS_CASE' || selectedType === 'RFP_ITT' || selectedType === 'REQUIREMENTS_SPEC') && (
                     <div className="space-y-1">
-                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Capability Basket</label>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">{t("docgen.capabilityBasket", "Capability Basket")}</label>
                       <select
                         value={basketId}
                         onChange={e => setBasketId(e.target.value)}
@@ -512,7 +514,7 @@ export function DocumentGenerator() {
 
                   {(selectedType === 'BUSINESS_CASE' || selectedType === 'EXECUTIVE_SUMMARY') && (
                     <div className="space-y-1">
-                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">TCO Estimate</label>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">{t("docgen.tcoEstimate", "TCO Estimate")}</label>
                       <select
                         value={tcoEstimateId}
                         onChange={e => setTcoEstimateId(e.target.value)}
@@ -526,7 +528,7 @@ export function DocumentGenerator() {
 
                   {(selectedType === 'BUSINESS_CASE' || selectedType === 'EXECUTIVE_SUMMARY') && (
                     <div className="space-y-1">
-                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Value Analysis</label>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">{t("docgen.valueAnalysis", "Value Analysis")}</label>
                       <select
                         value={valueAnalysisId}
                         onChange={e => setValueAnalysisId(e.target.value)}
@@ -543,7 +545,7 @@ export function DocumentGenerator() {
               {/* Custom text */}
               <div className="space-y-3">
                 <div className="space-y-1">
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Custom Introduction (optional)</label>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">{t("docgen.customIntro", "Custom Introduction (optional)")}</label>
                   <textarea
                     value={customIntro}
                     onChange={e => setCustomIntro(e.target.value)}
@@ -553,7 +555,7 @@ export function DocumentGenerator() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Custom Recommendation (optional)</label>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">{t("docgen.customRec", "Custom Recommendation (optional)")}</label>
                   <textarea
                     value={customRec}
                     onChange={e => setCustomRec(e.target.value)}
@@ -567,7 +569,7 @@ export function DocumentGenerator() {
 
             {/* Metadata */}
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 space-y-4">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Document Metadata</h3>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{t("docgen.documentMetadata", "Document Metadata")}</h3>
               <div className="grid grid-cols-2 gap-4">
                 {([
                   { key: 'author', label: 'Author / Prepared by' },
@@ -607,11 +609,11 @@ export function DocumentGenerator() {
                 <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{currentTypeConf?.label}</span>
               </div>
               <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">{currentTypeConf?.desc}</p>
-              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">Typical length: {currentTypeConf?.pages}</div>
+              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">{t("docgen.typicalLength", "Typical length:")}{" "}{currentTypeConf?.pages}</div>
             </div>
 
             <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 p-4 text-xs text-gray-600 dark:text-gray-400 space-y-2">
-              <div className="font-semibold text-gray-700 dark:text-gray-300">What gets auto-populated?</div>
+              <div className="font-semibold text-gray-700 dark:text-gray-300">{t("docgen.whatAutoPopulated", "What gets auto-populated?")}</div>
               <ul className="space-y-1 list-disc list-inside">
                 {projectId && <li className="text-teal-600 dark:text-teal-400">✓ Project timeline &amp; shortlist</li>}
                 {basketId && <li className="text-teal-600 dark:text-teal-400">✓ Capability requirements from basket</li>}
@@ -621,7 +623,7 @@ export function DocumentGenerator() {
                   <li className="text-gray-400">Connect data above for richer content</li>
                 )}
               </ul>
-              <p className="text-gray-500 dark:text-gray-500 italic">You can edit all sections after generation.</p>
+              <p className="text-gray-500 dark:text-gray-500 italic">{t("docgen.editAfterGeneration", "You can edit all sections after generation.")}</p>
             </div>
 
             <div className="flex flex-col gap-2">
@@ -631,20 +633,20 @@ export function DocumentGenerator() {
                 className="flex items-center justify-center gap-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
               >
                 <Eye className={`w-4 h-4 ${generateMutation.isPending ? 'animate-spin' : ''}`} />
-                {generateMutation.isPending ? 'Generating…' : 'Generate Preview'}
+                {generateMutation.isPending ? t("docgen.generating", "Generating…") : t("docgen.generatePreview", "Generate Preview")}
               </button>
               <button
                 onClick={() => setView('select')}
                 className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
               >
-                ← Change document type
+                {t("docgen.changeDocType", "← Change document type")}
               </button>
             </div>
 
             {generateMutation.isError && (
               <div className="flex items-center gap-2 text-red-600 dark:text-red-400 text-xs">
                 <AlertTriangle className="w-4 h-4" />
-                Generation failed — check server connection
+                {t("docgen.generationFailed", "Generation failed — check server connection")}
               </div>
             )}
           </div>
@@ -673,11 +675,11 @@ export function DocumentGenerator() {
                 onClick={() => downloadHtml(generated.title, editedSections, generated.metadata)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
-                <Download className="w-3.5 h-3.5" /> Export HTML
+                <Download className="w-3.5 h-3.5" /> {t("docgen.exportHtml", "Export HTML")}
               </button>
               {savedDocId ? (
                 <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
-                  <CheckCircle className="w-3.5 h-3.5" /> Saved
+                  <CheckCircle className="w-3.5 h-3.5" /> {t("docgen.savedLabel", "Saved")}
                 </div>
               ) : (
                 <button
@@ -686,14 +688,14 @@ export function DocumentGenerator() {
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white rounded-lg transition-colors"
                 >
                   <Save className="w-3.5 h-3.5" />
-                  {saveMutation.isPending ? 'Saving…' : 'Save'}
+                  {saveMutation.isPending ? t("docgen.saving", "Saving…") : t("docgen.save", "Save")}
                 </button>
               )}
               <button
                 onClick={() => { setView('configure'); setGenerated(null); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
-                <RefreshCw className="w-3.5 h-3.5" /> Regenerate
+                <RefreshCw className="w-3.5 h-3.5" /> {t("docgen.regenerate", "Regenerate")}
               </button>
             </div>
           </div>
@@ -712,7 +714,7 @@ export function DocumentGenerator() {
           {/* Edit hint */}
           <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 bg-blue-50 dark:bg-blue-950/30 rounded-lg px-4 py-2.5 border border-blue-200 dark:border-blue-800">
             <Edit3 className="w-3.5 h-3.5 text-blue-500" />
-            Click any section to expand and edit the content. Changes are local until you save.
+            {t("docgen.editHint", "Click any section to expand and edit the content. Changes are local until you save.")}
           </div>
 
           {/* Sections */}
@@ -734,14 +736,14 @@ export function DocumentGenerator() {
               onClick={() => setView('select')}
               className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
             >
-              ← New document
+              {t("docgen.newDocument", "← New document")}
             </button>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => downloadHtml(generated.title, editedSections, generated.metadata)}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
-                <Download className="w-4 h-4" /> Export HTML
+                <Download className="w-4 h-4" /> {t("docgen.exportHtml", "Export HTML")}
               </button>
               {!savedDocId && (
                 <button
@@ -750,7 +752,7 @@ export function DocumentGenerator() {
                   className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white rounded-lg transition-colors"
                 >
                   <Save className="w-4 h-4" />
-                  {saveMutation.isPending ? 'Saving…' : 'Save Document'}
+                  {saveMutation.isPending ? t("docgen.saving", "Saving…") : t("docgen.saveDocument", "Save Document")}
                 </button>
               )}
             </div>
@@ -762,7 +764,7 @@ export function DocumentGenerator() {
       {generateMutation.isPending && view !== 'preview' && (
         <div className="flex items-center justify-center py-16 text-gray-500 dark:text-gray-400">
           <RefreshCw className="w-6 h-6 animate-spin mr-3" />
-          <span>Generating document from platform data…</span>
+          <span>{t("docgen.generatingFromData", "Generating document from platform data…")}</span>
         </div>
       )}
     </div>

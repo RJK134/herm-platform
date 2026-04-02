@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, ShoppingBasket, PlayCircle } from 'lucide-react';
 import { Header } from '../components/layout/Header';
 import { Card } from '../components/ui/Card';
@@ -20,6 +21,7 @@ import { formatPercent, scoreColor } from '../lib/utils';
 import { CATEGORY_COLORS } from '../lib/constants';
 
 export function CapabilityBasket() {
+  const { t } = useTranslation('capabilities');
   const { data: baskets } = useBaskets();
   const [selectedBasketId, setSelectedBasketId] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -71,8 +73,8 @@ export function CapabilityBasket() {
   return (
     <div>
       <Header
-        title="Capability Basket"
-        subtitle="Build a custom capability shortlist and evaluate systems against it"
+        title={t('basket.title', 'Capability Basket')}
+        subtitle={t('basket.subtitle', 'Build a custom capability shortlist and evaluate systems against it')}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -80,16 +82,16 @@ export function CapabilityBasket() {
         <div>
           <Card>
             <div className="flex justify-between items-center mb-4">
-              <h3 className="font-semibold text-gray-800 dark:text-white">My Baskets</h3>
+              <h3 className="font-semibold text-gray-800 dark:text-white">{t('basket.myBaskets', 'My Baskets')}</h3>
               <Button size="sm" onClick={() => setShowCreateModal(true)}>
-                <Plus className="w-3.5 h-3.5 mr-1" /> New
+                <Plus className="w-3.5 h-3.5 mr-1" /> {t('basket.new', 'New')}
               </Button>
             </div>
 
             {!baskets || baskets.length === 0 ? (
               <div className="text-center py-8 text-gray-400 text-sm">
                 <ShoppingBasket className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                No baskets yet
+                {t('basket.noBasketsYet', 'No baskets yet')}
               </div>
             ) : (
               <div className="space-y-2">
@@ -126,7 +128,7 @@ export function CapabilityBasket() {
                   </div>
                   <div className="flex gap-2">
                     <Button size="sm" variant="secondary" onClick={() => setShowAddModal(true)}>
-                      <Plus className="w-3.5 h-3.5 mr-1" /> Add Capability
+                      <Plus className="w-3.5 h-3.5 mr-1" /> {t('basket.addCapability', 'Add Capability')}
                     </Button>
                     <Button
                       size="sm"
@@ -134,14 +136,14 @@ export function CapabilityBasket() {
                       disabled={basket.items.length === 0}
                     >
                       <PlayCircle className="w-3.5 h-3.5 mr-1" />
-                      {showEval ? 'Hide Evaluation' : 'Evaluate'}
+                      {showEval ? t('basket.hideEvaluation', 'Hide Evaluation') : t('basket.evaluate', 'Evaluate')}
                     </Button>
                   </div>
                 </div>
 
                 {basket.items.length === 0 ? (
                   <div className="text-center py-8 text-gray-400 text-sm">
-                    No capabilities in this basket yet. Add some!
+                    {t('basket.noCapabilities', 'No capabilities in this basket yet. Add some!')}
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -183,7 +185,7 @@ export function CapabilityBasket() {
               {showEval && evaluation && evaluation.length > 0 && (
                 <Card>
                   <h3 className="font-semibold text-gray-800 dark:text-white mb-4">
-                    Basket Evaluation — {basket.name}
+                    {t('basket.evaluation', 'Basket Evaluation \u2014 {{name}}', { name: basket.name })}
                   </h3>
                   <div className="space-y-3">
                     {evaluation.map(e => (
@@ -208,10 +210,11 @@ export function CapabilityBasket() {
                           </div>
                           <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                             <div
-                              className="h-2 rounded-full transition-all"
+                              className="h-2 rounded-full"
                               style={{
                                 width: `${e.percentage}%`,
                                 backgroundColor: CATEGORY_COLORS[e.system.category] || '#01696F',
+                                transition: 'width 500ms ease-out',
                               }}
                             />
                           </div>
@@ -226,7 +229,7 @@ export function CapabilityBasket() {
             <Card>
               <div className="text-center py-16 text-gray-400">
                 <ShoppingBasket className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                <p>Create or select a basket to get started</p>
+                <p>{t('basket.getStarted', 'Create or select a basket to get started')}</p>
               </div>
             </Card>
           )}
@@ -234,10 +237,10 @@ export function CapabilityBasket() {
       </div>
 
       {/* Create basket modal */}
-      <Modal open={showCreateModal} onClose={() => setShowCreateModal(false)} title="Create New Basket">
+      <Modal open={showCreateModal} onClose={() => setShowCreateModal(false)} title={t('basket.createTitle', 'Create New Basket')}>
         <div className="space-y-4">
           <div>
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-1">Name *</label>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-1">{t('basket.nameLabel', 'Name *')}</label>
             <input
               value={newBasketName}
               onChange={e => setNewBasketName(e.target.value)}
@@ -246,7 +249,7 @@ export function CapabilityBasket() {
             />
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-1">Description</label>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-1">{t('basket.descriptionLabel', 'Description')}</label>
             <textarea
               value={newBasketDesc}
               onChange={e => setNewBasketDesc(e.target.value)}
@@ -256,17 +259,17 @@ export function CapabilityBasket() {
             />
           </div>
           <div className="flex gap-2 justify-end">
-            <Button variant="secondary" onClick={() => setShowCreateModal(false)}>Cancel</Button>
-            <Button onClick={handleCreateBasket} disabled={!newBasketName.trim()}>Create Basket</Button>
+            <Button variant="secondary" onClick={() => setShowCreateModal(false)}>{t('basket.cancel', 'Cancel')}</Button>
+            <Button onClick={handleCreateBasket} disabled={!newBasketName.trim()}>{t('basket.createBasket', 'Create Basket')}</Button>
           </div>
         </div>
       </Modal>
 
       {/* Add capability modal */}
-      <Modal open={showAddModal} onClose={() => setShowAddModal(false)} title="Add Capability to Basket">
+      <Modal open={showAddModal} onClose={() => setShowAddModal(false)} title={t('basket.addTitle', 'Add Capability to Basket')}>
         <div className="space-y-4">
           <div>
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-1">Search Capability</label>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-1">{t('basket.searchCapability', 'Search Capability')}</label>
             <SearchInput value={capSearch} onChange={setCapSearch} placeholder="Search by name or code..." />
           </div>
           <div className="max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg">
@@ -285,20 +288,20 @@ export function CapabilityBasket() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-1">Priority</label>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-1">{t('basket.priority', 'Priority')}</label>
               <select
                 value={addPriority}
                 onChange={e => setAddPriority(e.target.value)}
                 className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white"
               >
-                <option value="must">Must Have</option>
-                <option value="should">Should Have</option>
-                <option value="could">Could Have</option>
-                <option value="wont">Won't Have</option>
+                <option value="must">{t('basket.mustHave', 'Must Have')}</option>
+                <option value="should">{t('basket.shouldHave', 'Should Have')}</option>
+                <option value="could">{t('basket.couldHave', 'Could Have')}</option>
+                <option value="wont">{t('basket.wontHave', "Won't Have")}</option>
               </select>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-1">Weight (1–5)</label>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-1">{t('basket.weight', 'Weight (1\u20135)')}</label>
               <input
                 type="number"
                 min={1}
@@ -310,7 +313,7 @@ export function CapabilityBasket() {
             </div>
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-1">Notes</label>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-1">{t('basket.notes', 'Notes')}</label>
             <input
               value={addNotes}
               onChange={e => setAddNotes(e.target.value)}
@@ -319,8 +322,8 @@ export function CapabilityBasket() {
             />
           </div>
           <div className="flex gap-2 justify-end">
-            <Button variant="secondary" onClick={() => setShowAddModal(false)}>Cancel</Button>
-            <Button onClick={handleAddItem} disabled={!selectedCapCode}>Add to Basket</Button>
+            <Button variant="secondary" onClick={() => setShowAddModal(false)}>{t('basket.cancel', 'Cancel')}</Button>
+            <Button onClick={handleAddItem} disabled={!selectedCapCode}>{t('basket.addToBasket', 'Add to Basket')}</Button>
           </div>
         </div>
       </Modal>

@@ -1,16 +1,21 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Star, Trophy, Cpu, TrendingUp } from 'lucide-react';
 import { Header } from '../components/layout/Header';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { SearchInput } from '../components/ui/SearchInput';
 import { DataTable } from '../components/tables/DataTable';
+import { SkeletonTable } from '../components/ui/Skeleton';
 import { useLeaderboard } from '../hooks/useApi';
 import { formatPercent } from '../lib/utils';
 import { CATEGORY_COLORS } from '../lib/constants';
 import type { LeaderboardEntry } from '../types';
 
 export function Leaderboard() {
+  const { t } = useTranslation('leaderboard');
+  const navigate = useNavigate();
   const { data, isLoading, error } = useLeaderboard();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
@@ -34,7 +39,7 @@ export function Leaderboard() {
   const columns: Array<import('../components/tables/DataTable').Column<LeaderboardEntry>> = [
     {
       key: 'rank',
-      header: 'Rank',
+      header: t('table.rank', 'Rank'),
       render: row => (
         <div className="flex items-center gap-2">
           <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
@@ -53,14 +58,14 @@ export function Leaderboard() {
     },
     {
       key: 'system',
-      header: 'System',
+      header: t('table.system', 'System'),
       render: row => (
         <div>
           <div className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
             {row.system.name}
             {row.system.isOwnSystem && (
               <span className="text-[10px] bg-teal text-white px-1.5 py-0.5 rounded font-semibold uppercase tracking-wide">
-                YOUR SYSTEM
+                {t('yourSystem', 'YOUR SYSTEM')}
               </span>
             )}
           </div>
@@ -72,31 +77,32 @@ export function Leaderboard() {
     },
     {
       key: 'category',
-      header: 'Category',
+      header: t('table.category', 'Category'),
       render: row => <Badge text={row.system.category} category={row.system.category} />,
       sortable: true,
       sortValue: row => row.system.category,
     },
     {
       key: 'cloud',
-      header: 'Cloud',
+      header: t('table.cloud', 'Cloud'),
       render: row => (
         <span className={`text-xs font-medium ${row.system.cloudNative ? 'text-green-600' : 'text-gray-400'}`}>
-          {row.system.cloudNative ? 'Native' : 'On-prem'}
+          {row.system.cloudNative ? t('cloudNative', 'Native') : t('cloudOnPrem', 'On-prem')}
         </span>
       ),
     },
     {
       key: 'score',
-      header: 'HERM Score',
+      header: t('table.hermScore', 'HERM Score'),
       render: row => (
         <div className="flex items-center gap-3 min-w-[160px]">
           <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
             <div
-              className="h-2 rounded-full transition-all"
+              className="h-2 rounded-full"
               style={{
                 width: `${row.percentage}%`,
                 backgroundColor: CATEGORY_COLORS[row.system.category] || '#01696F',
+                transition: 'width 500ms ease-out',
               }}
             />
           </div>
@@ -110,7 +116,7 @@ export function Leaderboard() {
     },
     {
       key: 'points',
-      header: 'Points',
+      header: t('table.points', 'Points'),
       render: row => (
         <span className="text-sm text-gray-600 dark:text-gray-300">
           {row.totalScore.toLocaleString()} / {row.maxScore.toLocaleString()}
@@ -124,7 +130,7 @@ export function Leaderboard() {
   if (error) {
     return (
       <div className="text-center py-20">
-        <p className="text-red-500">Failed to load leaderboard. Is the server running?</p>
+        <p className="text-red-500">{t('error', 'Failed to load leaderboard. Is the server running?')}</p>
       </div>
     );
   }
@@ -132,8 +138,8 @@ export function Leaderboard() {
   return (
     <div>
       <Header
-        title="HERM Capability Leaderboard"
-        subtitle="Ranked coverage of all 165 UCISA HERM v3.1 capabilities across 21 systems"
+        title={t('title', 'HERM Capability Leaderboard')}
+        subtitle={t('subtitle', 'Ranked coverage of all 165 UCISA HERM v3.1 capabilities across 21 systems')}
       />
 
       {/* KPI Cards */}
@@ -145,7 +151,7 @@ export function Leaderboard() {
             </div>
             <div>
               <div className="text-2xl font-bold text-gray-900 dark:text-white">21</div>
-              <div className="text-xs text-gray-500">Total Systems</div>
+              <div className="text-xs text-gray-500">{t('kpis.totalSystems', 'Total Systems')}</div>
             </div>
           </div>
         </Card>
@@ -157,7 +163,7 @@ export function Leaderboard() {
             </div>
             <div>
               <div className="text-2xl font-bold text-gray-900 dark:text-white">165</div>
-              <div className="text-xs text-gray-500">HERM Capabilities</div>
+              <div className="text-xs text-gray-500">{t('kpis.hermCapabilities', 'HERM Capabilities')}</div>
             </div>
           </div>
         </Card>
@@ -171,7 +177,7 @@ export function Leaderboard() {
               <div className="text-2xl font-bold text-gray-900 dark:text-white">
                 {isLoading ? '...' : formatPercent(avgCoverage)}
               </div>
-              <div className="text-xs text-gray-500">Avg Coverage</div>
+              <div className="text-xs text-gray-500">{t('kpis.averageCoverage', 'Avg Coverage')}</div>
             </div>
           </div>
         </Card>
@@ -185,7 +191,7 @@ export function Leaderboard() {
               <div className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
                 {isLoading ? '...' : (topSystem?.system.name || '—')}
               </div>
-              <div className="text-xs text-gray-500">Top System</div>
+              <div className="text-xs text-gray-500">{t('kpis.topSystem', 'Top System')}</div>
             </div>
           </div>
         </Card>
@@ -199,7 +205,7 @@ export function Leaderboard() {
               <div className="text-2xl font-bold text-teal">
                 {isLoading ? '...' : (sjmsEntry ? formatPercent(sjmsEntry.percentage) : '—')}
               </div>
-              <div className="text-xs text-gray-500">SJMS Score</div>
+              <div className="text-xs text-gray-500">{t('kpis.sjmsScore', 'SJMS Score')}</div>
             </div>
           </div>
         </Card>
@@ -209,32 +215,33 @@ export function Leaderboard() {
       <Card className="mb-4">
         <div className="flex gap-3 items-center flex-wrap">
           <div className="flex-1 min-w-[200px]">
-            <SearchInput value={search} onChange={setSearch} placeholder="Search systems..." />
+            <SearchInput value={search} onChange={setSearch} placeholder={t('filters.searchSystems', 'Search systems...')} />
           </div>
           <select
             value={category}
             onChange={e => setCategory(e.target.value)}
             className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white"
           >
-            <option value="">All Categories</option>
+            <option value="">{t('filters.allCategories', 'All Categories')}</option>
             <option value="SIS">SIS</option>
             <option value="LMS">LMS</option>
             <option value="CRM">CRM</option>
             <option value="HCM">HCM</option>
             <option value="SJMS">SJMS</option>
           </select>
-          <span className="text-sm text-gray-500">{filtered.length} systems</span>
+          <span className="text-sm text-gray-500">{t('systemsCount', '{{count}} systems', { count: filtered.length })}</span>
         </div>
       </Card>
 
       {/* Table */}
       <Card className="p-0 overflow-hidden">
         {isLoading ? (
-          <div className="p-12 text-center text-gray-400">Loading leaderboard data...</div>
+          <div className="p-6"><SkeletonTable rows={10} /></div>
         ) : (
           <DataTable
             columns={columns}
             data={filtered}
+            onRowClick={(row) => navigate(`/system?id=${row.system.id}`)}
             getRowClass={row =>
               row.system.isOwnSystem ? 'bg-teal/5 dark:bg-teal/10' : ''
             }

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Doughnut, Line, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -88,6 +89,7 @@ function getSystemSlugFromName(name: string): string {
 }
 
 export function TcoCalculator() {
+  const { t } = useTranslation('systems');
   const { data: systems } = useSystems();
   const [mode, setMode] = useState<'single' | 'compare'>('single');
   const [selectedSystemId, setSelectedSystemId] = useState<string>('');
@@ -200,8 +202,8 @@ export function TcoCalculator() {
   return (
     <div>
       <Header
-        title="TCO Calculator"
-        subtitle="Model total cost of ownership across systems, institution sizes, and time horizons"
+        title={t('tco.title', 'TCO Calculator')}
+        subtitle={t('tco.subtitle', 'Model total cost of ownership across systems, institution sizes, and time horizons')}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -209,7 +211,7 @@ export function TcoCalculator() {
         <div className="space-y-4">
           <Card>
             <h3 className="font-semibold text-gray-900 dark:text-white mb-4">
-              Configuration
+              {t('tco.configuration', 'Configuration')}
             </h3>
 
             {/* Mode toggle */}
@@ -222,7 +224,7 @@ export function TcoCalculator() {
                     : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                 }`}
               >
-                Single System
+                {t('tco.singleSystem', 'Single System')}
               </button>
               <button
                 onClick={() => setMode('compare')}
@@ -232,7 +234,7 @@ export function TcoCalculator() {
                     : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                 }`}
               >
-                Compare
+                {t('tco.compare', 'Compare')}
               </button>
             </div>
 
@@ -359,7 +361,7 @@ export function TcoCalculator() {
             )}
 
             <Button onClick={calculate} disabled={loading} className="w-full">
-              {loading ? 'Calculating…' : 'Calculate TCO'}
+              {loading ? t('tco.calculating', 'Calculating\u2026') : t('tco.calculateTco', 'Calculate TCO')}
             </Button>
           </Card>
 

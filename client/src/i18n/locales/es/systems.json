@@ -22,5 +22,40 @@
     "addToCompare": "Añadir a comparación",
     "compareSelected": "Comparar selección ({{count}})",
     "clearComparison": "Limpiar comparación"
+  },
+  "detail": {
+    "title": "Detalle del sistema",
+    "subtitle": "Análisis en profundidad del perfil de capacidades HERM",
+    "selectSystem": "Seleccionar sistema",
+    "loadingSystems": "Cargando sistemas...",
+    "yourSystem": "SU SISTEMA",
+    "vendor": "Proveedor",
+    "cloud": "Nube",
+    "cloudNative": "Nativo",
+    "cloudOnPremise": "Local",
+    "regions": "Regiones",
+    "hermCoverage": "Cobertura HERM",
+    "coverageByFamily": "Cobertura por familia",
+    "loadingScores": "Cargando puntuaciones...",
+    "topStrengths": "Fortalezas",
+    "capabilityGaps": "Brechas",
+    "allScoresByFamily": "Todas las puntuaciones por familia"
+  },
+  "architecture": {
+    "title": "Evaluación de arquitectura y panorama de sistemas",
+    "subtitle": "Mapee su parque informático y obtenga una puntuación de preparación."
+  },
+  "tco": {
+    "title": "Calculadora TCO",
+    "subtitle": "Modele el coste total de propiedad en distintos sistemas y horizontes temporales",
+    "configuration": "Configuración",
+    "singleSystem": "Sistema individual",
+    "compare": "Comparar",
+    "calculateTco": "Calcular TCO",
+    "calculating": "Calculando…"
+  },
+  "value": {
+    "title": "Análisis de coste y valor",
+    "subtitle": "Construya un caso de negocio con la metodología del Libro Verde HM Treasury."
   }
 }

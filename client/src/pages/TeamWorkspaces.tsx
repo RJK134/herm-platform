@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import {
@@ -122,6 +123,7 @@ interface NewProjectModalProps {
 }
 
 function NewProjectModal({ open, onClose, onCreated }: NewProjectModalProps) {
+  const { t } = useTranslation('common');
   const systemsQuery = useQuery<SystemOption[]>({
     queryKey: ['systems-simple'],
     queryFn: () =>
@@ -158,10 +160,10 @@ function NewProjectModal({ open, onClose, onCreated }: NewProjectModalProps) {
     setSelectedSystems(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
 
   return (
-    <Modal open={open} onClose={onClose} title="New Evaluation Project">
+    <Modal open={open} onClose={onClose} title={t("workspaces.newProjectTitle", "New Evaluation Project")}>
       <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Project Name <span className="text-red-500">*</span></label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t("workspaces.projectName", "Project Name")} <span className="text-red-500">*</span></label>
           <input
             value={name}
             onChange={e => setName(e.target.value)}
@@ -180,7 +182,7 @@ function NewProjectModal({ open, onClose, onCreated }: NewProjectModalProps) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Systems to Evaluate</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t("workspaces.systemsToEvaluate", "Systems to Evaluate")}</label>
           <div className="border border-gray-200 dark:border-gray-600 rounded-lg max-h-40 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700">
             {systemsQuery.data?.map(sys => (
               <label key={sys.id} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
@@ -198,19 +200,19 @@ function NewProjectModal({ open, onClose, onCreated }: NewProjectModalProps) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Team Member Emails</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t("workspaces.teamMemberEmails", "Team Member Emails")}</label>
           <input
             value={memberEmails}
             onChange={e => setMemberEmails(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-teal-500 outline-none"
             placeholder="alice@uni.ac.uk, bob@uni.ac.uk"
           />
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Comma-separated</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{t("workspaces.commaSeparated", "Comma-separated")}</p>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Basket Link (optional)</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t("workspaces.basketLink", "Basket Link (optional)")}</label>
             <input
               value={basketId}
               onChange={e => setBasketId(e.target.value)}
@@ -219,7 +221,7 @@ function NewProjectModal({ open, onClose, onCreated }: NewProjectModalProps) {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Deadline (optional)</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t("workspaces.deadline", "Deadline (optional)")}</label>
             <input
               type="date"
               value={deadline}
@@ -230,13 +232,13 @@ function NewProjectModal({ open, onClose, onCreated }: NewProjectModalProps) {
         </div>
 
         <div className="flex gap-2 justify-end pt-2">
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="secondary" onClick={onClose}>{t("workspaces.cancel", "Cancel")}</Button>
           <Button
             className="bg-teal-600 hover:bg-teal-700 text-white"
             onClick={() => createMutation.mutate()}
             disabled={createMutation.isPending || !name || selectedSystems.length === 0}
           >
-            {createMutation.isPending ? 'Creating…' : 'Create Project'}
+            {createMutation.isPending ? t("workspaces.creating", "Creating…") : t("workspaces.createProject", "Create Project")}
           </Button>
         </div>
       </div>
@@ -247,6 +249,7 @@ function NewProjectModal({ open, onClose, onCreated }: NewProjectModalProps) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export function TeamWorkspaces() {
+  const { t } = useTranslation("common");
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<Tab>('Projects');
@@ -324,8 +327,8 @@ export function TeamWorkspaces() {
   return (
     <div className="space-y-6">
       <Header
-        title="Team Evaluation Workspaces"
-        subtitle="Collaborate on structured HERM capability evaluations with your team"
+        title={t("workspaces.title", "Team Evaluation Workspaces")}
+        subtitle={t("workspaces.subtitle", "Collaborate on structured HERM capability evaluations with your team")}
       />
 
       {/* Tabs */}
@@ -353,14 +356,14 @@ export function TeamWorkspaces() {
               className="bg-teal-600 hover:bg-teal-700 text-white flex items-center gap-2"
               onClick={() => setShowNewModal(true)}
             >
-              <Plus className="w-4 h-4" /> New Evaluation Project
+              <Plus className="w-4 h-4" /> {t("workspaces.newProject", "New Evaluation Project")}
             </Button>
           </div>
 
           {projects.length === 0 && !projectsQuery.isPending && (
             <Card className="text-center py-12">
               <Users className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-500 dark:text-gray-400">No evaluation projects yet. Create one to get started.</p>
+              <p className="text-gray-500 dark:text-gray-400">{t("workspaces.noProjects", "No evaluation projects yet. Create one to get started.")}</p>
             </Card>
           )}
 
@@ -379,8 +382,8 @@ export function TeamWorkspaces() {
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 line-clamp-2">{proj.description}</p>
                 )}
                 <div className="flex flex-wrap gap-3 text-xs text-gray-500 dark:text-gray-400 mb-3">
-                  <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" /> {proj.members.length} members</span>
-                  <span className="flex items-center gap-1"><BarChart2 className="w-3.5 h-3.5" /> {proj.systems.length} systems</span>
+                  <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" /> {proj.members.length} {t("workspaces.members", "members")}</span>
+                  <span className="flex items-center gap-1"><BarChart2 className="w-3.5 h-3.5" /> {proj.systems.length} {t("workspaces.systems", "systems")}</span>
                   {proj.deadline && (
                     <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {new Date(proj.deadline).toLocaleDateString('en-GB')}</span>
                   )}
@@ -391,7 +394,7 @@ export function TeamWorkspaces() {
                     style={{ width: `${completionPct(proj)}%` }}
                   />
                 </div>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{completionPct(proj)}% complete</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{completionPct(proj)}% {t("workspaces.complete", "complete")}</p>
               </div>
             ))}
           </div>

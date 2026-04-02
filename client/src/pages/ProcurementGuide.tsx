@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import type { ApiResponse } from '../types';
@@ -530,6 +531,7 @@ function Accordion({ title, children, defaultOpen = false }: {
 // ── Section 1 — Decision Tree ─────────────────────────────────────────────────
 
 function DecisionTreeSection({ onStartProject }: { onStartProject?: (j: Jurisdiction) => void }) {
+  const { t } = useTranslation('procurement');
   const [step, setStep] = useState(0);
   const [jurisdiction, setJurisdiction] = useState<Jurisdiction | null>(null);
   const [value, setValue] = useState('');
@@ -572,7 +574,7 @@ function DecisionTreeSection({ onStartProject }: { onStartProject?: (j: Jurisdic
   return (
     <Card>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Find Your Procurement Route</h2>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t("guide.findRoute", "Find Your Procurement Route")}</h2>
         {step > 0 && (
           <button onClick={reset} className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
             Start over
@@ -602,7 +604,7 @@ function DecisionTreeSection({ onStartProject }: { onStartProject?: (j: Jurisdic
       {/* Step 0 — Jurisdiction */}
       {step === 0 && (
         <div>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">Select your jurisdiction:</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{t("guide.selectJurisdiction", "Select your jurisdiction:")}</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {(['UK', 'EU', 'US', 'AU'] as Jurisdiction[]).map((j) => (
               <button
@@ -644,7 +646,7 @@ function DecisionTreeSection({ onStartProject }: { onStartProject?: (j: Jurisdic
       {/* Step 2 — Type */}
       {step === 2 && (
         <div>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">What type of procurement?</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{t("guide.whatType", "What type of procurement?")}</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {PROCUREMENT_TYPES.map((t) => (
               <button
@@ -664,7 +666,7 @@ function DecisionTreeSection({ onStartProject }: { onStartProject?: (j: Jurisdic
       {step === 3 && result && (
         <div className="space-y-4">
           <div className="bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 rounded-lg p-4">
-            <p className="text-xs font-semibold text-teal-700 dark:text-teal-400 uppercase tracking-wider mb-1">Recommended Procedure</p>
+            <p className="text-xs font-semibold text-teal-700 dark:text-teal-400 uppercase tracking-wider mb-1">{t("guide.recommendedProcedure", "Recommended Procedure")}</p>
             <p className="text-sm font-medium text-gray-900 dark:text-white">{result.procedure}</p>
           </div>
 
@@ -672,21 +674,21 @@ function DecisionTreeSection({ onStartProject }: { onStartProject?: (j: Jurisdic
             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
               <div className="flex items-center gap-1.5 mb-1">
                 <Clock className="w-4 h-4 text-blue-500" />
-                <p className="text-xs font-semibold text-gray-600 dark:text-gray-400">Estimated Timeline</p>
+                <p className="text-xs font-semibold text-gray-600 dark:text-gray-400">{t("guide.estimatedTimeline", "Estimated Timeline")}</p>
               </div>
               <p className="text-sm text-gray-800 dark:text-gray-200">{result.timeline}</p>
             </div>
             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
               <div className="flex items-center gap-1.5 mb-1">
                 <Info className="w-4 h-4 text-amber-500" />
-                <p className="text-xs font-semibold text-gray-600 dark:text-gray-400">Threshold Status</p>
+                <p className="text-xs font-semibold text-gray-600 dark:text-gray-400">{t("guide.thresholdStatus", "Threshold Status")}</p>
               </div>
               <p className="text-sm text-gray-800 dark:text-gray-200">{result.thresholdStatus}</p>
             </div>
           </div>
 
           <div>
-            <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">Key Requirements</p>
+            <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2">{t("guide.keyRequirements", "Key Requirements")}</p>
             <ul className="space-y-1.5">
               {result.requirements.map((req, i) => (
                 <li key={i} className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
@@ -711,6 +713,7 @@ function DecisionTreeSection({ onStartProject }: { onStartProject?: (j: Jurisdic
 // ── Section 2 — Jurisdiction Comparison ──────────────────────────────────────
 
 function ComparisonSection() {
+  const { t } = useTranslation('procurement');
   const { data: jurisdictionData, isLoading } = useQuery({
     queryKey: ['procurement-jurisdictions'],
     queryFn: () =>
@@ -725,8 +728,8 @@ function ComparisonSection() {
   return (
     <Card className="p-0 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Jurisdiction Comparison</h2>
-        <p className="text-sm text-gray-500 mt-0.5">Key regulatory requirements by jurisdiction</p>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t("guide.comparison", "Jurisdiction Comparison")}</h2>
+        <p className="text-sm text-gray-500 mt-0.5">{t("guide.keyRegulatoryRequirements", "Key regulatory requirements by jurisdiction")}</p>
       </div>
 
       {isLoading ? (
@@ -738,7 +741,7 @@ function ComparisonSection() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-700/50">
               <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 w-40">Criterion</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 w-40">{t("guide.criterion", "Criterion")}</th>
                 {(['UK', 'EU', 'US', 'AU'] as const).map((j) => (
                   <th key={j} className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">
                     <span className="mr-1">{JURISDICTION_FLAGS[j]}</span>{j}
@@ -771,6 +774,7 @@ function ComparisonSection() {
 // ── Section 3 — Stage Guide ───────────────────────────────────────────────────
 
 function StageGuideSection() {
+  const { t } = useTranslation('procurement');
   const [activeJurisdiction, setActiveJurisdiction] = useState<Jurisdiction>('UK');
 
   const guideData = STAGE_GUIDES.find((g) => g.jurisdiction === activeJurisdiction);
@@ -778,7 +782,7 @@ function StageGuideSection() {
   return (
     <Card>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Stage-by-Stage Guide</h2>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t("guide.stageGuide", "Stage-by-Stage Guide")}</h2>
       </div>
 
       {/* Jurisdiction tabs */}
@@ -830,7 +834,7 @@ function StageGuideSection() {
                 <div>
                   <div className="flex items-center gap-1.5 mb-2">
                     <Users className="w-4 h-4 text-blue-500" />
-                    <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Who's Involved</h4>
+                    <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">{t("guide.whosInvolved", "Who's Involved")}</h4>
                   </div>
                   <ul className="space-y-1">
                     {stage.roles.map((role, ri) => (
@@ -846,7 +850,7 @@ function StageGuideSection() {
                 <div>
                   <div className="flex items-center gap-1.5 mb-2">
                     <FileText className="w-4 h-4 text-emerald-500" />
-                    <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Key Documents</h4>
+                    <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">{t("guide.keyDocuments", "Key Documents")}</h4>
                   </div>
                   <ul className="space-y-1">
                     {stage.documents.map((doc, di) => (
@@ -862,7 +866,7 @@ function StageGuideSection() {
                 <div>
                   <div className="flex items-center gap-1.5 mb-2">
                     <Shield className="w-4 h-4 text-amber-500" />
-                    <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Compliance</h4>
+                    <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">{t("guide.compliance", "Compliance")}</h4>
                   </div>
                   <ul className="space-y-1">
                     {stage.compliance.map((c, ci) => (
@@ -892,19 +896,20 @@ function StageGuideSection() {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export function ProcurementGuide() {
+  const { t } = useTranslation("procurement");
   const [activeSection, setActiveSection] = useState<'decision' | 'comparison' | 'guide'>('decision');
 
   const SECTIONS = [
-    { key: 'decision' as const, label: 'Decision Tree', desc: 'Find your procurement route' },
-    { key: 'comparison' as const, label: 'Jurisdiction Comparison', desc: 'Compare regulations side-by-side' },
-    { key: 'guide' as const, label: 'Stage-by-Stage Guide', desc: 'Detailed stage reference' },
+    { key: "decision" as const, label: t("guide.decisionTree", "Decision Tree"), desc: t("guide.decisionTreeDesc", "Find your procurement route") },
+    { key: "comparison" as const, label: t("guide.comparison", "Jurisdiction Comparison"), desc: t("guide.comparisonDesc", "Compare regulations side-by-side") },
+    { key: "guide" as const, label: t("guide.stageGuide", "Stage-by-Stage Guide"), desc: t("guide.stageGuideDesc", "Detailed stage reference") },
   ];
 
   return (
     <div>
       <Header
-        title="Procurement Guide"
-        subtitle="Interactive guide to procurement procedures across UK, EU, US Federal, and Australian regulatory frameworks"
+        title={t("guide.title", "Procurement Guide")}
+        subtitle={t("guide.subtitle", "Interactive guide to procurement procedures across UK, EU, US Federal, and Australian regulatory frameworks")}
       />
 
       {/* Section navigation */}

@@ -1,44 +1,47 @@
 import { Download, FileText, Table2, BarChart3 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Header } from '../components/layout/Header';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 
-const exports = [
-  {
-    title: 'Leaderboard CSV',
-    description: 'Ranked list of all 21 systems with HERM scores, vendor info, and coverage percentages.',
-    icon: BarChart3,
-    color: 'bg-blue-50 text-blue-600 dark:bg-blue-900/20',
-    href: '/api/export/leaderboard.csv',
-    filename: 'herm-leaderboard.csv',
-    badge: 'CSV',
-  },
-  {
-    title: 'Capability Heatmap CSV',
-    description: 'Full matrix of all 21 systems × 165 capabilities with raw scores (0, 50, 100).',
-    icon: Table2,
-    color: 'bg-purple-50 text-purple-600 dark:bg-purple-900/20',
-    href: '/api/export/heatmap.csv',
-    filename: 'herm-heatmap.csv',
-    badge: 'CSV',
-  },
-  {
-    title: 'Full Report JSON',
-    description: 'Complete JSON export including leaderboard, heatmap, system metadata, and capability definitions.',
-    icon: FileText,
-    color: 'bg-green-50 text-green-600 dark:bg-green-900/20',
-    href: '/api/export/report.json',
-    filename: 'herm-report.json',
-    badge: 'JSON',
-  },
-];
-
 export function ExportDownload() {
+  const { t } = useTranslation('admin');
+
+  const exports = [
+    {
+      title: t('export.leaderboardCsv', 'Leaderboard CSV'),
+      description: t('export.leaderboardCsvDesc', 'Ranked list of all 21 systems with HERM scores, vendor info, and coverage percentages.'),
+      icon: BarChart3,
+      color: 'bg-blue-50 text-blue-600 dark:bg-blue-900/20',
+      href: '/api/export/leaderboard.csv',
+      filename: 'herm-leaderboard.csv',
+      badge: 'CSV',
+    },
+    {
+      title: t('export.heatmapCsv', 'Capability Heatmap CSV'),
+      description: t('export.heatmapCsvDesc', 'Full matrix of all 21 systems × 165 capabilities with raw scores (0, 50, 100).'),
+      icon: Table2,
+      color: 'bg-purple-50 text-purple-600 dark:bg-purple-900/20',
+      href: '/api/export/heatmap.csv',
+      filename: 'herm-heatmap.csv',
+      badge: 'CSV',
+    },
+    {
+      title: t('export.fullReportJson', 'Full Report JSON'),
+      description: t('export.fullReportJsonDesc', 'Complete JSON export including leaderboard, heatmap, system metadata, and capability definitions.'),
+      icon: FileText,
+      color: 'bg-green-50 text-green-600 dark:bg-green-900/20',
+      href: '/api/export/report.json',
+      filename: 'herm-report.json',
+      badge: 'JSON',
+    },
+  ];
+
   return (
     <div>
       <Header
-        title="Export & Download"
-        subtitle="Download HERM capability data in multiple formats for offline analysis"
+        title={t('export.title', 'Export & Download')}
+        subtitle={t('export.subtitle', 'Download HERM capability data in multiple formats for offline analysis')}
       />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -57,7 +60,7 @@ export function ExportDownload() {
             <a href={exp.href} download={exp.filename}>
               <Button className="w-full">
                 <Download className="w-4 h-4 mr-2" />
-                Download {exp.badge}
+                {t('export.download', 'Download')} {exp.badge}
               </Button>
             </a>
           </Card>
@@ -65,7 +68,7 @@ export function ExportDownload() {
       </div>
 
       <Card>
-        <h3 className="font-semibold text-gray-800 dark:text-white mb-4">API Endpoints</h3>
+        <h3 className="font-semibold text-gray-800 dark:text-white mb-4">{t('export.apiEndpoints', 'API Endpoints')}</h3>
         <div className="space-y-3">
           {[
             { method: 'GET', path: '/api/scores/leaderboard', desc: 'Ranked systems with family breakdowns' },
