@@ -82,4 +82,95 @@ export const api = {
     client.get<ApiResponse<ChatMessage[]>>(`/chat/sessions/${sessionId}`),
   clearChatHistory: (sessionId: string) =>
     client.delete(`/chat/sessions/${sessionId}`),
+
+  // TCO
+  calculateTco: (data: {
+    systemSlug: string;
+    studentCount: number;
+    horizonYears: number;
+    overrides?: Record<string, number>;
+  }) => client.post<ApiResponse<unknown>>('/tco/calculate', data),
+  compareTco: (data: {
+    systemSlugs: string[];
+    studentCount: number;
+    horizonYears: number;
+  }) => client.post<ApiResponse<unknown[]>>('/tco/compare', data),
+  getTcoBenchmarks: () =>
+    client.get<ApiResponse<Record<string, unknown>>>('/tco/benchmarks'),
+  getTcoBenchmark: (slug: string) =>
+    client.get<ApiResponse<unknown>>(`/tco/benchmarks/${slug}`),
+  saveTcoEstimate: (data: Record<string, unknown>) =>
+    client.post<ApiResponse<unknown>>('/tco/estimates', data),
+  listTcoEstimates: () =>
+    client.get<ApiResponse<unknown[]>>('/tco/estimates'),
+  getTcoEstimate: (id: string) =>
+    client.get<ApiResponse<unknown>>(`/tco/estimates/${id}`),
+
+  // Procurement
+  createProject: (data: { name: string; jurisdiction?: string }) =>
+    client.post<ApiResponse<{ id: string; name: string; status: string }>>(
+      '/procurement/projects',
+      data
+    ),
+  listProjects: () =>
+    client.get<ApiResponse<{ id: string; name: string; status: string }[]>>(
+      '/procurement/projects'
+    ),
+  getProject: (id: string) =>
+    client.get<ApiResponse<unknown>>(`/procurement/projects/${id}`),
+  updateProject: (id: string, data: { name?: string; status?: string }) =>
+    client.patch<ApiResponse<unknown>>(`/procurement/projects/${id}`, data),
+  deleteProject: (id: string) =>
+    client.delete(`/procurement/projects/${id}`),
+  getWorkflow: (projectId: string) =>
+    client.get<ApiResponse<unknown>>(`/procurement/projects/${projectId}/workflow`),
+  updateWorkflowStage: (
+    projectId: string,
+    stageNum: number,
+    data: { notes?: string; status?: string }
+  ) =>
+    client.patch<ApiResponse<unknown>>(
+      `/procurement/projects/${projectId}/workflow/stages/${stageNum}`,
+      data
+    ),
+  advanceWorkflow: (projectId: string) =>
+    client.post<ApiResponse<unknown>>(
+      `/procurement/projects/${projectId}/workflow/advance`
+    ),
+  addShortlistEntry: (
+    projectId: string,
+    data: { systemId: string; status?: string; notes?: string }
+  ) =>
+    client.post<ApiResponse<unknown>>(
+      `/procurement/projects/${projectId}/shortlist`,
+      data
+    ),
+  getShortlist: (projectId: string) =>
+    client.get<ApiResponse<unknown[]>>(
+      `/procurement/projects/${projectId}/shortlist`
+    ),
+  updateShortlistEntry: (
+    projectId: string,
+    entryId: string,
+    data: { status?: string; notes?: string; score?: number }
+  ) =>
+    client.patch<ApiResponse<unknown>>(
+      `/procurement/projects/${projectId}/shortlist/${entryId}`,
+      data
+    ),
+  removeShortlistEntry: (projectId: string, entryId: string) =>
+    client.delete(
+      `/procurement/projects/${projectId}/shortlist/${entryId}`
+    ),
+
+  // Integration Assessment
+  createIntegrationAssessment: (data: {
+    name: string;
+    currentSystems: unknown[];
+    targetSystemId?: string;
+  }) => client.post<ApiResponse<unknown>>('/integration/assess', data),
+  listIntegrationAssessments: () =>
+    client.get<ApiResponse<unknown[]>>('/integration/assess'),
+  getIntegrationAssessment: (id: string) =>
+    client.get<ApiResponse<unknown>>(`/integration/assess/${id}`),
 };

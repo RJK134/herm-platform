@@ -10,6 +10,9 @@ import vendorsRouter from './api/vendors/vendors.router';
 import researchRouter from './api/research/research.router';
 import scoringRouter from './api/scoring/scoring.router';
 import chatRouter from './api/chat/chat.router';
+import tcoRouter from './api/tco/tco.router';
+import procurementRouter from './api/procurement/procurement.router';
+import integrationRouter from './api/integration/integration.router';
 
 const app = express();
 const PORT = process.env['PORT'] || 3001;
@@ -34,6 +37,9 @@ app.use('/api/vendors', vendorsRouter);
 app.use('/api/research', researchRouter);
 app.use('/api/scoring', scoringRouter);
 app.use('/api/chat', chatRouter);
+app.use('/api/tco', tcoRouter);
+app.use('/api/procurement', procurementRouter);
+app.use('/api/integration', integrationRouter);
 
 // 404
 app.use((_req, res) => {

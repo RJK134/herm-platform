@@ -1,7 +1,8 @@
 import { NavLink } from 'react-router-dom';
 import {
   BarChart3, Radar, Grid3X3, Building2, Search, ShoppingBasket,
-  Download, Settings, Sun, Moon, Store, HelpCircle, BookOpen, Bot
+  Download, Settings, Sun, Moon, Store, HelpCircle, BookOpen, Bot,
+  Calculator, Briefcase, Network
 } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 
@@ -12,6 +13,9 @@ const analyticsItems = [
   { to: '/system', icon: Building2, label: 'System Detail' },
   { to: '/capability', icon: Search, label: 'Capability View' },
   { to: '/basket', icon: ShoppingBasket, label: 'Capability Basket' },
+  { to: '/tco', icon: Calculator, label: 'TCO Calculator' },
+  { to: '/procurement', icon: Briefcase, label: 'Procurement Workflow' },
+  { to: '/integration', icon: Network, label: 'Integration Assessment' },
 ];
 
 const intelligenceItems = [

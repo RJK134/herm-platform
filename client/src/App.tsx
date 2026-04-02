@@ -14,6 +14,9 @@ import { VendorProfile } from './pages/VendorProfile';
 import { HowItWorks } from './pages/HowItWorks';
 import { ResearchHub } from './pages/ResearchHub';
 import { AiAssistant } from './pages/AiAssistant';
+import { TcoCalculator } from './pages/TcoCalculator';
+import { ProcurementWorkflow } from './pages/ProcurementWorkflow';
+import { IntegrationAssessment } from './pages/IntegrationAssessment';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 5 * 60 * 1000, retry: 1 } },
@@ -40,6 +43,9 @@ export default function App() {
               <Route path="/how-it-works" element={<HowItWorks />} />
               <Route path="/research" element={<ResearchHub />} />
               <Route path="/assistant" element={<AiAssistant />} />
+              <Route path="/tco" element={<TcoCalculator />} />
+              <Route path="/procurement" element={<ProcurementWorkflow />} />
+              <Route path="/integration" element={<IntegrationAssessment />} />
             </Routes>
           </main>
         </div>

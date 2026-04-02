@@ -69,21 +69,24 @@ model HermCapability {
 }
 
 model VendorSystem {
-  id          String   @id @default(cuid())
-  name        String
-  vendor      String
-  category    String
-  description String?
-  regions     String[]
-  cloudNative Boolean  @default(false)
-  website     String?
-  logoUrl     String?
-  isOwnSystem Boolean  @default(false)
-  scores      Score[]
-  profile     VendorProfile?
-  versions    VendorVersion[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                   String                  @id @default(cuid())
+  name                 String
+  vendor               String
+  category             String
+  description          String?
+  regions              String[]
+  cloudNative          Boolean                 @default(false)
+  website              String?
+  logoUrl              String?
+  isOwnSystem          Boolean                 @default(false)
+  scores               Score[]
+  profile              VendorProfile?
+  versions             VendorVersion[]
+  tcoEstimates         TcoEstimate[]
+  shortlistEntries     ShortlistEntry[]
+  integrationTargets   IntegrationAssessment[]
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
 }
 
 model Score {
@@ -138,6 +141,8 @@ model ProcurementProject {
   jurisdiction  String      @default("UK")
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
+  workflow      ProcurementWorkflow?
+  shortlist     ShortlistEntry[]
 }
 
 model AuditLog {
@@ -230,4 +235,86 @@ model ChatMessage {
   context   Json?
   createdAt DateTime @default(now())
   @@index([sessionId])
+}
+
+model TcoEstimate {
+  id                 String        @id @default(cuid())
+  name               String
+  institutionSize    String
+  studentFte         Int
+  staffFte           Int
+  currency           String        @default("GBP")
+  horizonYears       Int           @default(5)
+  systemId           String?
+  system             VendorSystem? @relation(fields: [systemId], references: [id])
+  licenceCostYear1   Float         @default(0)
+  licenceCostGrowth  Float         @default(0.03)
+  implementationCost Float         @default(0)
+  internalStaffCost  Float         @default(0)
+  trainingCost       Float         @default(0)
+  infrastructureCost Float         @default(0)
+  integrationCost    Float         @default(0)
+  supportCost        Float         @default(0)
+  customDevCost      Float         @default(0)
+  totalTco           Float         @default(0)
+  annualRunRate      Float         @default(0)
+  perStudentCost     Float         @default(0)
+  notes              String?
+  institutionId      String?
+  createdById        String        @default("anonymous")
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  @@index([systemId])
+}
+
+model ProcurementWorkflow {
+  id           String             @id @default(cuid())
+  projectId    String             @unique
+  project      ProcurementProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  currentStage Int                @default(1)
+  stages       WorkflowStage[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+}
+
+model WorkflowStage {
+  id          String              @id @default(cuid())
+  workflowId  String
+  workflow    ProcurementWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  stageNumber Int
+  title       String
+  status      String              @default("pending")
+  completedAt DateTime?
+  notes       String?
+  outputs     Json?
+  @@unique([workflowId, stageNumber])
+  @@index([workflowId])
+}
+
+model ShortlistEntry {
+  id        String             @id @default(cuid())
+  projectId String
+  project   ProcurementProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  systemId  String
+  system    VendorSystem       @relation(fields: [systemId], references: [id])
+  status    String             @default("longlist")
+  score     Float?
+  notes     String?
+  addedAt   DateTime           @default(now())
+  @@unique([projectId, systemId])
+  @@index([projectId])
+}
+
+model IntegrationAssessment {
+  id              String        @id @default(cuid())
+  name            String
+  currentSystems  Json
+  targetSystemId  String?
+  targetSystem    VendorSystem? @relation(fields: [targetSystemId], references: [id])
+  complexityScore Int           @default(0)
+  riskLevel       String        @default("medium")
+  findings        Json?
+  createdById     String        @default("anonymous")
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 }
