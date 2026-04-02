@@ -8,18 +8,39 @@ datasource db {
 }
 
 model Institution {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  country   String
-  tier      String   @default("free")
-  logoUrl   String?
-  domain    String?
-  users     User[]
-  baskets   CapabilityBasket[]
-  projects  ProcurementProject[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String               @id @default(cuid())
+  name         String
+  slug         String               @unique
+  country      String
+  tier         String               @default("free")
+  logoUrl      String?
+  domain       String?
+  users        User[]
+  baskets      CapabilityBasket[]
+  projects     ProcurementProject[]
+  subscription Subscription?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+}
+
+model Subscription {
+  id                   String           @id @default(cuid())
+  institutionId        String           @unique
+  institution          Institution      @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  tier                 SubscriptionTier @default(FREE)
+  status               String           @default("active")
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+}
+
+enum SubscriptionTier {
+  FREE
+  PROFESSIONAL
+  ENTERPRISE
 }
 
 model User {

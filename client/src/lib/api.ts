@@ -12,11 +12,52 @@ import type {
   ResearchItem,
   ChatMessage,
   ScoringMethodology,
+  AuthUser,
+  InstitutionDetail,
+  InstitutionUser,
 } from '../types';
+
+const TOKEN_KEY = 'herm_auth_token';
 
 const client = axios.create({ baseURL: '/api' });
 
+// Attach JWT to every request if present
+client.interceptors.request.use((config) => {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 export const api = {
+  // Auth
+  login: (email: string, password: string) =>
+    client.post<ApiResponse<{ token: string; user: AuthUser }>>('/auth/login', { email, password }),
+  register: (data: {
+    email: string;
+    name: string;
+    password: string;
+    institutionName: string;
+    institutionCountry?: string;
+  }) =>
+    client.post<ApiResponse<{ token: string; user: AuthUser }>>('/auth/register', data),
+  getMe: () =>
+    client.get<ApiResponse<AuthUser>>('/auth/me'),
+  updateProfile: (name: string) =>
+    client.patch<ApiResponse<AuthUser>>('/auth/me', { name }),
+  logout: () =>
+    client.post<ApiResponse<{ message: string }>>('/auth/logout'),
+
+  // Institution
+  getMyInstitution: () =>
+    client.get<ApiResponse<InstitutionDetail>>('/institutions/me'),
+  updateMyInstitution: (data: { name?: string; logoUrl?: string; domain?: string }) =>
+    client.patch<ApiResponse<InstitutionDetail>>('/institutions/me', data),
+  listInstitutionUsers: () =>
+    client.get<ApiResponse<InstitutionUser[]>>('/institutions/me/users'),
+  updateUserRole: (userId: string, role: string) =>
+    client.patch<ApiResponse<InstitutionUser>>(`/institutions/me/users/${userId}/role`, { role }),
   // Systems
   getSystems: (params?: { category?: string }) =>
     client.get<ApiResponse<VendorSystem[]>>('/systems', { params }),

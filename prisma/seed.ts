@@ -1,16 +1,26 @@
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('Seeding HERM platform...');
 
-  // Clean slate
+  // Clean slate — delete in dependency order
+  await prisma.versionScore.deleteMany();
+  await prisma.vendorVersion.deleteMany();
+  await prisma.vendorProfile.deleteMany();
   await prisma.score.deleteMany();
   await prisma.basketItem.deleteMany();
   await prisma.capabilityBasket.deleteMany();
   await prisma.hermCapability.deleteMany();
   await prisma.hermFamily.deleteMany();
+  await prisma.shortlistEntry.deleteMany();
+  await prisma.workflowStage.deleteMany();
+  await prisma.procurementWorkflow.deleteMany();
+  await prisma.procurementProject.deleteMany();
+  await prisma.tcoEstimate.deleteMany();
+  await prisma.integrationAssessment.deleteMany();
   await prisma.vendorSystem.deleteMany();
 
   // ── FAMILIES ──────────────────────────────────────────────────────────────
@@ -339,6 +349,42 @@ async function main() {
   const { seedVendorProfiles } = await import('./seeds/vendor-profiles');
   await seedVendorProfiles(prisma);
   console.log('Vendor profiles seeded');
+
+  // ── Demo institution & user ──────────────────────────────────────────────
+  const demoInstitution = await prisma.institution.upsert({
+    where: { slug: 'demo-university' },
+    update: {},
+    create: {
+      name: 'Demo University',
+      slug: 'demo-university',
+      country: 'UK',
+      tier: 'professional',
+    },
+  });
+
+  await prisma.subscription.upsert({
+    where: { institutionId: demoInstitution.id },
+    update: {},
+    create: {
+      institutionId: demoInstitution.id,
+      tier: 'PROFESSIONAL',
+      status: 'active',
+    },
+  });
+
+  const demoHash = await bcrypt.hash('demo12345', 10);
+  await prisma.user.upsert({
+    where: { email: 'demo@demo-university.ac.uk' },
+    update: {},
+    create: {
+      email: 'demo@demo-university.ac.uk',
+      name: 'Demo Admin',
+      passwordHash: demoHash,
+      role: 'INSTITUTION_ADMIN',
+      institutionId: demoInstitution.id,
+    },
+  });
+  console.log('Demo user seeded — demo@demo-university.ac.uk / demo12345');
 
   console.log('Seeding complete!');
 }

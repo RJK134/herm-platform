@@ -1,0 +1,150 @@
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from 'react';
+import axios from 'axios';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export interface AuthUser {
+  userId: string;
+  email: string;
+  name: string;
+  role: string;
+  institutionId: string;
+  institutionName: string;
+  tier: 'free' | 'professional' | 'enterprise';
+}
+
+export interface RegisterData {
+  email: string;
+  name: string;
+  password: string;
+  institutionName: string;
+  institutionCountry?: string;
+}
+
+interface AuthContextValue {
+  user: AuthUser | null;
+  token: string | null;
+  isLoading: boolean;
+  isAuthenticated: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  register: (data: RegisterData) => Promise<void>;
+  logout: () => void;
+}
+
+// ── Context ───────────────────────────────────────────────────────────────────
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+const TOKEN_KEY = 'herm_auth_token';
+
+// ── Provider ──────────────────────────────────────────────────────────────────
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const setAuth = useCallback((newToken: string, userData: AuthUser) => {
+    localStorage.setItem(TOKEN_KEY, newToken);
+    setToken(newToken);
+    setUser(userData);
+    axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+  }, []);
+
+  const clearAuth = useCallback(() => {
+    localStorage.removeItem(TOKEN_KEY);
+    setToken(null);
+    setUser(null);
+    delete axios.defaults.headers.common['Authorization'];
+  }, []);
+
+  // Restore session from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem(TOKEN_KEY);
+    if (saved) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${saved}`;
+      axios
+        .get<{ success: boolean; data: AuthUser }>('/api/auth/me')
+        .then(({ data }) => {
+          if (data.success) {
+            setToken(saved);
+            setUser(data.data);
+          } else {
+            clearAuth();
+          }
+        })
+        .catch(() => clearAuth())
+        .finally(() => setIsLoading(false));
+    } else {
+      setIsLoading(false);
+    }
+  }, [clearAuth]);
+
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const { data } = await axios.post<{
+        success: boolean;
+        data: { token: string; user: AuthUser };
+        error?: { message: string };
+      }>('/api/auth/login', { email, password });
+
+      if (!data.success) {
+        throw new Error(data.error?.message ?? 'Login failed');
+      }
+      setAuth(data.data.token, data.data.user);
+    },
+    [setAuth]
+  );
+
+  const register = useCallback(
+    async (formData: RegisterData) => {
+      const { data } = await axios.post<{
+        success: boolean;
+        data: { token: string; user: AuthUser };
+        error?: { message: string };
+      }>('/api/auth/register', formData);
+
+      if (!data.success) {
+        throw new Error(data.error?.message ?? 'Registration failed');
+      }
+      setAuth(data.data.token, data.data.user);
+    },
+    [setAuth]
+  );
+
+  const logout = useCallback(() => {
+    clearAuth();
+  }, [clearAuth]);
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        isLoading,
+        isAuthenticated: !!user,
+        login,
+        register,
+        logout,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+// ── Hook ──────────────────────────────────────────────────────────────────────
+
+export function useAuthContext(): AuthContextValue {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error('useAuthContext must be used within <AuthProvider>');
+  }
+  return ctx;
+}

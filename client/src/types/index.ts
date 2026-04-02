@@ -148,3 +148,59 @@ export interface ScoringMethodology {
   content: Record<string, unknown>;
   updatedAt: string;
 }
+
+// ── Auth & Institution types ─────────────────────────────────────────────────
+
+export interface AuthUser {
+  userId: string;
+  email: string;
+  name: string;
+  role: string;
+  institutionId: string;
+  institutionName: string;
+  tier: 'free' | 'professional' | 'enterprise';
+}
+
+export interface Subscription {
+  id: string;
+  institutionId: string;
+  tier: 'FREE' | 'PROFESSIONAL' | 'ENTERPRISE';
+  status: string;
+  stripeCustomerId?: string;
+  currentPeriodEnd?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InstitutionDetail {
+  id: string;
+  name: string;
+  slug: string;
+  country: string;
+  logoUrl?: string;
+  domain?: string;
+  tier: string;
+  subscription?: Subscription;
+  _count?: {
+    users: number;
+    projects: number;
+    baskets: number;
+  };
+}
+
+export interface InstitutionUser {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  createdAt: string;
+}
+
+export type UserRole =
+  | 'SUPER_ADMIN'
+  | 'INSTITUTION_ADMIN'
+  | 'PROCUREMENT_LEAD'
+  | 'EVALUATOR'
+  | 'VENDOR_ADMIN'
+  | 'VENDOR_CONTRIBUTOR'
+  | 'VIEWER';
