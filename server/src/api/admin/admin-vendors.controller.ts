@@ -8,6 +8,12 @@ const listQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
+const listSubmissionsQuerySchema = z.object({
+  status: z.enum(['pending', 'approved', 'rejected']).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
 const updateVendorAccountSchema = z.object({
   status: z.enum(['pending', 'approved', 'rejected', 'suspended']).optional(),
   systemId: z.string().cuid().optional(),
@@ -62,6 +68,29 @@ export const updateVendorAccount = async (req: Request, res: Response, next: Nex
       },
     });
     res.json({ success: true, data });
+  } catch (err) { next(err); }
+};
+
+export const listAllSubmissions = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const parsed = listSubmissionsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message ?? 'Invalid query parameters' } });
+      return;
+    }
+    const { status, limit, offset } = parsed.data;
+    const where = status ? { status } : {};
+    const [data, total] = await Promise.all([
+      prisma.vendorSubmission.findMany({
+        where,
+        orderBy: { submittedAt: 'desc' },
+        take: limit,
+        skip: offset,
+        include: { vendorAccount: { select: { id: true, companyName: true } } },
+      }),
+      prisma.vendorSubmission.count({ where }),
+    ]);
+    res.json({ success: true, data, meta: { total, limit, offset } });
   } catch (err) { next(err); }
 };
 

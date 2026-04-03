@@ -400,8 +400,8 @@ async function main() {
     },
   });
 
-  // Add basket items for key capabilities (use code-based lookup, skip if already present)
-  const coreCodes = ['LT001', 'LT002', 'LT003', 'RE001', 'SM001', 'SM002', 'FA001', 'HR001'];
+  // Add basket items for key capabilities — codes follow BC### pattern from HERM seed
+  const coreCodes = ['BC008', 'BC009', 'BC011', 'BC016', 'BC029', 'BC028', 'BC060', 'BC090'];
   const coreCaps = await prisma.hermCapability.findMany({
     where: { code: { in: coreCodes } },
     select: { id: true, code: true },

@@ -3,6 +3,7 @@ import { authenticateJWT, requireRole } from '../../middleware/auth';
 import {
   listVendorAccounts,
   updateVendorAccount,
+  listAllSubmissions,
   getVendorSubmissions,
   reviewSubmission,
 } from './admin-vendors.controller';
@@ -15,6 +16,7 @@ router.use(authenticateJWT, requireRole(['SUPER_ADMIN', 'INSTITUTION_ADMIN']));
 router.get('/vendors', listVendorAccounts);
 router.patch('/vendors/:id', updateVendorAccount);
 router.get('/vendors/:id/submissions', getVendorSubmissions);
+router.get('/submissions', listAllSubmissions);
 router.patch('/submissions/:id', reviewSubmission);
 
 export default router;

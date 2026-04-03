@@ -4,15 +4,6 @@ import {
   vendorRegisterSchema, vendorLoginSchema,
   vendorProfileUpdateSchema, vendorSubmissionSchema,
 } from './vendor-portal.schema';
-import type { VendorJwtPayload } from './vendor-portal.service';
-
-// Extend express Request to carry vendorUser
-declare module 'express-serve-static-core' {
-  interface Request {
-    vendorUser?: VendorJwtPayload;
-  }
-}
-
 const svc = new VendorPortalService();
 
 export const registerVendor = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
