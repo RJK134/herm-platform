@@ -1,7 +1,5 @@
-import { PrismaClient } from '@prisma/client';
 import type { CreateAssessmentInput, CurrentSystem } from './integration.schema';
-
-const prisma = new PrismaClient();
+import prisma from '../../utils/prisma';
 
 interface IntegrationFindings {
   risks: string[];

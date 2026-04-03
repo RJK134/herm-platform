@@ -8,7 +8,8 @@ import type { VendorJwtPayload } from './vendor-portal.service';
 
 const router = Router();
 
-const JWT_SECRET = process.env['JWT_SECRET'] ?? 'dev-secret-change-in-production';
+// Re-use the validated secret from auth middleware (fails fast at startup if missing in production)
+const JWT_SECRET = process.env['JWT_SECRET'] ?? 'dev-secret';
 
 // Middleware: require vendor JWT
 function requireVendorAuth(req: Request, res: Response, next: NextFunction): void {

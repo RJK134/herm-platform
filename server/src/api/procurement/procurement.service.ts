@@ -1,4 +1,3 @@
-import { PrismaClient } from '@prisma/client';
 import type {
   CreateProjectInput,
   UpdateProjectInput,
@@ -6,8 +5,7 @@ import type {
   AddShortlistEntryInput,
   UpdateShortlistEntryInput,
 } from './procurement.schema';
-
-const prisma = new PrismaClient();
+import prisma from '../../utils/prisma';
 
 const WORKFLOW_STAGES = [
   { stageNumber: 1, title: 'Requirements Definition', status: 'active' },

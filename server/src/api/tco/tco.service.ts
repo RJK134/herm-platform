@@ -1,12 +1,10 @@
-import { PrismaClient } from '@prisma/client';
 import {
   TCO_BENCHMARKS,
   calculateTco,
   type TcoBenchmark,
   type TcoResult,
 } from '../../data/tco-benchmarks';
-
-const prisma = new PrismaClient();
+import prisma from '../../utils/prisma';
 
 export interface CompareResult extends TcoResult {
   systemSlug: string;

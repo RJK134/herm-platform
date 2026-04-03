@@ -1,6 +1,17 @@
 import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
 
+// Fail fast at startup if JWT_SECRET is not configured — prevents forged tokens
+if (!process.env['JWT_SECRET']) {
+  if (process.env['NODE_ENV'] === 'production') {
+    throw new Error('JWT_SECRET environment variable must be set in production');
+  } else {
+    console.warn('[AUTH] WARNING: JWT_SECRET not set — using insecure dev-secret. Set JWT_SECRET in .env');
+  }
+}
+
+const JWT_SECRET = process.env['JWT_SECRET'] ?? 'dev-secret';
+
 export interface JwtPayload {
   userId: string;
   email: string;
@@ -37,7 +48,7 @@ export function authenticateJWT(req: Request, res: Response, next: NextFunction)
     return;
   }
   try {
-    req.user = jwt.verify(token, process.env['JWT_SECRET'] ?? 'dev-secret') as JwtPayload;
+    req.user = jwt.verify(token, JWT_SECRET) as JwtPayload;
     next();
   } catch {
     res.status(401).json({
@@ -52,7 +63,7 @@ export function optionalJWT(req: Request, _res: Response, next: NextFunction): v
   const token = extractToken(req);
   if (token) {
     try {
-      req.user = jwt.verify(token, process.env['JWT_SECRET'] ?? 'dev-secret') as JwtPayload;
+      req.user = jwt.verify(token, JWT_SECRET) as JwtPayload;
     } catch {
       // Ignore — proceed as anonymous
     }
@@ -88,5 +99,5 @@ export function requireRole(roles: string[]) {
 }
 
 export function generateToken(payload: JwtPayload): string {
-  return jwt.sign(payload, process.env['JWT_SECRET'] ?? 'dev-secret', { expiresIn: '7d' });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
 }
