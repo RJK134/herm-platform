@@ -3,6 +3,11 @@ import { z } from 'zod';
 import prisma from '../../utils/prisma';
 import type { VendorTier } from '@prisma/client';
 
+const listQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
 const updateVendorAccountSchema = z.object({
   status: z.enum(['pending', 'approved', 'rejected', 'suspended']).optional(),
   systemId: z.string().cuid().optional(),
@@ -14,16 +19,27 @@ const reviewSubmissionSchema = z.object({
   reviewNotes: z.string().max(2000).optional(),
 });
 
-export const listVendorAccounts = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const listVendorAccounts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const data = await prisma.vendorAccount.findMany({
-      orderBy: { createdAt: 'desc' },
-      include: {
-        system: { select: { id: true, name: true, vendor: true } },
-        _count: { select: { submissions: true, users: true } },
-      },
-    });
-    res.json({ success: true, data });
+    const parsed = listQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message ?? 'Invalid query parameters' } });
+      return;
+    }
+    const { limit, offset } = parsed.data;
+    const [data, total] = await Promise.all([
+      prisma.vendorAccount.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+        include: {
+          system: { select: { id: true, name: true, vendor: true } },
+          _count: { select: { submissions: true, users: true } },
+        },
+      }),
+      prisma.vendorAccount.count(),
+    ]);
+    res.json({ success: true, data, meta: { total, limit, offset } });
   } catch (err) { next(err); }
 };
 

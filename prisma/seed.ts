@@ -386,6 +386,59 @@ async function main() {
   });
   console.log('Demo user seeded — demo@demo-university.ac.uk / demo12345');
 
+  // ── Demo capability basket ────────────────────────────────────────────────
+  const demoBasket = await prisma.capabilityBasket.upsert({
+    where: { id: 'demo-basket-001' },
+    update: {},
+    create: {
+      id: 'demo-basket-001',
+      name: 'Core SIS Evaluation',
+      description: 'Standard basket for evaluating Student Information System capabilities across core HERM families.',
+      institutionId: demoInstitution.id,
+      createdById: 'seed',
+      isTemplate: false,
+    },
+  });
+
+  // Add basket items for key capabilities (use code-based lookup, skip if already present)
+  const coreCodes = ['LT001', 'LT002', 'LT003', 'RE001', 'SM001', 'SM002', 'FA001', 'HR001'];
+  const coreCaps = await prisma.hermCapability.findMany({
+    where: { code: { in: coreCodes } },
+    select: { id: true, code: true },
+  });
+
+  for (const cap of coreCaps) {
+    await prisma.basketItem.upsert({
+      where: { basketId_capabilityId: { basketId: demoBasket.id, capabilityId: cap.id } },
+      update: {},
+      create: {
+        basketId: demoBasket.id,
+        capabilityId: cap.id,
+        priority: 'must',
+        weight: 3,
+      },
+    });
+  }
+  console.log(`Demo basket seeded with ${coreCaps.length} capabilities`);
+
+  // ── Demo procurement project ──────────────────────────────────────────────
+  await prisma.procurementProject.upsert({
+    where: { id: 'demo-project-001' },
+    update: {},
+    create: {
+      id: 'demo-project-001',
+      name: 'SIS Replacement Programme 2026',
+      description: 'Full procurement exercise to replace the legacy student information system.',
+      institutionId: demoInstitution.id,
+      status: 'draft',
+      basketId: demoBasket.id,
+      jurisdiction: 'UK',
+      estimatedValue: 2500000,
+      procurementRoute: 'open',
+    },
+  });
+  console.log('Demo procurement project seeded');
+
   console.log('Seeding complete!');
 }
 

@@ -41,16 +41,30 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/api', apiRateLimiter);
 
-// Health check
-app.get('/api/health', (_req, res) => {
-  res.json({
-    success: true,
-    data: {
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      version: '2.0.0',
-    },
-  });
+// Health check — verifies DB connectivity before returning healthy
+app.get('/api/health', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({
+      success: true,
+      data: {
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        version: '2.0.0',
+        db: 'connected',
+      },
+    });
+  } catch {
+    res.status(503).json({
+      success: false,
+      data: {
+        status: 'degraded',
+        timestamp: new Date().toISOString(),
+        version: '2.0.0',
+        db: 'unavailable',
+      },
+    });
+  }
 });
 
 // Auth (unauthenticated — stricter rate limit)
