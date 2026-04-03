@@ -72,44 +72,47 @@ export class SystemsService {
       orderBy: { sortOrder: 'asc' },
     });
 
-    const results = await Promise.all(
-      systems.map(async (system) => {
-        const scores = await prisma.score.findMany({
-          where: { systemId: system.id, version: 1 },
-          include: { capability: { include: { family: true } } },
-        });
+    // Batch-load all scores for all requested systems in a single query (avoids N+1)
+    const allScores = await prisma.score.findMany({
+      where: { systemId: { in: ids }, version: 1 },
+      include: { capability: true },
+    });
 
-        const scoreMap: Record<string, number> = {};
-        for (const s of scores) {
-          scoreMap[s.capability.code] = s.value;
-        }
+    // Build map: systemId -> capabilityCode -> value
+    const scoreIndex = new Map<string, Map<string, number>>();
+    for (const s of allScores) {
+      if (!scoreIndex.has(s.systemId)) scoreIndex.set(s.systemId, new Map());
+      scoreIndex.get(s.systemId)!.set(s.capability.code, s.value);
+    }
 
-        const familyScores = families.map((family) => {
-          const caps = family.capabilities;
-          const total = caps.reduce((sum, c) => sum + (scoreMap[c.code] ?? 0), 0);
-          const max = caps.length * 100;
-          return {
-            familyCode: family.code,
-            familyName: family.name,
-            score: total,
-            maxScore: max,
-            percentage: max > 0 ? (total / max) * 100 : 0,
-          };
-        });
+    const results = systems.map((system) => {
+      const scoreMap = scoreIndex.get(system.id) ?? new Map<string, number>();
 
-        const totalScore = familyScores.reduce((s, f) => s + f.score, 0);
-        const maxScore = familyScores.reduce((s, f) => s + f.maxScore, 0);
-
+      const familyScores = families.map((family) => {
+        const caps = family.capabilities;
+        const total = caps.reduce((sum, c) => sum + (scoreMap.get(c.code) ?? 0), 0);
+        const max = caps.length * 100;
         return {
-          system,
-          totalScore,
-          maxScore,
-          percentage: maxScore > 0 ? (totalScore / maxScore) * 100 : 0,
-          rank: 0,
-          familyScores,
+          familyCode: family.code,
+          familyName: family.name,
+          score: total,
+          maxScore: max,
+          percentage: max > 0 ? (total / max) * 100 : 0,
         };
-      })
-    );
+      });
+
+      const totalScore = familyScores.reduce((s, f) => s + f.score, 0);
+      const maxScore = familyScores.reduce((s, f) => s + f.maxScore, 0);
+
+      return {
+        system,
+        totalScore,
+        maxScore,
+        percentage: maxScore > 0 ? (totalScore / maxScore) * 100 : 0,
+        rank: 0,
+        familyScores,
+      };
+    });
 
     // Sort by percentage desc and assign ranks
     results.sort((a, b) => b.percentage - a.percentage);

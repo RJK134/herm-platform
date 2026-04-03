@@ -76,15 +76,21 @@ export class ScoresService {
       where: { version: 1 },
     });
 
+    // Pre-build O(1) capability id→code lookup (replaces O(n) Array.find per score)
+    const capIdToCode = new Map<string, string>();
+    for (const cap of capabilities) {
+      capIdToCode.set(cap.id, cap.code);
+    }
+
     // Build matrix: systemId -> capabilityCode -> value
     const matrix: Record<string, Record<string, number>> = {};
     for (const system of systems) {
       matrix[system.id] = {};
     }
     for (const score of scores) {
-      const cap = capabilities.find(c => c.id === score.capabilityId);
-      if (cap && matrix[score.systemId]) {
-        matrix[score.systemId][cap.code] = score.value;
+      const capCode = capIdToCode.get(score.capabilityId);
+      if (capCode && matrix[score.systemId]) {
+        matrix[score.systemId][capCode] = score.value;
       }
     }
 

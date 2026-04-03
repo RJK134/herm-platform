@@ -5,11 +5,15 @@ export const helmetMiddleware = helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
+      // 'unsafe-inline' and 'unsafe-eval' removed — XSS protection requires strict CSP.
+      // The Vite React frontend injects styles via CSS-in-JS at build time, so no inline
+      // scripts are needed at runtime from the API layer. If admin UI adds inline styles
+      // later, use a nonce instead of re-enabling 'unsafe-inline'.
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'"],
       imgSrc: ["'self'", 'data:', 'https:'],
       connectSrc: ["'self'", 'ws:', 'wss:'],
-      fontSrc: ["'self'", 'data:'],
+      fontSrc: ["'self'", 'data:', 'https:'],
       objectSrc: ["'none'"],
       frameSrc: ["'none'"],
     },

@@ -53,7 +53,7 @@ model User {
   passwordHash  String      @default("")
   role          UserRole    @default(VIEWER)
   institutionId String
-  institution   Institution @relation(fields: [institutionId], references: [id])
+  institution   Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
   evaluationMemberships      EvaluationMember[]
   domainAssignments          EvaluationDomainAssignment[] @relation("DomainAssignments")
   notifications Notification[]
@@ -88,7 +88,7 @@ model HermCapability {
   name          String
   description   String?
   familyId      String
-  family        HermFamily    @relation(fields: [familyId], references: [id])
+  family        HermFamily    @relation(fields: [familyId], references: [id], onDelete: Restrict)
   sortOrder     Int
   scores        Score[]
   basketItems   BasketItem[]
@@ -125,9 +125,9 @@ model VendorSystem {
 model Score {
   id           String         @id @default(cuid())
   systemId     String
-  system       VendorSystem   @relation(fields: [systemId], references: [id])
+  system       VendorSystem   @relation(fields: [systemId], references: [id], onDelete: Cascade)
   capabilityId String
-  capability   HermCapability @relation(fields: [capabilityId], references: [id])
+  capability   HermCapability @relation(fields: [capabilityId], references: [id], onDelete: Restrict)
   value        Int
   evidence     String?
   source       String?
@@ -140,16 +140,17 @@ model Score {
 }
 
 model CapabilityBasket {
-  id            String      @id @default(cuid())
+  id            String       @id @default(cuid())
   name          String
   description   String?
   institutionId String?
-  institution   Institution? @relation(fields: [institutionId], references: [id])
+  institution   Institution? @relation(fields: [institutionId], references: [id], onDelete: SetNull)
   createdById   String
   items         BasketItem[]
-  isTemplate    Boolean     @default(false)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  isTemplate    Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  @@index([institutionId])
 }
 
 model BasketItem {
@@ -157,7 +158,7 @@ model BasketItem {
   basketId     String
   basket       CapabilityBasket @relation(fields: [basketId], references: [id], onDelete: Cascade)
   capabilityId String
-  capability   HermCapability   @relation(fields: [capabilityId], references: [id])
+  capability   HermCapability   @relation(fields: [capabilityId], references: [id], onDelete: Restrict)
   priority     String           @default("must")
   weight       Int              @default(1)
   notes        String?
@@ -169,7 +170,7 @@ model ProcurementProject {
   name             String
   description      String?
   institutionId    String
-  institution      Institution @relation(fields: [institutionId], references: [id])
+  institution      Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
   status           String      @default("draft")
   basketId         String?
   jurisdiction     String      @default("UK")
@@ -184,6 +185,7 @@ model ProcurementProject {
   stages           ProcurementStage[]
   evaluations      ProcurementEvaluation[]
   complianceChecks ComplianceCheck[]
+  @@index([institutionId])
 }
 
 model AuditLog {
@@ -202,7 +204,7 @@ model AuditLog {
 model VendorVersion {
   id           String         @id @default(cuid())
   systemId     String
-  system       VendorSystem   @relation(fields: [systemId], references: [id])
+  system       VendorSystem   @relation(fields: [systemId], references: [id], onDelete: Cascade)
   versionName  String
   releaseDate  DateTime?
   endOfLife    DateTime?
@@ -215,9 +217,9 @@ model VendorVersion {
 model VersionScore {
   id             String         @id @default(cuid())
   versionId      String
-  version        VendorVersion  @relation(fields: [versionId], references: [id])
+  version        VendorVersion  @relation(fields: [versionId], references: [id], onDelete: Cascade)
   capabilityId   String
-  capability     HermCapability @relation(fields: [capabilityId], references: [id])
+  capability     HermCapability @relation(fields: [capabilityId], references: [id], onDelete: Restrict)
   value          Int
   changeFromPrev Int?
   evidence       String?
@@ -228,7 +230,7 @@ model VersionScore {
 model VendorProfile {
   id                   String       @id @default(cuid())
   systemId             String       @unique
-  system               VendorSystem @relation(fields: [systemId], references: [id])
+  system               VendorSystem @relation(fields: [systemId], references: [id], onDelete: Cascade)
   foundedYear          Int?
   headquarters         String?
   employees            String?
@@ -287,7 +289,7 @@ model TcoEstimate {
   currency           String        @default("GBP")
   horizonYears       Int           @default(5)
   systemId           String?
-  system             VendorSystem? @relation(fields: [systemId], references: [id])
+  system             VendorSystem? @relation(fields: [systemId], references: [id], onDelete: SetNull)
   licenceCostYear1   Float         @default(0)
   licenceCostGrowth  Float         @default(0.03)
   implementationCost Float         @default(0)
@@ -306,6 +308,7 @@ model TcoEstimate {
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
   @@index([systemId])
+  @@index([institutionId])
 }
 
 model ProcurementWorkflow {
@@ -337,7 +340,7 @@ model ShortlistEntry {
   projectId String
   project   ProcurementProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
   systemId  String
-  system    VendorSystem       @relation(fields: [systemId], references: [id])
+  system    VendorSystem       @relation(fields: [systemId], references: [id], onDelete: Restrict)
   status    String             @default("longlist")
   score     Float?
   notes     String?
@@ -351,13 +354,15 @@ model IntegrationAssessment {
   name            String
   currentSystems  Json
   targetSystemId  String?
-  targetSystem    VendorSystem? @relation(fields: [targetSystemId], references: [id])
+  targetSystem    VendorSystem? @relation(fields: [targetSystemId], references: [id], onDelete: SetNull)
   complexityScore Int           @default(0)
   riskLevel       String        @default("medium")
   findings        Json?
   createdById     String        @default("anonymous")
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
+  @@index([targetSystemId])
+  @@index([createdById])
 }
 
 // ── Architecture & System Landscape Assessment ────────────────────────────────
@@ -370,7 +375,7 @@ model ArchitectureAssessment {
   integrationLinks    Json          // IntegrationLink[] — { fromId, toId, protocol, complexity }
   architecturePattern String        @default("point-to-point")
   targetSystemId      String?
-  targetSystem        VendorSystem? @relation(fields: [targetSystemId], references: [id])
+  targetSystem        VendorSystem? @relation(fields: [targetSystemId], references: [id], onDelete: SetNull)
   // Risk dimensions (0–100 each)
   dataRisk            Int           @default(0)
   cutoverRisk         Int           @default(0)
@@ -384,6 +389,8 @@ model ArchitectureAssessment {
   createdById         String        @default("anonymous")
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
+  @@index([institutionId])
+  @@index([createdById])
 }
 
 // ── Cost & Value Analysis (Business Case Builder) ─────────────────────────────
@@ -393,7 +400,7 @@ model ValueAnalysis {
   name                    String
   institutionId           String?
   systemId                String?
-  targetSystem            VendorSystem? @relation(fields: [systemId], references: [id])
+  targetSystem            VendorSystem? @relation(fields: [systemId], references: [id], onDelete: SetNull)
   // Institution profile
   studentFte              Int           @default(10000)
   staffFte                Int           @default(500)
@@ -433,6 +440,7 @@ model ValueAnalysis {
   createdAt               DateTime      @default(now())
   updatedAt               DateTime      @updatedAt
   @@index([systemId])
+  @@index([institutionId])
 }
 
 // ── Document Generation ───────────────────────────────────────────────────────
@@ -453,6 +461,9 @@ model GeneratedDocument {
   createdById     String         @default("anonymous")
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
+  @@index([institutionId])
+  @@index([projectId])
+  @@index([createdById])
 }
 
 enum DocumentType {
@@ -567,7 +578,7 @@ model ProcurementEvaluation {
   projectId           String
   project             ProcurementProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
   systemId            String
-  system              VendorSystem       @relation(fields: [systemId], references: [id])
+  system              VendorSystem       @relation(fields: [systemId], references: [id], onDelete: Restrict)
   evaluatorId         String?
   evaluatorName       String?
   hermScore           Decimal?           @db.Decimal(5, 2)
@@ -607,7 +618,7 @@ model VendorAccount {
   contactEmail         String             @unique
   contactName          String
   systemId             String?            @unique
-  system               VendorSystem?      @relation(fields: [systemId], references: [id])
+  system               VendorSystem?      @relation(fields: [systemId], references: [id], onDelete: SetNull)
   tier                 VendorTier         @default(BASIC)
   status               String             @default("pending")
   websiteUrl           String?
@@ -638,7 +649,7 @@ model VendorUser {
   name            String
   role            String        @default("contributor")
   vendorAccountId String
-  vendorAccount   VendorAccount @relation(fields: [vendorAccountId], references: [id])
+  vendorAccount   VendorAccount @relation(fields: [vendorAccountId], references: [id], onDelete: Cascade)
   passwordHash    String
   lastLogin       DateTime?
   createdAt       DateTime      @default(now())
@@ -648,7 +659,7 @@ model VendorUser {
 model VendorSubmission {
   id              String        @id @default(cuid())
   vendorAccountId String
-  vendorAccount   VendorAccount @relation(fields: [vendorAccountId], references: [id])
+  vendorAccount   VendorAccount @relation(fields: [vendorAccountId], references: [id], onDelete: Cascade)
   type            String
   data            Json
   status          String        @default("pending")
@@ -662,7 +673,7 @@ model VendorSubmission {
 model VendorAnalytic {
   id              String        @id @default(cuid())
   vendorAccountId String
-  vendorAccount   VendorAccount @relation(fields: [vendorAccountId], references: [id])
+  vendorAccount   VendorAccount @relation(fields: [vendorAccountId], references: [id], onDelete: Cascade)
   metric          String
   value           Int
   period          String
@@ -675,7 +686,7 @@ model EvaluationProject {
   name              String
   description       String?
   institutionId     String
-  institution       Institution                  @relation(fields: [institutionId], references: [id])
+  institution       Institution                  @relation(fields: [institutionId], references: [id], onDelete: Cascade)
   leadUserId        String
   status            String                       @default("planning")
   basketId          String?
@@ -693,7 +704,7 @@ model EvaluationSystem {
   projectId String
   project   EvaluationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
   systemId  String
-  system    VendorSystem      @relation(fields: [systemId], references: [id])
+  system    VendorSystem      @relation(fields: [systemId], references: [id], onDelete: Cascade)
   @@unique([projectId, systemId])
 }
 
@@ -702,7 +713,7 @@ model EvaluationMember {
   projectId       String
   project         EvaluationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
   userId          String
-  user            User              @relation(fields: [userId], references: [id])
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   role            String            @default("evaluator")
   assignedDomains String[]
   @@unique([projectId, userId])
@@ -713,9 +724,9 @@ model EvaluationDomainAssignment {
   projectId    String
   project      EvaluationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
   familyId     String
-  family       HermFamily        @relation(fields: [familyId], references: [id])
+  family       HermFamily        @relation(fields: [familyId], references: [id], onDelete: Restrict)
   assignedToId String
-  assignedTo   User              @relation("DomainAssignments", fields: [assignedToId], references: [id])
+  assignedTo   User              @relation("DomainAssignments", fields: [assignedToId], references: [id], onDelete: Cascade)
   status       String            @default("pending")
   score        Json?
   completedAt  DateTime?
@@ -738,7 +749,7 @@ model EvaluationDomainScore {
 model Payment {
   id              String       @id @default(cuid())
   subscriptionId  String
-  subscription    Subscription @relation(fields: [subscriptionId], references: [id])
+  subscription    Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
   amount          Decimal      @db.Decimal(10, 2)
   currency        String       @default("GBP")
   status          String
@@ -746,6 +757,7 @@ model Payment {
   invoiceUrl      String?
   paidAt          DateTime?
   createdAt       DateTime     @default(now())
+  @@index([subscriptionId])
 }
 
 // ── Phase 6: Notifications & API Keys ────────────────────────────────────────

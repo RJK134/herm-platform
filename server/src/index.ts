@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import prisma from './utils/prisma';
 import { errorHandler } from './middleware/errorHandler';
 import { helmetMiddleware, apiRateLimiter, authRateLimiter } from './middleware/security';
 import systemsRouter from './api/systems/systems.router';
@@ -30,9 +31,12 @@ import keysRouter from './api/keys/keys.router';
 const app = express();
 const PORT = process.env['PORT'] || 3002;
 
+// Allow CORS origin to be configured per environment
+const ALLOWED_ORIGIN = process.env['FRONTEND_URL'] || 'http://localhost:5173';
+
 // Middleware
 app.use(helmetMiddleware);
-app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
+app.use(cors({ origin: ALLOWED_ORIGIN, credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/api', apiRateLimiter);
@@ -100,9 +104,28 @@ app.use((_req, res) => {
 // Global error handler
 app.use(errorHandler);
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`HERM Platform API running on http://localhost:${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/api/health`);
 });
+
+// Graceful shutdown — closes HTTP server then disconnects Prisma before exiting
+// Ensures in-flight requests complete and DB connections are cleanly released
+function shutdown(signal: string) {
+  console.log(`[SHUTDOWN] Received ${signal} — shutting down gracefully`);
+  server.close(async () => {
+    await prisma.$disconnect();
+    console.log('[SHUTDOWN] Server and DB connections closed');
+    process.exit(0);
+  });
+  // Force-exit after 10 seconds if graceful shutdown stalls
+  setTimeout(() => {
+    console.error('[SHUTDOWN] Force-exit after timeout');
+    process.exit(1);
+  }, 10_000).unref();
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT',  () => shutdown('SIGINT'));
 
 export default app;

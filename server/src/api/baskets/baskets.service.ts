@@ -84,46 +84,45 @@ export class BasketsService {
     if (basket.items.length === 0) return [];
 
     const systems = await prisma.vendorSystem.findMany();
+    const capabilityIds = basket.items.map(item => item.capabilityId);
 
-    const results = await Promise.all(
-      systems.map(async (system) => {
-        const capabilityIds = basket.items.map(item => item.capabilityId);
-        const scores = await prisma.score.findMany({
-          where: {
-            systemId: system.id,
-            capabilityId: { in: capabilityIds },
-            version: 1,
-          },
-        });
+    // Batch-load all relevant scores in a single query (avoids N+1)
+    const allScores = await prisma.score.findMany({
+      where: { capabilityId: { in: capabilityIds }, version: 1 },
+    });
 
-        const scoreMap: Record<string, number> = {};
-        for (const s of scores) {
-          scoreMap[s.capabilityId] = s.value;
-        }
+    // Build map: systemId -> capabilityId -> value  (O(1) lookups below)
+    const scoreIndex = new Map<string, Map<string, number>>();
+    for (const s of allScores) {
+      if (!scoreIndex.has(s.systemId)) scoreIndex.set(s.systemId, new Map());
+      scoreIndex.get(s.systemId)!.set(s.capabilityId, s.value);
+    }
 
-        let weightedScore = 0;
-        let weightedMax = 0;
+    const results = systems.map((system) => {
+      const systemScores = scoreIndex.get(system.id) ?? new Map<string, number>();
 
-        for (const item of basket.items) {
-          const score = scoreMap[item.capabilityId] ?? 0;
-          // Priority multiplier: must=3, should=2, could=1, wont=0
-          const priorityMult = item.priority === 'must' ? 3 : item.priority === 'should' ? 2 : item.priority === 'could' ? 1 : 0;
-          const effectiveWeight = item.weight * priorityMult;
-          weightedScore += (score / 100) * effectiveWeight;
-          weightedMax += effectiveWeight;
-        }
+      let weightedScore = 0;
+      let weightedMax = 0;
 
-        const percentage = weightedMax > 0 ? (weightedScore / weightedMax) * 100 : 0;
+      for (const item of basket.items) {
+        const score = systemScores.get(item.capabilityId) ?? 0;
+        // Priority multiplier: must=3, should=2, could=1, wont=0
+        const priorityMult = item.priority === 'must' ? 3 : item.priority === 'should' ? 2 : item.priority === 'could' ? 1 : 0;
+        const effectiveWeight = item.weight * priorityMult;
+        weightedScore += (score / 100) * effectiveWeight;
+        weightedMax += effectiveWeight;
+      }
 
-        return {
-          system,
-          score: weightedScore,
-          maxScore: weightedMax,
-          percentage,
-          rank: 0,
-        };
-      })
-    );
+      const percentage = weightedMax > 0 ? (weightedScore / weightedMax) * 100 : 0;
+
+      return {
+        system,
+        score: weightedScore,
+        maxScore: weightedMax,
+        percentage,
+        rank: 0,
+      };
+    });
 
     results.sort((a, b) => b.percentage - a.percentage);
     results.forEach((r, i) => { r.rank = i + 1; });
