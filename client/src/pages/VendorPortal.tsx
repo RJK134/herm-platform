@@ -3,9 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import {
-  Building2, LogOut, Star, Eye, BarChart2, ShoppingCart, Mail,
+  Building2, LogOut, Star, Eye, BarChart2, ShoppingCart,
   ChevronDown, ChevronRight, CheckCircle, XCircle, AlertTriangle,
-  User, Globe, Lock, Send, TrendingUp,
+  TrendingUp,
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';

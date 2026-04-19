@@ -61,10 +61,6 @@ const JURISDICTION_FLAGS: Record<Jurisdiction, string> = {
   UK: '🇬🇧', EU: '🇪🇺', US: '🇺🇸', AU: '🇦🇺',
 };
 
-const JURISDICTION_LABELS: Record<Jurisdiction, string> = {
-  UK: 'United Kingdom', EU: 'European Union', US: 'US Federal', AU: 'Australia',
-};
-
 const COMPARISON_ROWS: JurisdictionRow[] = [
   {
     label: 'Governing Legislation',
@@ -535,7 +531,7 @@ function DecisionTreeSection({ onStartProject }: { onStartProject?: (j: Jurisdic
   const [step, setStep] = useState(0);
   const [jurisdiction, setJurisdiction] = useState<Jurisdiction | null>(null);
   const [value, setValue] = useState('');
-  const [type, setType] = useState<ProcurementType | null>(null);
+  const [_type, setType] = useState<ProcurementType | null>(null);
   const [result, setResult] = useState<DecisionResult | null>(null);
 
   const reset = () => {

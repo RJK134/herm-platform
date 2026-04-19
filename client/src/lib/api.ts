@@ -1,4 +1,5 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
+import toast from 'react-hot-toast';
 import type {
   VendorSystem,
   HermCapability,
@@ -18,8 +19,12 @@ import type {
 } from '../types';
 
 const TOKEN_KEY = 'herm_auth_token';
+const REQUEST_TIMEOUT_MS = 15_000;
 
-const client = axios.create({ baseURL: '/api' });
+// Hard wall-clock cap on every request so a hung backend doesn't freeze the
+// UI; TanStack Query will then surface an error state instead of an infinite
+// spinner.
+const client = axios.create({ baseURL: '/api', timeout: REQUEST_TIMEOUT_MS });
 
 // Attach JWT to every request if present
 client.interceptors.request.use((config) => {
@@ -29,6 +34,39 @@ client.interceptors.request.use((config) => {
   }
   return config;
 });
+
+interface ApiErrorBody {
+  success: false;
+  error?: { code?: string; message?: string };
+}
+
+// Centralised response handling:
+// - 401 + AUTHENTICATION_ERROR → clear stale token and bounce to /login.
+// - 5xx → surface once via toast so the user sees *something* when the server
+//   breaks. Per-query error states still render as normal; this is a safety net.
+client.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError<ApiErrorBody>) => {
+    const status = error.response?.status;
+    const code = error.response?.data?.error?.code;
+    const message = error.response?.data?.error?.message ?? error.message ?? 'Request failed';
+
+    if (status === 401 && code === 'AUTHENTICATION_ERROR') {
+      localStorage.removeItem(TOKEN_KEY);
+      delete axios.defaults.headers.common['Authorization'];
+      if (
+        typeof window !== 'undefined' &&
+        !['/login', '/register'].some((p) => window.location.pathname.startsWith(p))
+      ) {
+        window.location.assign('/login');
+      }
+    } else if (status && status >= 500) {
+      toast.error(message);
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 export const api = {
   // Auth
@@ -64,7 +102,18 @@ export const api = {
   getSystem: (id: string) =>
     client.get<ApiResponse<VendorSystem>>(`/systems/${id}`),
   getSystemScores: (id: string) =>
-    client.get<ApiResponse<{ byCode: Record<string, number>; byFamily: Array<{ familyCode: string; familyName: string; capabilities: Array<{ code: string; name: string; value: number }> }> }>>(`/systems/${id}/scores`),
+    client.get<
+      ApiResponse<{
+        byCode: Record<string, number>;
+        byFamily: Array<{
+          familyCode: string;
+          familyName: string;
+          score: number;
+          maxScore: number;
+          capabilities: Array<{ code: string; name: string; value: number }>;
+        }>;
+      }>
+    >(`/systems/${id}/scores`),
   compareSystems: (ids: string[]) =>
     client.get<ApiResponse<LeaderboardEntry[]>>('/systems/compare', { params: { ids: ids.join(',') } }),
 

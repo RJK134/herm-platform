@@ -2,9 +2,11 @@ import './i18n/config';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Menu } from 'lucide-react';
+import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
 import { SidebarProvider, useSidebar } from './contexts/SidebarContext';
 import { Sidebar } from './components/layout/Sidebar';
+import { ProtectedRoute } from './components/ProtectedRoute';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Leaderboard } from './pages/Leaderboard';
@@ -80,12 +82,13 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
 
-            {/* App pages — sidebar layout */}
+            {/* App pages — sidebar layout, gated behind auth */}
             <Route
               path="/*"
               element={
-                <AppShell>
-                  <Routes>
+                <ProtectedRoute>
+                  <AppShell>
+                    <Routes>
                     <Route path="/" element={<Leaderboard />} />
                     <Route path="/radar" element={<RadarComparison />} />
                     <Route path="/heatmap" element={<CapabilityHeatmap />} />
@@ -115,10 +118,12 @@ export default function App() {
                     <Route path="/api-keys" element={<ApiIntegration />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
-                </AppShell>
+                  </AppShell>
+                </ProtectedRoute>
               }
             />
           </Routes>
+          <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

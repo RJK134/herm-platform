@@ -12,7 +12,7 @@ interface DocumentSection {
 
 // ── Template generators ───────────────────────────────────────────────────────
 
-async function generateBusinessCase(input: GenerateDocumentInput, date: string): Promise<DocumentSection[]> {
+async function generateBusinessCase(input: GenerateDocumentInput, _date: string): Promise<DocumentSection[]> {
   let tcoSection = '_No TCO data linked. Add a TCO estimate ID to populate this section._';
   let valueSection = '_No value analysis linked. Add a value analysis ID to populate this section._';
   let basketSection = '_No requirements basket linked. Add a basket ID to populate this section._';
@@ -219,7 +219,7 @@ async function generateRfpItt(input: GenerateDocumentInput): Promise<DocumentSec
 async function generateShortlistReport(input: GenerateDocumentInput): Promise<DocumentSection[]> {
   const inst = input.institutionName ?? input.metadata?.institution ?? '[INSTITUTION]';
   let shortlistSection = '_No procurement project linked._';
-  let tcoComparison = '_No TCO data available._';
+  const tcoComparison = '_No TCO data available._';
 
   if (input.projectId) {
     const project = await prisma.procurementProject.findUnique({

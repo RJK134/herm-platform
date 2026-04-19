@@ -38,25 +38,39 @@ export class SystemsService {
       },
     });
 
-    // Return as map of code -> value and full grouped structure
+    // Scores are stored 0-100 per capability. A family's `maxScore` is
+    // `capabilities.length * 100`; `score` is the sum of capability values.
     const byCode: Record<string, number> = {};
-    const byFamily: Record<string, { familyCode: string; familyName: string; capabilities: Array<{ code: string; name: string; value: number }> }> = {};
+    const byFamily: Record<
+      string,
+      {
+        familyCode: string;
+        familyName: string;
+        score: number;
+        maxScore: number;
+        capabilities: Array<{ code: string; name: string; value: number }>;
+      }
+    > = {};
 
     for (const s of scores) {
       byCode[s.capability.code] = s.value;
       const fCode = s.capability.family.code;
-      if (!byFamily[fCode]) {
-        byFamily[fCode] = {
+      const family =
+        byFamily[fCode] ??
+        (byFamily[fCode] = {
           familyCode: fCode,
           familyName: s.capability.family.name,
+          score: 0,
+          maxScore: 0,
           capabilities: [],
-        };
-      }
-      byFamily[fCode].capabilities.push({
+        });
+      family.capabilities.push({
         code: s.capability.code,
         name: s.capability.name,
         value: s.value,
       });
+      family.score += s.value;
+      family.maxScore += 100;
     }
 
     return { system, byCode, byFamily: Object.values(byFamily) };

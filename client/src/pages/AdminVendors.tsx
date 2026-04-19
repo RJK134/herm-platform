@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import {
   Building2, Search, CheckCircle, XCircle, AlertTriangle,
-  Users, BarChart2, ChevronRight, Globe, Mail, User,
+  Users, BarChart2, ChevronRight, Mail, User,
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';

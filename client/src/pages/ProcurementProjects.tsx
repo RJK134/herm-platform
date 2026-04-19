@@ -5,7 +5,7 @@ import axios from 'axios';
 import type { ApiResponse } from '../types';
 import {
   Plus, ChevronLeft, CheckCircle, Clock, AlertTriangle, XCircle,
-  Circle, ChevronRight, CalendarDays, BarChart2, Layers, Flag,
+  ChevronRight, CalendarDays, BarChart2, Layers, Flag,
   Lock, RefreshCw, AlertCircle,
 } from 'lucide-react';
 import { Header } from '../components/layout/Header';
@@ -903,7 +903,7 @@ function CreateProjectWizard({
   onClose: () => void;
   onCreated: (id: string) => void;
 }) {
-  const { t } = useTranslation("procurement");
+  useTranslation("procurement");
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<WizardState>({
     name: '', description: '', jurisdiction: '', estimatedValue: '',

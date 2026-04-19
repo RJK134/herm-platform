@@ -2,6 +2,7 @@
   "name": "herm-platform",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "workspaces": [
     "client",
     "server"
@@ -10,6 +11,15 @@
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "npm run dev --workspace=server",
     "dev:client": "npm run dev --workspace=client",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "eslint \"client/src/**/*.{ts,tsx}\" \"server/src/**/*.ts\"",
+    "lint:fix": "eslint --fix \"client/src/**/*.{ts,tsx}\" \"server/src/**/*.ts\"",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,json,md,yml,yaml}\"",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:server": "npm run test --workspace=server",
+    "test:client": "npm run test --workspace=client",
     "db:push": "npx prisma db push --schema=prisma/schema.prisma",
     "db:seed": "npx tsx prisma/seed.ts",
     "db:seed:demo": "npx tsx prisma/seeds/demo-user.ts",
@@ -21,10 +31,16 @@
     "seed": "npx tsx prisma/seed.ts"
   },
   "devDependencies": {
+    "@eslint/js": "^9.15.0",
     "@prisma/client": "^5.10.0",
     "concurrently": "^8.2.2",
+    "eslint": "^9.15.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-react-refresh": "^0.4.14",
+    "prettier": "^3.3.3",
     "prisma": "^5.10.0",
-    "tsx": "^4.7.0"
+    "tsx": "^4.7.0",
+    "typescript-eslint": "^8.15.0"
   },
   "dependencies": {
     "i18next": "^26.0.3",

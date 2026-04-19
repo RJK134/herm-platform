@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import {
-  Users, Plus, Calendar, CheckCircle, Clock, Circle, AlertTriangle,
+  Users, Plus, Calendar, CheckCircle, AlertTriangle,
   BarChart2, ChevronDown, ChevronRight, Award, FileText,
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';

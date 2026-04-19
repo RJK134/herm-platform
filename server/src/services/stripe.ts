@@ -1,3 +1,4 @@
+import Stripe from 'stripe';
 import prisma from '../utils/prisma';
 
 // Graceful no-op if Stripe not configured
@@ -15,12 +16,13 @@ const PRICE_IDS = {
 
 type TierKey = keyof typeof PRICE_IDS;
 
-function getStripe() {
+// Pin the Stripe API version to match the installed SDK's LatestApiVersion.
+// If you upgrade the stripe package, bump this constant to the new LatestApiVersion.
+const STRIPE_API_VERSION: Stripe.LatestApiVersion = '2026-03-25.dahlia';
+
+function getStripe(): Stripe | null {
   if (!STRIPE_SECRET) return null;
-  // Dynamic import to avoid crash when stripe is not installed
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const Stripe = require('stripe');
-  return new Stripe(STRIPE_SECRET, { apiVersion: '2024-09-30.acacia' }) as import('stripe').default;
+  return new Stripe(STRIPE_SECRET, { apiVersion: STRIPE_API_VERSION });
 }
 
 export interface CheckoutResult {
@@ -75,7 +77,7 @@ export async function handleWebhook(rawBody: Buffer, signature: string): Promise
   const stripe = getStripe();
   if (!stripe || !STRIPE_WEBHOOK_SECRET) return { handled: false };
 
-  let event: import('stripe').Stripe.Event;
+  let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(rawBody, signature, STRIPE_WEBHOOK_SECRET);
   } catch {
@@ -83,7 +85,7 @@ export async function handleWebhook(rawBody: Buffer, signature: string): Promise
   }
 
   if (event.type === 'checkout.session.completed') {
-    const session = event.data.object as import('stripe').Stripe.Checkout.Session;
+    const session = event.data.object as Stripe.Checkout.Session;
     const meta = session.metadata ?? {};
     const isVendor = meta['isVendor'] === 'true';
     const tier = meta['tier'] as TierKey;
@@ -132,7 +134,7 @@ export async function handleWebhook(rawBody: Buffer, signature: string): Promise
   }
 
   if (event.type === 'customer.subscription.deleted') {
-    const sub = event.data.object as import('stripe').Stripe.Subscription;
+    const sub = event.data.object as Stripe.Subscription;
     const dbSub = await prisma.subscription.findFirst({ where: { stripeSubscriptionId: sub.id } });
     if (dbSub) {
       await prisma.subscription.update({ where: { id: dbSub.id }, data: { tier: 'FREE', status: 'cancelled' } });
