@@ -68,7 +68,7 @@ export class SystemsService {
         value: s.value,
       });
       byFamily[fCode].score += s.value;
-      byFamily[fCode].maxScore += 5; // max score per capability is 5
+      byFamily[fCode].maxScore += 100; // Score.value is 0/50/100 per capability (consistent with vendor-portal.service.ts and scores.service.ts)
     }
 
     return { system, byCode, byFamily: Object.values(byFamily) };
