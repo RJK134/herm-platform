@@ -3,9 +3,10 @@ import { CapabilitiesService } from './capabilities.service';
 
 const service = new CapabilitiesService();
 
-export const listCapabilities = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const listCapabilities = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { capabilities, licence } = await service.listCapabilities();
+    // Scope to the active framework resolved by framework-context middleware.
+    const { capabilities, licence } = await service.listCapabilities(req.frameworkId);
     res.json({ success: true, data: capabilities, licence });
   } catch (err) {
     next(err);
@@ -14,16 +15,19 @@ export const listCapabilities = async (_req: Request, res: Response, next: NextF
 
 export const getByCode = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { capability, licence } = await service.getCapabilityByCode(req.params['code'] as string);
+    const { capability, licence } = await service.getCapabilityByCode(
+      req.params['code'] as string,
+      req.frameworkId,
+    );
     res.json({ success: true, data: capability, licence });
   } catch (err) {
     next(err);
   }
 };
 
-export const listDomains = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const listDomains = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { domains, licence } = await service.listDomains();
+    const { domains, licence } = await service.listDomains(req.frameworkId);
     res.json({ success: true, data: domains, licence });
   } catch (err) {
     next(err);
