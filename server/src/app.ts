@@ -31,6 +31,8 @@ import keysRouter from './api/keys/keys.router';
 import frameworksRouter from './api/frameworks/frameworks.router';
 import frameworkMappingsRouter from './api/framework-mappings/framework-mappings.router';
 import { frameworkContext } from './middleware/framework-context';
+import { tierGate } from './middleware/tier-gate';
+import { optionalJWT } from './middleware/auth';
 
 // Validate environment variables at startup.
 // Placed after all imports because ES module static imports are hoisted —
@@ -81,18 +83,27 @@ app.use('/api/auth', authRateLimiter, authRouter);
 // Institution management (authenticated — guards inside router)
 app.use('/api/institutions', institutionsRouter);
 
-// Analytics (open — read-only reference data).
-// frameworkContext populates req.frameworkId so service layer queries
-// scope to the active framework. Without it, Capability / FrameworkDomain /
-// CapabilityScore queries would silently mix HERM + FHE data. The
-// middleware falls back to the first public active framework when no
-// ?frameworkId is supplied.
-app.use('/api/systems', frameworkContext, systemsRouter);
-app.use('/api/capabilities', frameworkContext, capabilitiesRouter);
-app.use('/api/scores', frameworkContext, scoresRouter);
-// Export endpoints format framework-scoped data (scores, domains, capabilities)
-// so they need the same active-framework resolution as the analytics routes.
-app.use('/api/export', frameworkContext, exportRouter);
+// Framework-scoped analytics + reference data.
+//
+// Middleware chain:
+//   1. optionalJWT   — populates req.user when a valid token is present so
+//                      the tier can be read; anonymous callers just get
+//                      req.user === undefined.
+//   2. frameworkContext — resolves req.framework / req.frameworkId from
+//                      ?frameworkId (explicit) or the first public active
+//                      framework (default). Without it, service-layer
+//                      queries would mix frameworks.
+//   3. tierGate       — rejects free/anonymous callers trying to reach a
+//                      non-public framework even by explicit id. This
+//                      closes the paywall-bypass that explicit
+//                      ?frameworkId=<proprietary-id> would otherwise open.
+const frameworkScoped = [optionalJWT, frameworkContext, tierGate];
+app.use('/api/systems', ...frameworkScoped, systemsRouter);
+app.use('/api/capabilities', ...frameworkScoped, capabilitiesRouter);
+app.use('/api/scores', ...frameworkScoped, scoresRouter);
+// Export endpoints format framework-scoped data (scores, domains,
+// capabilities) so they sit behind the same chain.
+app.use('/api/export', ...frameworkScoped, exportRouter);
 
 // Intelligence layer (open — reference data)
 app.use('/api/vendors', vendorsRouter);
@@ -111,9 +122,11 @@ app.use('/api/architecture', architectureRouter);
 app.use('/api/value', valueRouter);
 app.use('/api/documents', documentsRouter);
 
-// Phase 5 — Vendor Portal, Team Workspaces, Payments
-// frameworkContext attached so getOwnScores can scope CapabilityScore.
-app.use('/api/vendor-portal', frameworkContext, vendorPortalRouter);
+// Phase 5 — Vendor Portal, Team Workspaces, Payments.
+// Same framework-scoped chain: optionalJWT → frameworkContext → tierGate
+// so getOwnScores can scope CapabilityScore and vendors cannot pass a
+// proprietary frameworkId they are not entitled to.
+app.use('/api/vendor-portal', ...frameworkScoped, vendorPortalRouter);
 app.use('/api/evaluations', evaluationsRouter);
 app.use('/api/subscriptions', subscriptionsRouter);
 app.use('/api/admin', adminRouter);
