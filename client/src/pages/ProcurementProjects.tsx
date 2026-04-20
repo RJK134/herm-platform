@@ -722,7 +722,7 @@ function EvaluationView({ projectId }: { projectId: string }) {
   const maxOverall = sorted[0]?.overallScore ?? 100;
 
   const WEIGHT_LABELS: [keyof WeightingProfile, string][] = [
-    ['framework', 'HERM Capability Fit'],
+    ['framework', 'Framework Capability Fit'],
     ['technical', 'Technical Evaluation'],
     ['commercial', 'Commercial/Price'],
     ['implementation', 'Implementation Risk'],
@@ -730,7 +730,7 @@ function EvaluationView({ projectId }: { projectId: string }) {
   ];
 
   const SCORE_FIELDS: [keyof EvaluationEntry, string][] = [
-    ['frameworkScore', 'HERM'],
+    ['frameworkScore', 'Framework'],
     ['technicalScore', 'Technical'],
     ['commercialScore', 'Commercial'],
     ['implementationScore', 'Implementation'],

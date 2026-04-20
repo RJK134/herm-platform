@@ -90,7 +90,9 @@ app.use('/api/institutions', institutionsRouter);
 app.use('/api/systems', frameworkContext, systemsRouter);
 app.use('/api/capabilities', frameworkContext, capabilitiesRouter);
 app.use('/api/scores', frameworkContext, scoresRouter);
-app.use('/api/export', exportRouter);
+// Export endpoints format framework-scoped data (scores, domains, capabilities)
+// so they need the same active-framework resolution as the analytics routes.
+app.use('/api/export', frameworkContext, exportRouter);
 
 // Intelligence layer (open — reference data)
 app.use('/api/vendors', vendorsRouter);
