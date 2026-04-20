@@ -16,14 +16,29 @@ export const useSystem = (id: string) =>
 export const useSystemScores = (id: string) =>
   useQuery({ queryKey: ['system-scores', id], queryFn: () => api.getSystemScores(id).then(r => r.data.data), enabled: !!id });
 
-export const useDomains = () =>
-  useQuery({ queryKey: ['domains'], queryFn: () => api.getDomains().then(r => r.data.data) });
+// Framework-scoped hooks — callers should pass the active framework id
+// (from FrameworkContext) so the returned data matches the rest of the
+// page. Unscoped calls still work (server falls back to the default public
+// framework via frameworkContext middleware) but on multi-framework pages
+// this would produce dropdown/heatmap mismatches.
+export const useDomains = (frameworkId?: string) =>
+  useQuery({
+    queryKey: ['domains', frameworkId ?? 'default'],
+    queryFn: () => api.getDomains(frameworkId).then(r => r.data.data),
+  });
 
-export const useCapabilities = () =>
-  useQuery({ queryKey: ['capabilities'], queryFn: () => api.getCapabilities().then(r => r.data.data) });
+export const useCapabilities = (frameworkId?: string) =>
+  useQuery({
+    queryKey: ['capabilities', frameworkId ?? 'default'],
+    queryFn: () => api.getCapabilities(frameworkId).then(r => r.data.data),
+  });
 
-export const useCapability = (code: string) =>
-  useQuery({ queryKey: ['capability', code], queryFn: () => api.getCapability(code).then(r => r.data.data), enabled: !!code });
+export const useCapability = (code: string, frameworkId?: string) =>
+  useQuery({
+    queryKey: ['capability', code, frameworkId ?? 'default'],
+    queryFn: () => api.getCapability(code, frameworkId).then(r => r.data.data),
+    enabled: !!code,
+  });
 
 export const useHeatmap = (frameworkId?: string) =>
   useQuery({

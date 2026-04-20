@@ -17,7 +17,10 @@ export function CapabilityHeatmap() {
   const { t } = useTranslation('capabilities');
   const { activeFramework } = useFramework();
   const { data, isLoading } = useHeatmap(activeFramework?.id);
-  const { data: domains } = useDomains();
+  // Scope the domain dropdown to the same framework as the heatmap so the
+  // filter options and the heatmap data match (fixes the cross-framework
+  // mismatch flagged by Bugbot / Copilot).
+  const { data: domains } = useDomains(activeFramework?.id);
   const [domainFilter, setDomainFilter] = useState('');
   const [hoveredCell, setHoveredCell] = useState<{ systemId: string; capCode: string } | null>(null);
 

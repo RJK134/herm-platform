@@ -3,16 +3,16 @@ import { ScoresService } from './scores.service';
 
 const service = new ScoresService();
 
-function extractFrameworkId(req: Request): string | undefined {
-  const raw = req.query['frameworkId'];
-  if (typeof raw === 'string' && raw.length > 0) return raw;
-  return undefined;
-}
+// Source of truth for the active framework is req.frameworkId, populated by
+// the frameworkContext middleware mounted on /api/scores in app.ts. Using
+// the middleware-resolved value guarantees consistent resolution across
+// every framework-scoped route (systems, capabilities, vendor-portal, scores)
+// and honours the middleware's tier-safe fallback to the first public
+// framework when no ?frameworkId query parameter is supplied.
 
 export const getLeaderboard = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const frameworkId = extractFrameworkId(req);
-    const { entries, licence, framework } = await service.getLeaderboard(frameworkId);
+    const { entries, licence, framework } = await service.getLeaderboard(req.frameworkId);
     res.json({ success: true, data: entries, licence, framework });
   } catch (err) {
     next(err);
@@ -21,8 +21,7 @@ export const getLeaderboard = async (req: Request, res: Response, next: NextFunc
 
 export const getHeatmap = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const frameworkId = extractFrameworkId(req);
-    const data = await service.getHeatmap(frameworkId);
+    const data = await service.getHeatmap(req.frameworkId);
     res.json({ success: true, data });
   } catch (err) {
     next(err);

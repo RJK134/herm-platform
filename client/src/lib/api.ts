@@ -68,13 +68,21 @@ export const api = {
   compareSystems: (ids: string[]) =>
     client.get<ApiResponse<LeaderboardEntry[]>>('/systems/compare', { params: { ids: ids.join(',') } }),
 
-  // Capabilities
-  getDomains: () =>
-    client.get<ApiResponse<FrameworkDomain[]>>('/capabilities/domains'),
-  getCapabilities: () =>
-    client.get<ApiResponse<Capability[]>>('/capabilities'),
-  getCapability: (code: string) =>
-    client.get<ApiResponse<Capability & { scores: Array<{ value: number; system: VendorSystem }> }>>(`/capabilities/${code}`),
+  // Capabilities — each call accepts an optional frameworkId so callers can
+  // pin to a specific framework (default: server picks first public active).
+  getDomains: (frameworkId?: string) =>
+    client.get<ApiResponse<FrameworkDomain[]>>('/capabilities/domains', {
+      params: frameworkId ? { frameworkId } : {},
+    }),
+  getCapabilities: (frameworkId?: string) =>
+    client.get<ApiResponse<Capability[]>>('/capabilities', {
+      params: frameworkId ? { frameworkId } : {},
+    }),
+  getCapability: (code: string, frameworkId?: string) =>
+    client.get<ApiResponse<Capability & { scores: Array<{ value: number; system: VendorSystem }> }>>(
+      `/capabilities/${code}`,
+      { params: frameworkId ? { frameworkId } : {} },
+    ),
 
   // Scores
   getLeaderboard: (frameworkId?: string) =>
