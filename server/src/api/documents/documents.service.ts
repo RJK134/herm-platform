@@ -219,7 +219,7 @@ async function generateRfpItt(input: GenerateDocumentInput): Promise<DocumentSec
 async function generateShortlistReport(input: GenerateDocumentInput): Promise<DocumentSection[]> {
   const inst = input.institutionName ?? input.metadata?.institution ?? '[INSTITUTION]';
   let shortlistSection = '_No procurement project linked._';
-  let tcoComparison = '_No TCO data available._';
+  const tcoComparison = '_No TCO data available._';
 
   if (input.projectId) {
     const project = await prisma.procurementProject.findUnique({

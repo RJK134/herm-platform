@@ -38,9 +38,19 @@ export class SystemsService {
       },
     });
 
-    // Return as map of code -> value and full grouped structure
+    // Return as map of code -> value and full grouped structure, with family totals
+    // precomputed so callers don't need to reduce.
     const byCode: Record<string, number> = {};
-    const byFamily: Record<string, { familyCode: string; familyName: string; capabilities: Array<{ code: string; name: string; value: number }> }> = {};
+    const byFamily: Record<
+      string,
+      {
+        familyCode: string;
+        familyName: string;
+        score: number;
+        maxScore: number;
+        capabilities: Array<{ code: string; name: string; value: number }>;
+      }
+    > = {};
 
     for (const s of scores) {
       byCode[s.capability.code] = s.value;
@@ -49,9 +59,13 @@ export class SystemsService {
         byFamily[fCode] = {
           familyCode: fCode,
           familyName: s.capability.family.name,
+          score: 0,
+          maxScore: 0,
           capabilities: [],
         };
       }
+      byFamily[fCode].score += s.value;
+      byFamily[fCode].maxScore += 100;
       byFamily[fCode].capabilities.push({
         code: s.capability.code,
         name: s.capability.name,

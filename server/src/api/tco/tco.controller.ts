@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { TcoService } from './tco.service';
 import {
   calculateTcoSchema,

@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { BasketsService } from './baskets.service';
 import { createBasketSchema, addItemSchema } from './baskets.schema';
 
