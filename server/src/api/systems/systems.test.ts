@@ -14,8 +14,8 @@ vi.mock('../../utils/prisma', () => ({
       ]),
       findUnique: vi.fn().mockResolvedValue({ id: 'sys1', name: 'Ellucian Banner', vendor: 'Ellucian', category: 'SIS' }),
     },
-    score: { findMany: vi.fn().mockResolvedValue([]) },
-    hermFamily: { findMany: vi.fn().mockResolvedValue([]) },
+    capabilityScore: { findMany: vi.fn().mockResolvedValue([]) },
+    frameworkDomain: { findMany: vi.fn().mockResolvedValue([]) },
   },
 }));
 

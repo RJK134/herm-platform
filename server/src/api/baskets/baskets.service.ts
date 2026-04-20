@@ -15,7 +15,7 @@ export class BasketsService {
         isTemplate: data.isTemplate ?? false,
         createdById: 'anonymous',
       },
-      include: { items: { include: { capability: { include: { family: true } } } } },
+      include: { items: { include: { capability: { include: { domain: true } } } } },
     });
   }
 
@@ -23,7 +23,7 @@ export class BasketsService {
     return prisma.capabilityBasket.findMany({
       include: {
         items: {
-          include: { capability: { include: { family: true } } },
+          include: { capability: { include: { domain: true } } },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -35,7 +35,7 @@ export class BasketsService {
       where: { id },
       include: {
         items: {
-          include: { capability: { include: { family: true } } },
+          include: { capability: { include: { domain: true } } },
         },
       },
     });
@@ -47,8 +47,12 @@ export class BasketsService {
     const basket = await prisma.capabilityBasket.findUnique({ where: { id: basketId } });
     if (!basket) throw new NotFoundError(`Basket not found: ${basketId}`);
 
-    const capability = await prisma.hermCapability.findUnique({
-      where: { code: data.capabilityCode },
+    // Lookup capability by code — scoped to basket's framework if set, else any framework
+    const capability = await prisma.capability.findFirst({
+      where: {
+        code: data.capabilityCode,
+        ...(basket.frameworkId ? { frameworkId: basket.frameworkId } : {}),
+      },
     });
     if (!capability) throw new ValidationError(`Capability not found: ${data.capabilityCode}`);
 
@@ -87,7 +91,7 @@ export class BasketsService {
     const capabilityIds = basket.items.map(item => item.capabilityId);
 
     // Batch-load all relevant scores in a single query (avoids N+1)
-    const allScores = await prisma.score.findMany({
+    const allScores = await prisma.capabilityScore.findMany({
       where: { capabilityId: { in: capabilityIds }, version: 1 },
     });
 

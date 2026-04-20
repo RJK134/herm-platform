@@ -105,22 +105,22 @@ export class VendorPortalService {
     });
     if (!account?.systemId) return { system: null, scores: [] };
 
-    const scores = await prisma.score.findMany({
+    const scores = await prisma.capabilityScore.findMany({
       where: { systemId: account.systemId },
       include: {
         capability: {
-          include: { family: { select: { code: true, name: true } } },
+          include: { domain: { select: { code: true, name: true } } },
         },
       },
-      orderBy: [{ capability: { family: { sortOrder: 'asc' } } }],
+      orderBy: [{ capability: { domain: { sortOrder: 'asc' } } }],
     });
 
-    // Group by family
-    const byFamily = new Map<string, { familyCode: string; familyName: string; capabilities: typeof scores }>();
+    // Group by domain
+    const byDomain = new Map<string, { domainCode: string; domainName: string; capabilities: typeof scores }>();
     for (const s of scores) {
-      const fc = s.capability.family.code;
-      if (!byFamily.has(fc)) byFamily.set(fc, { familyCode: fc, familyName: s.capability.family.name, capabilities: [] });
-      byFamily.get(fc)!.capabilities.push(s);
+      const fc = s.capability.domain.code;
+      if (!byDomain.has(fc)) byDomain.set(fc, { domainCode: fc, domainName: s.capability.domain.name, capabilities: [] });
+      byDomain.get(fc)!.capabilities.push(s);
     }
 
     const totalScore = scores.reduce((a, s) => a + s.value, 0);
@@ -132,7 +132,7 @@ export class VendorPortalService {
       totalScore,
       maxScore,
       percentage: pct,
-      byFamily: Array.from(byFamily.values()),
+      byDomain: Array.from(byDomain.values()),
     };
   }
 

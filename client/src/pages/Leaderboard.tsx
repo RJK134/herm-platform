@@ -8,7 +8,9 @@ import { Badge } from '../components/ui/Badge';
 import { SearchInput } from '../components/ui/SearchInput';
 import { DataTable } from '../components/tables/DataTable';
 import { SkeletonTable } from '../components/ui/Skeleton';
+import { LicenceAttribution } from '../components/LicenceAttribution';
 import { useLeaderboard } from '../hooks/useApi';
+import { useFramework } from '../contexts/FrameworkContext';
 import { formatPercent } from '../lib/utils';
 import { CATEGORY_COLORS } from '../lib/constants';
 import type { LeaderboardEntry } from '../types';
@@ -18,7 +20,8 @@ const PAGE_SIZE = 10;
 export function Leaderboard() {
   const { t } = useTranslation('leaderboard');
   const navigate = useNavigate();
-  const { data, isLoading, error } = useLeaderboard();
+  const { activeFramework } = useFramework();
+  const { data, isLoading, error } = useLeaderboard(activeFramework?.id);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [page, setPage] = useState(0);
@@ -96,7 +99,7 @@ export function Leaderboard() {
     },
     {
       key: 'score',
-      header: t('table.hermScore', 'HERM Score'),
+      header: t('table.hermScore', `${activeFramework?.name ?? 'Capability'} Score`),
       render: row => (
         <div className="flex items-center gap-3 min-w-[160px]">
           <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
@@ -141,8 +144,8 @@ export function Leaderboard() {
   return (
     <div>
       <Header
-        title={t('title', 'HERM Capability Leaderboard')}
-        subtitle={t('subtitle', 'Ranked coverage of all 165 UCISA HERM v3.1 capabilities across 21 systems')}
+        title={t('title', `${activeFramework?.name ?? 'Capability'} Leaderboard`)}
+        subtitle={t('subtitle', `Ranked coverage of all ${activeFramework?.capabilityCount ?? ''} ${activeFramework?.name ?? ''} capabilities across {{count}} systems`, { count: data?.length ?? 0 })}
       />
 
       {/* KPI Cards */}
@@ -165,8 +168,8 @@ export function Leaderboard() {
               <TrendingUp className="w-5 h-5 text-purple-600" />
             </div>
             <div>
-              <div className="text-2xl font-bold text-gray-900 dark:text-white">165</div>
-              <div className="text-xs text-gray-500">{t('kpis.hermCapabilities', 'HERM Capabilities')}</div>
+              <div className="text-2xl font-bold text-gray-900 dark:text-white">{activeFramework?.capabilityCount ?? '...'}</div>
+              <div className="text-xs text-gray-500">{t('kpis.hermCapabilities', `${activeFramework?.name ?? 'Framework'} Capabilities`)}</div>
             </div>
           </div>
         </Card>
@@ -274,6 +277,8 @@ export function Leaderboard() {
           </>
         )}
       </Card>
+
+      <LicenceAttribution />
     </div>
   );
 }

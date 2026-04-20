@@ -28,6 +28,8 @@ import adminRouter from './api/admin/admin.router';
 import sectorAnalyticsRouter from './api/sector-analytics/sector-analytics.router';
 import notificationsRouter from './api/notifications/notifications.router';
 import keysRouter from './api/keys/keys.router';
+import frameworksRouter from './api/frameworks/frameworks.router';
+import frameworkMappingsRouter from './api/framework-mappings/framework-mappings.router';
 
 // Validate environment variables at startup.
 // Placed after all imports because ES module static imports are hoisted —
@@ -111,6 +113,12 @@ app.use('/api/admin', adminRouter);
 app.use('/api/sector/analytics', sectorAnalyticsRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/keys', keysRouter);
+
+// Phase 7 — Multi-framework support
+app.use('/api/frameworks', frameworksRouter);
+
+// Phase 8 — Cross-framework mappings (Enterprise tier)
+app.use('/api/framework-mappings', frameworkMappingsRouter);
 
 // 404
 app.use((_req, res) => {

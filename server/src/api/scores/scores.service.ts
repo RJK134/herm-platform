@@ -1,20 +1,51 @@
 import prisma from '../../utils/prisma';
+import { getLicence } from '../../utils/licence';
+import type { Framework } from '@prisma/client';
 
 export class ScoresService {
-  async getLeaderboard() {
+  /**
+   * Resolve which framework to use for leaderboard/heatmap queries.
+   * Priority: explicit frameworkId → default framework (paid) → first public active (free).
+   * Returns null if no framework can be found.
+   */
+  private async resolveFramework(frameworkId?: string): Promise<Framework | null> {
+    if (frameworkId) {
+      const framework = await prisma.framework.findUnique({ where: { id: frameworkId } });
+      if (framework && framework.isActive) return framework;
+    }
+
+    // Try default (paid tier)
+    const defaultFramework = await prisma.framework.findFirst({
+      where: { isDefault: true, isActive: true },
+    });
+    if (defaultFramework) return defaultFramework;
+
+    // Fall back to first public active (free tier)
+    return prisma.framework.findFirst({
+      where: { isPublic: true, isActive: true },
+    });
+  }
+
+  async getLeaderboard(frameworkId?: string) {
+    const framework = await this.resolveFramework(frameworkId);
+    if (!framework) {
+      return { entries: [], licence: null, framework: null };
+    }
+
     const systems = await prisma.vendorSystem.findMany({
       orderBy: { name: 'asc' },
     });
 
-    const families = await prisma.hermFamily.findMany({
+    const domains = await prisma.frameworkDomain.findMany({
+      where: { frameworkId: framework.id },
       include: { capabilities: true },
       orderBy: { sortOrder: 'asc' },
     });
 
-    const allScores = await prisma.score.findMany({
-      where: { version: 1 },
+    const allScores = await prisma.capabilityScore.findMany({
+      where: { frameworkId: framework.id, version: 1 },
       include: {
-        capability: { include: { family: true } },
+        capability: { include: { domain: true } },
       },
     });
 
@@ -28,14 +59,14 @@ export class ScoresService {
     const entries = systems.map((system) => {
       const scores = scoresBySystem[system.id] || [];
 
-      const familyScores = families.map((family) => {
-        const familyCaps = family.capabilities.map(c => c.id);
-        const familyScoreList = scores.filter(s => familyCaps.includes(s.capabilityId));
-        const total = familyScoreList.reduce((sum, s) => sum + s.value, 0);
-        const max = family.capabilities.length * 100;
+      const domainScores = domains.map((domain) => {
+        const domainCaps = domain.capabilities.map((c) => c.id);
+        const domainScoreList = scores.filter((s) => domainCaps.includes(s.capabilityId));
+        const total = domainScoreList.reduce((sum, s) => sum + s.value, 0);
+        const max = domain.capabilities.length * 100;
         return {
-          familyCode: family.code,
-          familyName: family.name,
+          domainCode: domain.code,
+          domainName: domain.name,
           score: total,
           maxScore: max,
           percentage: max > 0 ? (total / max) * 100 : 0,
@@ -43,7 +74,7 @@ export class ScoresService {
       });
 
       const totalScore = scores.reduce((sum, s) => sum + s.value, 0);
-      const maxScore = families.reduce((sum, f) => sum + f.capabilities.length * 100, 0);
+      const maxScore = domains.reduce((sum, d) => sum + d.capabilities.length * 100, 0);
 
       return {
         system,
@@ -51,32 +82,54 @@ export class ScoresService {
         maxScore,
         percentage: maxScore > 0 ? (totalScore / maxScore) * 100 : 0,
         rank: 0,
-        familyScores,
+        domainScores,
       };
     });
 
     // Sort by percentage desc and assign ranks
     entries.sort((a, b) => b.percentage - a.percentage);
-    entries.forEach((e, i) => { e.rank = i + 1; });
+    entries.forEach((e, i) => {
+      e.rank = i + 1;
+    });
 
-    return entries;
+    const licence = getLicence(framework);
+
+    return {
+      entries,
+      licence,
+      framework: {
+        id: framework.id,
+        slug: framework.slug,
+        name: framework.name,
+        version: framework.version,
+        domainCount: framework.domainCount,
+        capabilityCount: framework.capabilityCount,
+      },
+    };
   }
 
-  async getHeatmap() {
+  async getHeatmap(frameworkId?: string) {
+    const framework = await this.resolveFramework(frameworkId);
+
     const systems = await prisma.vendorSystem.findMany({
       orderBy: [{ category: 'asc' }, { name: 'asc' }],
     });
 
-    const capabilities = await prisma.hermCapability.findMany({
-      include: { family: true },
-      orderBy: { sortOrder: 'asc' },
-    });
+    const capabilities = framework
+      ? await prisma.capability.findMany({
+          where: { frameworkId: framework.id },
+          include: { domain: true },
+          orderBy: { sortOrder: 'asc' },
+        })
+      : [];
 
-    const scores = await prisma.score.findMany({
-      where: { version: 1 },
-    });
+    const scores = framework
+      ? await prisma.capabilityScore.findMany({
+          where: { frameworkId: framework.id, version: 1 },
+        })
+      : [];
 
-    // Pre-build O(1) capability id→code lookup (replaces O(n) Array.find per score)
+    // Pre-build O(1) capability id→code lookup
     const capIdToCode = new Map<string, string>();
     for (const cap of capabilities) {
       capIdToCode.set(cap.id, cap.code);
@@ -94,6 +147,23 @@ export class ScoresService {
       }
     }
 
-    return { systems, capabilities, matrix };
+    const licence = framework ? getLicence(framework) : null;
+
+    return {
+      systems,
+      capabilities,
+      matrix,
+      licence,
+      framework: framework
+        ? {
+            id: framework.id,
+            slug: framework.slug,
+            name: framework.name,
+            version: framework.version,
+            domainCount: framework.domainCount,
+            capabilityCount: framework.capabilityCount,
+          }
+        : null,
+    };
   }
 }

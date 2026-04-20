@@ -1,8 +1,8 @@
 import axios from 'axios';
 import type {
   VendorSystem,
-  HermCapability,
-  HermFamily,
+  Capability,
+  FrameworkDomain,
   LeaderboardEntry,
   HeatmapData,
   CapabilityBasket,
@@ -64,23 +64,61 @@ export const api = {
   getSystem: (id: string) =>
     client.get<ApiResponse<VendorSystem>>(`/systems/${id}`),
   getSystemScores: (id: string) =>
-    client.get<ApiResponse<{ byCode: Record<string, number>; byFamily: Array<{ familyCode: string; familyName: string; score: number; maxScore: number; capabilities: Array<{ code: string; name: string; value: number }> }> }>>(`/systems/${id}/scores`),
+    client.get<ApiResponse<{ byCode: Record<string, number>; byDomain: Array<{ domainCode: string; domainName: string; score: number; maxScore: number; capabilities: Array<{ code: string; name: string; value: number }> }> }>>(`/systems/${id}/scores`),
   compareSystems: (ids: string[]) =>
     client.get<ApiResponse<LeaderboardEntry[]>>('/systems/compare', { params: { ids: ids.join(',') } }),
 
   // Capabilities
-  getFamilies: () =>
-    client.get<ApiResponse<HermFamily[]>>('/capabilities/families'),
+  getDomains: () =>
+    client.get<ApiResponse<FrameworkDomain[]>>('/capabilities/domains'),
   getCapabilities: () =>
-    client.get<ApiResponse<HermCapability[]>>('/capabilities'),
+    client.get<ApiResponse<Capability[]>>('/capabilities'),
   getCapability: (code: string) =>
-    client.get<ApiResponse<HermCapability & { scores: Array<{ value: number; system: VendorSystem }> }>>(`/capabilities/${code}`),
+    client.get<ApiResponse<Capability & { scores: Array<{ value: number; system: VendorSystem }> }>>(`/capabilities/${code}`),
 
   // Scores
-  getLeaderboard: () =>
-    client.get<ApiResponse<LeaderboardEntry[]>>('/scores/leaderboard'),
-  getHeatmap: () =>
-    client.get<ApiResponse<HeatmapData>>('/scores/heatmap'),
+  getLeaderboard: (frameworkId?: string) =>
+    client.get<ApiResponse<LeaderboardEntry[]>>('/scores/leaderboard', {
+      params: frameworkId ? { frameworkId } : {},
+    }),
+  getHeatmap: (frameworkId?: string) =>
+    client.get<ApiResponse<HeatmapData>>('/scores/heatmap', {
+      params: frameworkId ? { frameworkId } : {},
+    }),
+
+  // Frameworks
+  listFrameworks: () =>
+    client.get<ApiResponse<Array<{ id: string; slug: string; name: string; version: string; publisher: string; description?: string; licenceType: string; licenceNotice?: string; licenceUrl?: string; isPublic: boolean; isDefault: boolean; domainCount: number; capabilityCount: number }>>>('/frameworks'),
+  getFramework: (id: string) =>
+    client.get<ApiResponse<{ id: string; slug: string; name: string; domains: Array<{ id: string; code: string; name: string; capabilityCount: number }> }>>(`/frameworks/${id}`),
+
+  // Framework Mappings (Enterprise tier)
+  listFrameworkMappings: () =>
+    client.get<ApiResponse<Array<{
+      id: string;
+      name: string;
+      description?: string;
+      mappingType: string;
+      sourceFramework: { id: string; slug: string; name: string; version: string };
+      targetFramework: { id: string; slug: string; name: string; version: string };
+      _count: { items: number };
+    }>>>('/framework-mappings'),
+  getFrameworkMapping: (id: string) =>
+    client.get<ApiResponse<{
+      id: string;
+      name: string;
+      description?: string;
+      sourceFramework: { id: string; slug: string; name: string };
+      targetFramework: { id: string; slug: string; name: string };
+      items: Array<{
+        id: string;
+        strength: string;
+        confidence: number;
+        notes?: string;
+        sourceCapability: { id: string; code: string; name: string; description?: string; domain: { code: string; name: string } };
+        targetCapability: { id: string; code: string; name: string; description?: string; domain: { code: string; name: string } };
+      }>;
+    }>>(`/framework-mappings/${id}`),
 
   // Baskets
   createBasket: (data: { name: string; description?: string }) =>
@@ -282,7 +320,7 @@ export const api = {
     client.post<ApiResponse<unknown>>(`/evaluations/${id}/systems`, { systemId }),
   removeEvaluationSystemEntry: (id: string, systemId: string) =>
     client.delete(`/evaluations/${id}/systems/${systemId}`),
-  assignEvaluationDomains: (id: string, assignments: Array<{ familyId: string; userId: string }>) =>
+  assignEvaluationDomains: (id: string, assignments: Array<{ domainId: string; userId: string }>) =>
     client.post<ApiResponse<unknown>>(`/evaluations/${id}/domains/assign`, { assignments }),
   getEvaluationDomainProgress: (id: string) =>
     client.get<ApiResponse<unknown[]>>(`/evaluations/${id}/domains`),

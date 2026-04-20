@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Menu } from 'lucide-react';
 import { AuthProvider } from './contexts/AuthContext';
+import { FrameworkProvider } from './contexts/FrameworkContext';
 import { SidebarProvider, useSidebar } from './contexts/SidebarContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { Login } from './pages/Login';
@@ -34,6 +35,7 @@ import { AdminVendors } from './pages/AdminVendors';
 import { Subscriptions } from './pages/Subscriptions';
 import { SectorAnalytics } from './pages/SectorAnalytics';
 import { ApiIntegration } from './pages/ApiIntegration';
+import { FrameworkMapping } from './pages/FrameworkMapping';
 import { NotFound } from './pages/NotFound';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
@@ -75,50 +77,53 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
-          <Routes>
-            {/* Auth pages — full screen, no sidebar */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
+          <FrameworkProvider>
+            <Routes>
+              {/* Auth pages — full screen, no sidebar */}
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
 
-            {/* App pages — sidebar layout */}
-            <Route
-              path="/*"
-              element={
-                <AppShell>
-                  <Routes>
-                    <Route path="/" element={<Leaderboard />} />
-                    <Route path="/radar" element={<RadarComparison />} />
-                    <Route path="/heatmap" element={<CapabilityHeatmap />} />
-                    <Route path="/system" element={<SystemDetail />} />
-                    <Route path="/capability" element={<CapabilityView />} />
-                    <Route path="/basket" element={<CapabilityBasket />} />
-                    <Route path="/export" element={<ExportDownload />} />
-                    <Route path="/admin" element={<AdminSystems />} />
-                    <Route path="/vendor" element={<VendorShowcase />} />
-                    <Route path="/vendor/:id" element={<VendorProfile />} />
-                    <Route path="/how-it-works" element={<HowItWorks />} />
-                    <Route path="/research" element={<ResearchHub />} />
-                    <Route path="/assistant" element={<AiAssistant />} />
-                    <Route path="/tco" element={<TcoCalculator />} />
-                    <Route path="/procurement" element={<ProcurementWorkflow />} />
-                    <Route path="/integration" element={<IntegrationAssessment />} />
-                    <Route path="/architecture" element={<ArchitectureAssessment />} />
-                    <Route path="/value" element={<ValueAnalysis />} />
-                    <Route path="/documents" element={<DocumentGenerator />} />
-                    <Route path="/projects" element={<ProcurementProjects />} />
-                    <Route path="/guide" element={<ProcurementGuide />} />
-                    <Route path="/vendor-portal" element={<VendorPortal />} />
-                    <Route path="/workspaces" element={<TeamWorkspaces />} />
-                    <Route path="/admin/vendors" element={<AdminVendors />} />
-                    <Route path="/subscription" element={<Subscriptions />} />
-                    <Route path="/sector" element={<SectorAnalytics />} />
-                    <Route path="/api-keys" element={<ApiIntegration />} />
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                </AppShell>
-              }
-            />
-          </Routes>
+              {/* App pages — sidebar layout */}
+              <Route
+                path="/*"
+                element={
+                  <AppShell>
+                    <Routes>
+                      <Route path="/" element={<Leaderboard />} />
+                      <Route path="/radar" element={<RadarComparison />} />
+                      <Route path="/heatmap" element={<CapabilityHeatmap />} />
+                      <Route path="/system" element={<SystemDetail />} />
+                      <Route path="/capability" element={<CapabilityView />} />
+                      <Route path="/basket" element={<CapabilityBasket />} />
+                      <Route path="/export" element={<ExportDownload />} />
+                      <Route path="/admin" element={<AdminSystems />} />
+                      <Route path="/vendor" element={<VendorShowcase />} />
+                      <Route path="/vendor/:id" element={<VendorProfile />} />
+                      <Route path="/how-it-works" element={<HowItWorks />} />
+                      <Route path="/research" element={<ResearchHub />} />
+                      <Route path="/assistant" element={<AiAssistant />} />
+                      <Route path="/tco" element={<TcoCalculator />} />
+                      <Route path="/procurement" element={<ProcurementWorkflow />} />
+                      <Route path="/integration" element={<IntegrationAssessment />} />
+                      <Route path="/architecture" element={<ArchitectureAssessment />} />
+                      <Route path="/value" element={<ValueAnalysis />} />
+                      <Route path="/documents" element={<DocumentGenerator />} />
+                      <Route path="/projects" element={<ProcurementProjects />} />
+                      <Route path="/guide" element={<ProcurementGuide />} />
+                      <Route path="/vendor-portal" element={<VendorPortal />} />
+                      <Route path="/workspaces" element={<TeamWorkspaces />} />
+                      <Route path="/admin/vendors" element={<AdminVendors />} />
+                      <Route path="/subscription" element={<Subscriptions />} />
+                      <Route path="/sector" element={<SectorAnalytics />} />
+                      <Route path="/api-keys" element={<ApiIntegration />} />
+                      <Route path="/framework-mapping" element={<FrameworkMapping />} />
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </AppShell>
+                }
+              />
+            </Routes>
+          </FrameworkProvider>
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

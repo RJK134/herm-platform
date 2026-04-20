@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useSystem, useSystemScores, useVendorProfile, useFamilies } from '../hooks/useApi';
+import { useSystem, useSystemScores, useVendorProfile, useDomains } from '../hooks/useApi';
 import { Header } from '../components/layout/Header';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -15,29 +15,29 @@ export function VendorProfile() {
   const { data: system, isLoading: sysLoading } = useSystem(id!);
   const { data: profile, isLoading: profLoading } = useVendorProfile(id!);
   const { data: scores } = useSystemScores(id!);
-  const { data: families } = useFamilies();
+  const { data: domains } = useDomains();
 
   if (sysLoading || profLoading) return <div className="text-gray-400 text-center py-12">{t('profile.loading', 'Loading profile...')}</div>;
   if (!system) return <div className="text-red-500 text-center py-12">{t('profile.notFound', 'System not found')}</div>;
 
   const color = CATEGORY_COLORS[system.category] || '#6b7280';
 
-  // Calculate family scores from the scores data
-  const familyScores = families?.map(fam => {
-    if (!scores || !fam.capabilities) return null;
-    const famCaps = fam.capabilities ?? [];
+  // Calculate domain scores from the scores data
+  const domainScores = domains?.map(dom => {
+    if (!scores || !dom.capabilities) return null;
+    const domCaps = dom.capabilities ?? [];
     let total = 0; let count = 0;
-    famCaps.forEach((cap: { code: string }) => {
+    domCaps.forEach((cap: { code: string }) => {
       const byCode = (scores as { byCode?: Record<string, number> }).byCode ?? {};
       const v = byCode[cap.code] ?? 0;
       total += v; count++;
     });
     const pct = count > 0 ? Math.round(total / (count * 100) * 100) : 0;
-    return { family: fam, pct };
+    return { domain: dom, pct };
   }).filter(Boolean).sort((a, b) => (b?.pct ?? 0) - (a?.pct ?? 0)) ?? [];
 
-  const strengths = familyScores.slice(0, 3);
-  const weaknesses = familyScores.slice(-3).reverse();
+  const strengths = domainScores.slice(0, 3);
+  const weaknesses = domainScores.slice(-3).reverse();
 
   return (
     <div>
@@ -177,9 +177,9 @@ export function VendorProfile() {
                 <>
                   <div className="text-xs font-medium text-green-600 uppercase tracking-wider">Strengths</div>
                   {strengths.map(s => s && (
-                    <div key={s.family.id}>
+                    <div key={s.domain.id}>
                       <div className="flex justify-between text-xs mb-1">
-                        <span className="text-gray-700 dark:text-gray-300">{s.family.name}</span>
+                        <span className="text-gray-700 dark:text-gray-300">{s.domain.name}</span>
                         <span className="font-medium">{s.pct}%</span>
                       </div>
                       <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
@@ -189,9 +189,9 @@ export function VendorProfile() {
                   ))}
                   <div className="text-xs font-medium text-red-500 uppercase tracking-wider mt-4">Gaps</div>
                   {weaknesses.map(s => s && (
-                    <div key={s.family.id}>
+                    <div key={s.domain.id}>
                       <div className="flex justify-between text-xs mb-1">
-                        <span className="text-gray-700 dark:text-gray-300">{s.family.name}</span>
+                        <span className="text-gray-700 dark:text-gray-300">{s.domain.name}</span>
                         <span className="font-medium">{s.pct}%</span>
                       </div>
                       <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
