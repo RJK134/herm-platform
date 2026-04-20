@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useSystem, useSystemScores, useVendorProfile, useDomains } from '../hooks/useApi';
+import { useFramework } from '../contexts/FrameworkContext';
 import { Header } from '../components/layout/Header';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -12,10 +13,13 @@ export function VendorProfile() {
   const { t } = useTranslation('vendor');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { activeFramework } = useFramework();
   const { data: system, isLoading: sysLoading } = useSystem(id!);
   const { data: profile, isLoading: profLoading } = useVendorProfile(id!);
   const { data: scores } = useSystemScores(id!);
-  const { data: domains } = useDomains();
+  // Scope domains to the active framework so the strengths / weaknesses
+  // aggregation lines up with the same framework the scores belong to.
+  const { data: domains } = useDomains(activeFramework?.id);
 
   if (sysLoading || profLoading) return <div className="text-gray-400 text-center py-12">{t('profile.loading', 'Loading profile...')}</div>;
   if (!system) return <div className="text-red-500 text-center py-12">{t('profile.notFound', 'System not found')}</div>;

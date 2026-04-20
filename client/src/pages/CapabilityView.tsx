@@ -11,8 +11,10 @@ import { CATEGORY_COLORS } from '../lib/constants';
 export function CapabilityView() {
   const { t } = useTranslation('capabilities');
   const { activeFramework } = useFramework();
-  const { data: domains } = useDomains();
-  const { data: capabilities } = useCapabilities();
+  // Scope every hook to the active framework so the domain filter,
+  // capability list, and capability detail all belong to the same framework.
+  const { data: domains } = useDomains(activeFramework?.id);
+  const { data: capabilities } = useCapabilities(activeFramework?.id);
   const [selectedDomain, setSelectedDomain] = useState('');
   const [selectedCode, setSelectedCode] = useState('');
 
@@ -20,7 +22,7 @@ export function CapabilityView() {
     ? (capabilities || []).filter(c => c.domain?.code === selectedDomain)
     : (capabilities || []);
 
-  const { data: capDetail, isLoading } = useCapability(selectedCode);
+  const { data: capDetail, isLoading } = useCapability(selectedCode, activeFramework?.id);
 
   const systemLabels = capDetail?.scores?.map((s: { system: { name: string } }) => s.system.name) || [];
   const systemValues = capDetail?.scores?.map((s: { value: number }) => s.value) || [];

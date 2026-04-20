@@ -90,9 +90,18 @@ export class BasketsService {
     const systems = await prisma.vendorSystem.findMany();
     const capabilityIds = basket.items.map(item => item.capabilityId);
 
-    // Batch-load all relevant scores in a single query (avoids N+1)
+    // Batch-load all relevant scores in a single query (avoids N+1).
+    // Scope to the basket's framework — now that the same capability code
+    // can exist in multiple frameworks, an unscoped findMany could return
+    // scores belonging to a different framework and give a misleading
+    // evaluation. If the basket has no framework pin (legacy baskets), fall
+    // back to the capabilityId filter only.
     const allScores = await prisma.capabilityScore.findMany({
-      where: { capabilityId: { in: capabilityIds }, version: 1 },
+      where: {
+        capabilityId: { in: capabilityIds },
+        version: 1,
+        ...(basket.frameworkId ? { frameworkId: basket.frameworkId } : {}),
+      },
     });
 
     // Build map: systemId -> capabilityId -> value  (O(1) lookups below)
