@@ -6,6 +6,8 @@ interface ListParams {
   category?: string;
   year?: number;
   tags?: string;
+  limit?: number;
+  offset?: number;
 }
 
 interface ResearchItemInput {
@@ -40,6 +42,8 @@ export class ResearchService {
     return prisma.researchItem.findMany({
       where,
       orderBy: [{ year: 'desc' }, { title: 'asc' }],
+      take: Math.min(params.limit ?? 200, 200),
+      skip: params.offset ?? 0,
     });
   }
 

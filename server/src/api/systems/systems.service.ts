@@ -2,11 +2,13 @@ import prisma from '../../utils/prisma';
 import { NotFoundError } from '../../utils/errors';
 
 export class SystemsService {
-  async listSystems(params: { category?: string }) {
+  async listSystems(params: { category?: string; limit?: number; offset?: number }) {
     const where = params.category ? { category: params.category } : {};
     return prisma.vendorSystem.findMany({
       where,
       orderBy: [{ category: 'asc' }, { name: 'asc' }],
+      take: Math.min(params.limit ?? 200, 200),
+      skip: params.offset ?? 0,
     });
   }
 
@@ -40,7 +42,13 @@ export class SystemsService {
 
     // Return as map of code -> value and full grouped structure
     const byCode: Record<string, number> = {};
-    const byFamily: Record<string, { familyCode: string; familyName: string; capabilities: Array<{ code: string; name: string; value: number }> }> = {};
+    const byFamily: Record<string, {
+      familyCode: string;
+      familyName: string;
+      score: number;
+      maxScore: number;
+      capabilities: Array<{ code: string; name: string; value: number }>;
+    }> = {};
 
     for (const s of scores) {
       byCode[s.capability.code] = s.value;
@@ -49,6 +57,8 @@ export class SystemsService {
         byFamily[fCode] = {
           familyCode: fCode,
           familyName: s.capability.family.name,
+          score: 0,
+          maxScore: 0,
           capabilities: [],
         };
       }
@@ -57,6 +67,8 @@ export class SystemsService {
         name: s.capability.name,
         value: s.value,
       });
+      byFamily[fCode].score += s.value;
+      byFamily[fCode].maxScore += 100; // Score.value is 0/50/100 per capability (consistent with vendor-portal.service.ts and scores.service.ts)
     }
 
     return { system, byCode, byFamily: Object.values(byFamily) };

@@ -1,11 +1,8 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useQuery } from '@tanstack/react-query';
-import axios from 'axios';
-import type { ApiResponse } from '../types';
 import {
   ChevronDown, ChevronRight, ChevronUp, Info,
-  CheckCircle, Clock, Users, FileText, Shield, RefreshCw,
+  CheckCircle, Clock, Users, FileText, Shield,
 } from 'lucide-react';
 import { Header } from '../components/layout/Header';
 import { Card } from '../components/ui/Card';
@@ -46,13 +43,6 @@ interface DecisionResult {
   thresholdStatus: string;
   jurisdiction: Jurisdiction;
   procurementType: ProcurementType;
-}
-
-interface JurisdictionData {
-  uk: Record<string, string>;
-  eu: Record<string, string>;
-  us_federal: Record<string, string>;
-  au: Record<string, string>;
 }
 
 // ── Static Data ────────────────────────────────────────────────────────────────
@@ -714,16 +704,6 @@ function DecisionTreeSection({ onStartProject }: { onStartProject?: (j: Jurisdic
 
 function ComparisonSection() {
   const { t } = useTranslation('procurement');
-  const { data: jurisdictionData, isLoading } = useQuery({
-    queryKey: ['procurement-jurisdictions'],
-    queryFn: () =>
-      axios.get<ApiResponse<JurisdictionData>>('/api/procurement/jurisdictions')
-        .then((r) => r.data.data)
-        .catch(() => null),
-  });
-
-  // Use static data as fallback (the endpoint may not exist yet)
-  const rows = COMPARISON_ROWS;
 
   return (
     <Card className="p-0 overflow-hidden">
@@ -732,41 +712,31 @@ function ComparisonSection() {
         <p className="text-sm text-gray-500 mt-0.5">{t("guide.keyRegulatoryRequirements", "Key regulatory requirements by jurisdiction")}</p>
       </div>
 
-      {isLoading ? (
-        <div className="flex justify-center py-8">
-          <RefreshCw className="w-5 h-5 animate-spin text-gray-400" />
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 dark:bg-gray-700/50">
-              <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 w-40">{t("guide.criterion", "Criterion")}</th>
-                {(['UK', 'EU', 'US', 'AU'] as const).map((j) => (
-                  <th key={j} className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">
-                    <span className="mr-1">{JURISDICTION_FLAGS[j]}</span>{j}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {rows.map((row, i) => (
-                <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                  <td className="px-4 py-3 font-medium text-gray-700 dark:text-gray-300 text-xs">{row.label}</td>
-                  <td className="px-4 py-3 text-gray-600 dark:text-gray-400 text-xs">
-                    {jurisdictionData
-                      ? (Object.values(jurisdictionData.uk)[i] ?? row.uk)
-                      : row.uk}
-                  </td>
-                  <td className="px-4 py-3 text-gray-600 dark:text-gray-400 text-xs">{row.eu}</td>
-                  <td className="px-4 py-3 text-gray-600 dark:text-gray-400 text-xs">{row.us}</td>
-                  <td className="px-4 py-3 text-gray-600 dark:text-gray-400 text-xs">{row.au}</td>
-                </tr>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 dark:bg-gray-700/50">
+            <tr>
+              <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400 w-40">{t("guide.criterion", "Criterion")}</th>
+              {(['UK', 'EU', 'US', 'AU'] as const).map((j) => (
+                <th key={j} className="text-left px-4 py-3 font-medium text-gray-600 dark:text-gray-400">
+                  <span className="mr-1">{JURISDICTION_FLAGS[j]}</span>{j}
+                </th>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+            {COMPARISON_ROWS.map((row, i) => (
+              <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                <td className="px-4 py-3 font-medium text-gray-700 dark:text-gray-300 text-xs">{row.label}</td>
+                <td className="px-4 py-3 text-gray-600 dark:text-gray-400 text-xs">{row.uk}</td>
+                <td className="px-4 py-3 text-gray-600 dark:text-gray-400 text-xs">{row.eu}</td>
+                <td className="px-4 py-3 text-gray-600 dark:text-gray-400 text-xs">{row.us}</td>
+                <td className="px-4 py-3 text-gray-600 dark:text-gray-400 text-xs">{row.au}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </Card>
   );
 }

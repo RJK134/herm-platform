@@ -4,7 +4,7 @@ import prisma from '../../utils/prisma';
 import { ConflictError, AuthError, NotFoundError } from '../../utils/errors';
 import type { VendorRegisterInput, VendorLoginInput, VendorProfileUpdateInput, VendorSubmissionInput } from './vendor-portal.schema';
 
-const JWT_SECRET = process.env['JWT_SECRET'] ?? 'dev-secret-change-in-production';
+const JWT_SECRET = process.env['JWT_SECRET'] ?? 'dev-secret';
 
 export interface VendorJwtPayload {
   vendorUserId: string;

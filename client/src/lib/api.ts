@@ -64,7 +64,7 @@ export const api = {
   getSystem: (id: string) =>
     client.get<ApiResponse<VendorSystem>>(`/systems/${id}`),
   getSystemScores: (id: string) =>
-    client.get<ApiResponse<{ byCode: Record<string, number>; byFamily: Array<{ familyCode: string; familyName: string; capabilities: Array<{ code: string; name: string; value: number }> }> }>>(`/systems/${id}/scores`),
+    client.get<ApiResponse<{ byCode: Record<string, number>; byFamily: Array<{ familyCode: string; familyName: string; score: number; maxScore: number; capabilities: Array<{ code: string; name: string; value: number }> }> }>>(`/systems/${id}/scores`),
   compareSystems: (ids: string[]) =>
     client.get<ApiResponse<LeaderboardEntry[]>>('/systems/compare', { params: { ids: ids.join(',') } }),
 

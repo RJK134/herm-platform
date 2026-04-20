@@ -7,6 +7,8 @@ const listQuerySchema = z.object({
   category: z.string().min(1).max(100).optional(),
   year: z.string().regex(/^\d{4}$/, 'year must be a 4-digit number').optional(),
   tags: z.string().max(500).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(200),
+  offset: z.coerce.number().int().min(0).default(0),
 });
 
 const service = new ResearchService();
@@ -18,12 +20,14 @@ export const list = async (req: Request, res: Response, next: NextFunction): Pro
       res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: query.error.errors[0]?.message ?? 'Invalid query parameters' } });
       return;
     }
-    const { publisher, category, year, tags } = query.data;
+    const { publisher, category, year, tags, limit, offset } = query.data;
     const data = await service.list({
       publisher,
       category,
       year: year ? Number(year) : undefined,
       tags,
+      limit,
+      offset,
     });
     res.json({ success: true, data });
   } catch (err) {

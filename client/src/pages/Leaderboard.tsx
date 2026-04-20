@@ -13,12 +13,15 @@ import { formatPercent } from '../lib/utils';
 import { CATEGORY_COLORS } from '../lib/constants';
 import type { LeaderboardEntry } from '../types';
 
+const PAGE_SIZE = 10;
+
 export function Leaderboard() {
   const { t } = useTranslation('leaderboard');
   const navigate = useNavigate();
   const { data, isLoading, error } = useLeaderboard();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
+  const [page, setPage] = useState(0);
 
   const filtered = (data || []).filter(e => {
     const matchSearch =
@@ -215,11 +218,11 @@ export function Leaderboard() {
       <Card className="mb-4">
         <div className="flex gap-3 items-center flex-wrap">
           <div className="flex-1 min-w-[200px]">
-            <SearchInput value={search} onChange={setSearch} placeholder={t('filters.searchSystems', 'Search systems...')} />
+            <SearchInput value={search} onChange={v => { setSearch(v); setPage(0); }} placeholder={t('filters.searchSystems', 'Search systems...')} />
           </div>
           <select
             value={category}
-            onChange={e => setCategory(e.target.value)}
+            onChange={e => { setCategory(e.target.value); setPage(0); }}
             className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white"
           >
             <option value="">{t('filters.allCategories', 'All Categories')}</option>
@@ -238,14 +241,37 @@ export function Leaderboard() {
         {isLoading ? (
           <div className="p-6"><SkeletonTable rows={10} /></div>
         ) : (
-          <DataTable
-            columns={columns}
-            data={filtered}
-            onRowClick={(row) => navigate(`/system?id=${row.system.id}`)}
-            getRowClass={row =>
-              row.system.isOwnSystem ? 'bg-teal/5 dark:bg-teal/10' : ''
-            }
-          />
+          <>
+            <DataTable
+              columns={columns}
+              data={filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)}
+              onRowClick={(row) => navigate(`/system?id=${row.system.id}`)}
+              getRowClass={row =>
+                row.system.isOwnSystem ? 'bg-teal/5 dark:bg-teal/10' : ''
+              }
+            />
+            {filtered.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700 text-sm text-gray-500">
+                <span>{page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPage(p => Math.max(0, p - 1))}
+                    disabled={page === 0}
+                    className="px-3 py-1 rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  >
+                    {t('pagination.prev', 'Prev')}
+                  </button>
+                  <button
+                    onClick={() => setPage(p => p + 1)}
+                    disabled={(page + 1) * PAGE_SIZE >= filtered.length}
+                    className="px-3 py-1 rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  >
+                    {t('pagination.next', 'Next')}
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </Card>
     </div>

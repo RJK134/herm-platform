@@ -4,6 +4,8 @@ import { SystemsService } from './systems.service';
 
 const listQuerySchema = z.object({
   category: z.string().min(1).max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(200),
+  offset: z.coerce.number().int().min(0).default(0),
 });
 
 const compareQuerySchema = z.object({
@@ -19,7 +21,7 @@ export const list = async (req: Request, res: Response, next: NextFunction): Pro
       res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: query.error.errors[0]?.message ?? 'Invalid query parameters' } });
       return;
     }
-    const data = await service.listSystems({ category: query.data.category });
+    const data = await service.listSystems({ category: query.data.category, limit: query.data.limit, offset: query.data.offset });
     res.json({ success: true, data });
   } catch (err) {
     next(err);
