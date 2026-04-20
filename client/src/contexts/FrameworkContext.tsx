@@ -5,7 +5,7 @@ import React, {
   useEffect,
   useCallback,
 } from 'react';
-import axios from 'axios';
+import { api } from '../lib/api';
 import { useAuthContext } from './AuthContext';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -18,6 +18,8 @@ export interface Framework {
   publisher: string;
   description?: string;
   licenceType: string;
+  licenceNotice?: string | null;
+  licenceUrl?: string | null;
   isPublic: boolean;
   isDefault: boolean;
   domainCount: number;
@@ -35,6 +37,11 @@ interface FrameworkContextValue {
 
 const FrameworkContext = createContext<FrameworkContextValue | null>(null);
 
+// Tiers that should default to the paid / non-public "isDefault" framework.
+// Kept in sync with server-side tier gates — add new tiers here if they are
+// introduced on the subscription model.
+const PAID_TIERS = new Set(['professional', 'enterprise', 'admin']);
+
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 export function FrameworkProvider({ children }: { children: React.ReactNode }) {
@@ -47,10 +54,9 @@ export function FrameworkProvider({ children }: { children: React.ReactNode }) {
     (list: Framework[]) => {
       if (list.length === 0) return null;
 
-      const isPaid =
-        user?.tier === 'professional' || user?.tier === 'enterprise';
+      const isPaid = user?.tier ? PAID_TIERS.has(user.tier) : false;
 
-      // Paid users default to isDefault=true; free/anonymous default to isPublic=true
+      // Paid users default to isDefault=true; free/anonymous default to isPublic=true.
       const preferred = isPaid
         ? list.find((f) => f.isDefault) ?? list.find((f) => f.isPublic) ?? list[0]
         : list.find((f) => f.isPublic) ?? list[0];
@@ -62,17 +68,22 @@ export function FrameworkProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setIsLoading(true);
-    axios
-      .get<{ success: boolean; data: Framework[] }>('/api/frameworks')
-      .then(({ data }) => {
-        if (data.success && Array.isArray(data.data)) {
-          setFrameworks(data.data);
-          const defaultFw = selectDefault(data.data);
+    // Use the shared authenticated API client so the JWT (and any future
+    // auth headers) travel with this request — critical for paid-tier
+    // callers whose account can see the proprietary framework list.
+    api
+      .listFrameworks()
+      .then(({ data: payload }) => {
+        if (payload.success && Array.isArray(payload.data)) {
+          setFrameworks(payload.data as Framework[]);
+          const defaultFw = selectDefault(payload.data as Framework[]);
           setActiveFramework(defaultFw);
         }
       })
       .catch(() => {
-        // If frameworks endpoint fails, continue with empty list
+        // If the frameworks endpoint fails, continue with an empty list —
+        // the UI will render the public fallback served by framework-context
+        // middleware on the server.
         setFrameworks([]);
         setActiveFramework(null);
       })

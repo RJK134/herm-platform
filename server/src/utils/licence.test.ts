@@ -70,7 +70,7 @@ describe('getLicence', () => {
     const result = getLicence(framework);
 
     expect(result).not.toBeNull();
-    expect(result!.url).toBe('https://creativecommons.org/licenses/by-sa-4.0/');
+    expect(result!.url).toBe('https://creativecommons.org/licenses/by-sa/4.0/');
   });
 
   it('returns licence for CC-BY-NC-4.0', () => {

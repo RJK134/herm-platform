@@ -98,15 +98,20 @@ export class VendorPortalService {
     return prisma.vendorAccount.update({ where: { id: vendorAccountId }, data });
   }
 
-  async getOwnScores(vendorAccountId: string) {
+  async getOwnScores(vendorAccountId: string, frameworkId?: string) {
     const account = await prisma.vendorAccount.findUnique({
       where: { id: vendorAccountId },
       select: { systemId: true, system: { select: { id: true, name: true, vendor: true } } },
     });
     if (!account?.systemId) return { system: null, scores: [] };
 
+    // Scope to the caller's active framework; without it, scores from
+    // multiple frameworks would be conflated into one byDomain aggregation.
     const scores = await prisma.capabilityScore.findMany({
-      where: { systemId: account.systemId },
+      where: {
+        systemId: account.systemId,
+        ...(frameworkId ? { frameworkId } : {}),
+      },
       include: {
         capability: {
           include: { domain: { select: { code: true, name: true } } },

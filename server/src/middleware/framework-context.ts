@@ -23,8 +23,17 @@ declare global {
 
 /**
  * Resolves frameworkId from query string and attaches framework metadata to req.
- * If ?frameworkId is provided, looks it up directly.
- * If not provided, finds the default framework (isDefault: true).
+ *
+ * Resolution order:
+ *   1. Explicit `?frameworkId=…` — honoured as given (tier-gate middleware is
+ *      expected to run before this for paid-only frameworks).
+ *   2. Fallback — first **public** active framework (HERM under CC-BY-NC-SA).
+ *
+ * The previous fallback used `isDefault: true`, which on the current seed
+ * points at the proprietary FHE framework. Anonymous / free-tier callers
+ * would silently receive proprietary data. Defaulting to the public framework
+ * is safe for every tier; paid callers that want a non-public default
+ * pass the frameworkId explicitly (via tier-gate / subscription logic).
  */
 export async function frameworkContext(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -47,7 +56,8 @@ export async function frameworkContext(req: Request, res: Response, next: NextFu
           },
         })
       : await prisma.framework.findFirst({
-          where: { isDefault: true, isActive: true },
+          where: { isPublic: true, isActive: true },
+          orderBy: { createdAt: 'asc' },
           select: {
             id: true,
             slug: true,

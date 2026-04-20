@@ -731,11 +731,11 @@ export class ProcurementEngine {
     const byDomain = new Map<string, { domainCode: string; domainName: string; items: typeof basketItems }>();
 
     for (const item of basketItems) {
-      const fc = item.capability.domain.code;
-      if (!byDomain.has(fc)) {
-        byDomain.set(fc, { domainCode: fc, domainName: item.capability.domain.name, items: [] });
+      const dc = item.capability.domain.code;
+      if (!byDomain.has(dc)) {
+        byDomain.set(dc, { domainCode: dc, domainName: item.capability.domain.name, items: [] });
       }
-      byDomain.get(fc)!.items.push(item);
+      byDomain.get(dc)!.items.push(item);
     }
 
     const sections = Array.from(byDomain.values()).map(domain => ({

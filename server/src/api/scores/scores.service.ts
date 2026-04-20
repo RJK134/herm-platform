@@ -5,8 +5,15 @@ import type { Framework } from '@prisma/client';
 export class ScoresService {
   /**
    * Resolve which framework to use for leaderboard/heatmap queries.
-   * Priority: explicit frameworkId → default framework (paid) → first public active (free).
-   * Returns null if no framework can be found.
+   *
+   * Priority:
+   *   1. Explicit frameworkId (must exist AND be active). Callers that need
+   *      tier enforcement should wrap this service with tier-gate middleware.
+   *   2. Fallback — first public active framework.
+   *
+   * The previous `isDefault` fallback would silently surface the proprietary
+   * FHE framework to anonymous callers. Defaulting to the public framework
+   * is safe for every tier; paid callers pass frameworkId explicitly.
    */
   private async resolveFramework(frameworkId?: string): Promise<Framework | null> {
     if (frameworkId) {
@@ -14,15 +21,10 @@ export class ScoresService {
       if (framework && framework.isActive) return framework;
     }
 
-    // Try default (paid tier)
-    const defaultFramework = await prisma.framework.findFirst({
-      where: { isDefault: true, isActive: true },
-    });
-    if (defaultFramework) return defaultFramework;
-
-    // Fall back to first public active (free tier)
+    // Fall back to first public active framework (safe for all tiers).
     return prisma.framework.findFirst({
       where: { isPublic: true, isActive: true },
+      orderBy: { createdAt: 'asc' },
     });
   }
 

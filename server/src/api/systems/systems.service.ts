@@ -29,12 +29,18 @@ export class SystemsService {
     return system;
   }
 
-  async getSystemScores(id: string) {
+  async getSystemScores(id: string, frameworkId?: string) {
     const system = await prisma.vendorSystem.findUnique({ where: { id } });
     if (!system) throw new NotFoundError(`System not found: ${id}`);
 
+    // Scope to the caller's active framework so HERM and FHE scores do not
+    // mix into the same byDomain aggregation.
     const scores = await prisma.capabilityScore.findMany({
-      where: { systemId: id, version: 1 },
+      where: {
+        systemId: id,
+        version: 1,
+        ...(frameworkId ? { frameworkId } : {}),
+      },
       include: {
         capability: { include: { domain: true } },
       },
@@ -74,19 +80,26 @@ export class SystemsService {
     return { system, byCode, byDomain: Object.values(byDomain) };
   }
 
-  async compareSystems(ids: string[]) {
+  async compareSystems(ids: string[], frameworkId?: string) {
     const systems = await prisma.vendorSystem.findMany({
       where: { id: { in: ids } },
     });
 
+    // Scope domains + scores to the active framework — comparison across
+    // frameworks makes no sense and would produce mixed aggregations.
     const domains = await prisma.frameworkDomain.findMany({
+      where: frameworkId ? { frameworkId } : undefined,
       include: { capabilities: true },
       orderBy: { sortOrder: 'asc' },
     });
 
     // Batch-load all scores for all requested systems in a single query (avoids N+1)
     const allScores = await prisma.capabilityScore.findMany({
-      where: { systemId: { in: ids }, version: 1 },
+      where: {
+        systemId: { in: ids },
+        version: 1,
+        ...(frameworkId ? { frameworkId } : {}),
+      },
       include: { capability: true },
     });
 
