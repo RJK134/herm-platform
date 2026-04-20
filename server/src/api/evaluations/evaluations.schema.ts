@@ -26,7 +26,7 @@ export const addMemberSchema = z.object({
 
 export const assignDomainsSchema = z.object({
   assignments: z.array(z.object({
-    familyId: z.string(),
+    domainId: z.string(),
     userId: z.string(),
   })),
 });

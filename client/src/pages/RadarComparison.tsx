@@ -42,13 +42,13 @@ export function RadarComparison() {
     });
   };
 
-  const familyLabels = comparison?.[0]?.familyScores.map(f => f.familyName.split(' ').slice(0, 2).join(' ')) || [];
+  const domainLabels = comparison?.[0]?.domainScores.map(f => f.domainName.split(' ').slice(0, 2).join(' ')) || [];
 
   const radarDatasets = (comparison || []).map((entry, i) => {
     const colors = ['#2563eb', '#7c3aed', '#ea580c', '#01696F', '#0891b2'];
     return {
       label: entry.system.name,
-      data: entry.familyScores.map(f => f.percentage),
+      data: entry.domainScores.map(f => f.percentage),
       color: entry.system.isOwnSystem ? '#01696F' : (CATEGORY_COLORS[entry.system.category] || colors[i % colors.length]),
     };
   });
@@ -100,7 +100,7 @@ export function RadarComparison() {
             </div>
           ) : (
             <div className="w-full max-w-xl mx-auto">
-              <RadarChart labels={familyLabels} datasets={radarDatasets} />
+              <RadarChart labels={domainLabels} datasets={radarDatasets} />
             </div>
           )}
         </Card>
@@ -132,9 +132,9 @@ export function RadarComparison() {
                     />
                   </div>
                   <div className="mt-2 space-y-1">
-                    {entry.familyScores.map(f => (
-                      <div key={f.familyCode} className="flex justify-between text-xs text-gray-500">
-                        <span className="truncate max-w-[120px]">{f.familyName}</span>
+                    {entry.domainScores.map(f => (
+                      <div key={f.domainCode} className="flex justify-between text-xs text-gray-500">
+                        <span className="truncate max-w-[120px]">{f.domainName}</span>
                         <span>{formatPercent(f.percentage)}</span>
                       </div>
                     ))}

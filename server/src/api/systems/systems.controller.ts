@@ -39,7 +39,8 @@ export const getById = async (req: Request, res: Response, next: NextFunction): 
 
 export const getScores = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const data = await service.getSystemScores(req.params['id'] as string);
+    // Forward the active frameworkId so scores are not mixed across frameworks.
+    const data = await service.getSystemScores(req.params['id'] as string, req.frameworkId);
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -58,7 +59,7 @@ export const compare = async (req: Request, res: Response, next: NextFunction): 
       res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'At least 2 system IDs required' } });
       return;
     }
-    const data = await service.compareSystems(idList);
+    const data = await service.compareSystems(idList, req.frameworkId);
     res.json({ success: true, data });
   } catch (err) {
     next(err);

@@ -39,7 +39,7 @@ export const updateVendorProfile = async (req: Request, res: Response, next: Nex
 
 export const getVendorScores = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const data = await svc.getOwnScores(req.vendorUser!.vendorAccountId);
+    const data = await svc.getOwnScores(req.vendorUser!.vendorAccountId, req.frameworkId);
     res.json({ success: true, data });
   } catch (err) { next(err); }
 };

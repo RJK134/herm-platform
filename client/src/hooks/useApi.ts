@@ -1,8 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 
-export const useLeaderboard = () =>
-  useQuery({ queryKey: ['leaderboard'], queryFn: () => api.getLeaderboard().then(r => r.data.data) });
+export const useLeaderboard = (frameworkId?: string) =>
+  useQuery({
+    queryKey: ['leaderboard', frameworkId ?? 'default'],
+    queryFn: () => api.getLeaderboard(frameworkId).then(r => r.data.data),
+  });
 
 export const useSystems = (category?: string) =>
   useQuery({ queryKey: ['systems', category], queryFn: () => api.getSystems({ category }).then(r => r.data.data) });
@@ -13,17 +16,35 @@ export const useSystem = (id: string) =>
 export const useSystemScores = (id: string) =>
   useQuery({ queryKey: ['system-scores', id], queryFn: () => api.getSystemScores(id).then(r => r.data.data), enabled: !!id });
 
-export const useFamilies = () =>
-  useQuery({ queryKey: ['families'], queryFn: () => api.getFamilies().then(r => r.data.data) });
+// Framework-scoped hooks — callers should pass the active framework id
+// (from FrameworkContext) so the returned data matches the rest of the
+// page. Unscoped calls still work (server falls back to the default public
+// framework via frameworkContext middleware) but on multi-framework pages
+// this would produce dropdown/heatmap mismatches.
+export const useDomains = (frameworkId?: string) =>
+  useQuery({
+    queryKey: ['domains', frameworkId ?? 'default'],
+    queryFn: () => api.getDomains(frameworkId).then(r => r.data.data),
+  });
 
-export const useCapabilities = () =>
-  useQuery({ queryKey: ['capabilities'], queryFn: () => api.getCapabilities().then(r => r.data.data) });
+export const useCapabilities = (frameworkId?: string) =>
+  useQuery({
+    queryKey: ['capabilities', frameworkId ?? 'default'],
+    queryFn: () => api.getCapabilities(frameworkId).then(r => r.data.data),
+  });
 
-export const useCapability = (code: string) =>
-  useQuery({ queryKey: ['capability', code], queryFn: () => api.getCapability(code).then(r => r.data.data), enabled: !!code });
+export const useCapability = (code: string, frameworkId?: string) =>
+  useQuery({
+    queryKey: ['capability', code, frameworkId ?? 'default'],
+    queryFn: () => api.getCapability(code, frameworkId).then(r => r.data.data),
+    enabled: !!code,
+  });
 
-export const useHeatmap = () =>
-  useQuery({ queryKey: ['heatmap'], queryFn: () => api.getHeatmap().then(r => r.data.data) });
+export const useHeatmap = (frameworkId?: string) =>
+  useQuery({
+    queryKey: ['heatmap', frameworkId ?? 'default'],
+    queryFn: () => api.getHeatmap(frameworkId).then(r => r.data.data),
+  });
 
 export const useCompare = (ids: string[]) =>
   useQuery({ queryKey: ['compare', ids], queryFn: () => api.compareSystems(ids).then(r => r.data.data), enabled: ids.length >= 2 });

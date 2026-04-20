@@ -2,10 +2,39 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app';
 
+// Hoisted alongside vi.mock so the factory below can reference it.
+// frameworkContext middleware (mounted on /api/systems, /api/capabilities,
+// /api/scores, /api/vendor-portal) needs a Framework to resolve during tests.
+const { mockFramework } = vi.hoisted(() => ({
+  mockFramework: {
+    id: 'fw-herm',
+    slug: 'herm-v3.1',
+    name: 'UCISA HERM v3.1',
+    version: '3.1',
+    publisher: 'CAUDIT',
+    description: 'HE Reference Model',
+    licenceType: 'CC-BY-NC-SA-4.0',
+    licenceNotice: null,
+    licenceUrl: null,
+    isPublic: true,
+    isDefault: false,
+    isActive: true,
+    domainCount: 10,
+    capabilityCount: 165,
+    metadata: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+}));
+
 vi.mock('../../utils/prisma', () => ({
   default: {
     $queryRaw: vi.fn().mockResolvedValue([]),
     $disconnect: vi.fn(),
+    framework: {
+      findFirst: vi.fn().mockResolvedValue(mockFramework),
+      findUnique: vi.fn().mockResolvedValue(mockFramework),
+    },
     vendorSystem: {
       findMany: vi.fn().mockResolvedValue([
         { id: 'sys1', name: 'Ellucian Banner', vendor: 'Ellucian', category: 'SIS', cloudNative: false },
@@ -14,8 +43,8 @@ vi.mock('../../utils/prisma', () => ({
       ]),
       findUnique: vi.fn().mockResolvedValue({ id: 'sys1', name: 'Ellucian Banner', vendor: 'Ellucian', category: 'SIS' }),
     },
-    score: { findMany: vi.fn().mockResolvedValue([]) },
-    hermFamily: { findMany: vi.fn().mockResolvedValue([]) },
+    capabilityScore: { findMany: vi.fn().mockResolvedValue([]) },
+    frameworkDomain: { findMany: vi.fn().mockResolvedValue([]) },
   },
 }));
 

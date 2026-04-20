@@ -19,7 +19,7 @@ export class SystemsService {
         scores: {
           include: {
             capability: {
-              include: { family: true },
+              include: { domain: true },
             },
           },
         },
@@ -29,22 +29,28 @@ export class SystemsService {
     return system;
   }
 
-  async getSystemScores(id: string) {
+  async getSystemScores(id: string, frameworkId?: string) {
     const system = await prisma.vendorSystem.findUnique({ where: { id } });
     if (!system) throw new NotFoundError(`System not found: ${id}`);
 
-    const scores = await prisma.score.findMany({
-      where: { systemId: id, version: 1 },
+    // Scope to the caller's active framework so HERM and FHE scores do not
+    // mix into the same byDomain aggregation.
+    const scores = await prisma.capabilityScore.findMany({
+      where: {
+        systemId: id,
+        version: 1,
+        ...(frameworkId ? { frameworkId } : {}),
+      },
       include: {
-        capability: { include: { family: true } },
+        capability: { include: { domain: true } },
       },
     });
 
     // Return as map of code -> value and full grouped structure
     const byCode: Record<string, number> = {};
-    const byFamily: Record<string, {
-      familyCode: string;
-      familyName: string;
+    const byDomain: Record<string, {
+      domainCode: string;
+      domainName: string;
       score: number;
       maxScore: number;
       capabilities: Array<{ code: string; name: string; value: number }>;
@@ -52,41 +58,48 @@ export class SystemsService {
 
     for (const s of scores) {
       byCode[s.capability.code] = s.value;
-      const fCode = s.capability.family.code;
-      if (!byFamily[fCode]) {
-        byFamily[fCode] = {
-          familyCode: fCode,
-          familyName: s.capability.family.name,
+      const fCode = s.capability.domain.code;
+      if (!byDomain[fCode]) {
+        byDomain[fCode] = {
+          domainCode: fCode,
+          domainName: s.capability.domain.name,
           score: 0,
           maxScore: 0,
           capabilities: [],
         };
       }
-      byFamily[fCode].capabilities.push({
+      byDomain[fCode].capabilities.push({
         code: s.capability.code,
         name: s.capability.name,
         value: s.value,
       });
-      byFamily[fCode].score += s.value;
-      byFamily[fCode].maxScore += 100; // Score.value is 0/50/100 per capability (consistent with vendor-portal.service.ts and scores.service.ts)
+      byDomain[fCode].score += s.value;
+      byDomain[fCode].maxScore += 100; // CapabilityScore.value is 0/50/100 per capability (consistent with vendor-portal.service.ts and scores.service.ts)
     }
 
-    return { system, byCode, byFamily: Object.values(byFamily) };
+    return { system, byCode, byDomain: Object.values(byDomain) };
   }
 
-  async compareSystems(ids: string[]) {
+  async compareSystems(ids: string[], frameworkId?: string) {
     const systems = await prisma.vendorSystem.findMany({
       where: { id: { in: ids } },
     });
 
-    const families = await prisma.hermFamily.findMany({
+    // Scope domains + scores to the active framework — comparison across
+    // frameworks makes no sense and would produce mixed aggregations.
+    const domains = await prisma.frameworkDomain.findMany({
+      where: frameworkId ? { frameworkId } : undefined,
       include: { capabilities: true },
       orderBy: { sortOrder: 'asc' },
     });
 
     // Batch-load all scores for all requested systems in a single query (avoids N+1)
-    const allScores = await prisma.score.findMany({
-      where: { systemId: { in: ids }, version: 1 },
+    const allScores = await prisma.capabilityScore.findMany({
+      where: {
+        systemId: { in: ids },
+        version: 1,
+        ...(frameworkId ? { frameworkId } : {}),
+      },
       include: { capability: true },
     });
 
@@ -100,21 +113,21 @@ export class SystemsService {
     const results = systems.map((system) => {
       const scoreMap = scoreIndex.get(system.id) ?? new Map<string, number>();
 
-      const familyScores = families.map((family) => {
-        const caps = family.capabilities;
+      const domainScores = domains.map((domain) => {
+        const caps = domain.capabilities;
         const total = caps.reduce((sum, c) => sum + (scoreMap.get(c.code) ?? 0), 0);
         const max = caps.length * 100;
         return {
-          familyCode: family.code,
-          familyName: family.name,
+          domainCode: domain.code,
+          domainName: domain.name,
           score: total,
           maxScore: max,
           percentage: max > 0 ? (total / max) * 100 : 0,
         };
       });
 
-      const totalScore = familyScores.reduce((s, f) => s + f.score, 0);
-      const maxScore = familyScores.reduce((s, f) => s + f.maxScore, 0);
+      const totalScore = domainScores.reduce((s, f) => s + f.score, 0);
+      const maxScore = domainScores.reduce((s, f) => s + f.maxScore, 0);
 
       return {
         system,
@@ -122,7 +135,7 @@ export class SystemsService {
         maxScore,
         percentage: maxScore > 0 ? (totalScore / maxScore) * 100 : 0,
         rank: 0,
-        familyScores,
+        domainScores,
       };
     });
 

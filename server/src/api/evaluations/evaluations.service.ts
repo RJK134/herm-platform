@@ -100,7 +100,7 @@ export class EvaluationsService {
         },
         domainAssignments: {
           include: {
-            family: { select: { id: true, code: true, name: true, category: true } },
+            domain: { select: { id: true, code: true, name: true, category: true } },
             assignedTo: { select: { id: true, name: true, email: true } },
             scores: true,
           },
@@ -161,8 +161,8 @@ export class EvaluationsService {
     const results = await prisma.$transaction(
       data.assignments.map(a =>
         prisma.evaluationDomainAssignment.upsert({
-          where: { projectId_familyId: { projectId, familyId: a.familyId } },
-          create: { projectId, familyId: a.familyId, assignedToId: a.userId, status: 'pending' },
+          where: { projectId_domainId: { projectId, domainId: a.domainId } },
+          create: { projectId, domainId: a.domainId, assignedToId: a.userId, status: 'pending' },
           update: { assignedToId: a.userId, status: 'pending', completedAt: null },
         })
       )
@@ -174,7 +174,7 @@ export class EvaluationsService {
     const assignments = await prisma.evaluationDomainAssignment.findMany({
       where: { projectId },
       include: {
-        family: { select: { id: true, code: true, name: true, category: true } },
+        domain: { select: { id: true, code: true, name: true, category: true } },
         assignedTo: { select: { id: true, name: true, email: true } },
         scores: true,
       },
@@ -183,24 +183,24 @@ export class EvaluationsService {
     // Get total systems in project
     const systemCount = await prisma.evaluationSystem.count({ where: { projectId } });
 
-    // Get total capabilities per family
-    const familyIds = [...new Set(assignments.map(a => a.familyId))];
-    const capCounts = await prisma.hermCapability.groupBy({
-      by: ['familyId'],
-      where: { familyId: { in: familyIds } },
+    // Get total capabilities per domain
+    const domainIds = [...new Set(assignments.map(a => a.domainId))];
+    const capCounts = await prisma.capability.groupBy({
+      by: ['domainId'],
+      where: { domainId: { in: domainIds } },
       _count: { id: true },
     });
-    const capCountMap = new Map(capCounts.map(c => [c.familyId, c._count.id]));
+    const capCountMap = new Map(capCounts.map(c => [c.domainId, c._count.id]));
 
     return assignments.map(a => {
-      const totalCaps = capCountMap.get(a.familyId) ?? 0;
+      const totalCaps = capCountMap.get(a.domainId) ?? 0;
       const expectedScores = totalCaps * systemCount;
       const actualScores = a.scores.length;
       const progress = expectedScores > 0 ? Math.round((actualScores / expectedScores) * 100) : 0;
 
       return {
         id: a.id,
-        family: a.family,
+        domain: a.domain,
         assignedTo: a.assignedTo,
         status: a.status,
         completedAt: a.completedAt,
@@ -216,7 +216,7 @@ export class EvaluationsService {
     const assignment = await prisma.evaluationDomainAssignment.findUnique({
       where: { id: assignmentId },
       include: {
-        family: { include: { capabilities: { select: { id: true } } } },
+        domain: { include: { capabilities: { select: { id: true } } } },
         project: { include: { systems: { select: { systemId: true } } } },
       },
     });
@@ -234,7 +234,7 @@ export class EvaluationsService {
     );
 
     // Check if all caps x systems scored — if so, mark complete
-    const totalCaps = assignment.family.capabilities.length;
+    const totalCaps = assignment.domain.capabilities.length;
     const totalSystems = assignment.project.systems.length;
     const expectedTotal = totalCaps * totalSystems;
     const actualTotal = await prisma.evaluationDomainScore.count({ where: { assignmentId } });
@@ -257,7 +257,7 @@ export class EvaluationsService {
         domainAssignments: {
           include: {
             scores: true,
-            family: { include: { capabilities: { select: { id: true, name: true, sortOrder: true } } } },
+            domain: { include: { capabilities: { select: { id: true, name: true, sortOrder: true } } } },
           },
         },
       },
@@ -271,7 +271,7 @@ export class EvaluationsService {
       );
 
       const totalScore = allScores.reduce((sum, s) => sum + s.value, 0);
-      const maxPossible = project.domainAssignments.reduce((sum, da) => sum + da.family.capabilities.length * 100, 0);
+      const maxPossible = project.domainAssignments.reduce((sum, da) => sum + da.domain.capabilities.length * 100, 0);
       const percentage = maxPossible > 0 ? Math.round((totalScore / maxPossible) * 100) : 0;
 
       // Calculate variance/stddev for consensus flag
@@ -283,14 +283,14 @@ export class EvaluationsService {
       const stddev = Math.sqrt(variance);
       const highVariance = stddev > 30; // flag if stddev > 30 points
 
-      // Scores by domain/family
+      // Scores by domain
       const byDomain = project.domainAssignments.map(da => {
         const domainScores = da.scores.filter(s => s.systemId === es.systemId);
         const domainTotal = domainScores.reduce((sum, s) => sum + s.value, 0);
-        const domainMax = da.family.capabilities.length * 100;
+        const domainMax = da.domain.capabilities.length * 100;
         return {
-          familyId: da.familyId,
-          familyCode: da.family.code,
+          domainId: da.domainId,
+          domainCode: da.domain.code,
           score: domainTotal,
           maxScore: domainMax,
           percentage: domainMax > 0 ? Math.round((domainTotal / domainMax) * 100) : 0,
@@ -326,7 +326,7 @@ export class EvaluationsService {
       where: { projectId },
       include: {
         scores: true,
-        family: { include: { capabilities: { select: { id: true } } } },
+        domain: { include: { capabilities: { select: { id: true } } } },
         project: { include: { systems: { select: { systemId: true } } } },
       },
     });
@@ -343,7 +343,7 @@ export class EvaluationsService {
         : 0;
 
       const totalExpected = myAssignments.reduce((sum, a) => {
-        return sum + a.family.capabilities.length * systemCount;
+        return sum + a.domain.capabilities.length * systemCount;
       }, 0);
       const totalActual = myScores.length;
       const completionPct = totalExpected > 0 ? Math.round((totalActual / totalExpected) * 100) : 0;

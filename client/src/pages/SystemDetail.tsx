@@ -20,24 +20,24 @@ export function SystemDetail() {
 
   const system = systems?.find(s => s.id === effectiveId);
 
-  const familyLabels = scoreData?.byFamily.map(f => f.familyName.split(' ').slice(0, 2).join('\n')) || [];
-  const familyPercentages = scoreData?.byFamily.map(f =>
+  const domainLabels = scoreData?.byDomain.map(f => f.domainName.split(' ').slice(0, 2).join('\n')) || [];
+  const domainPercentages = scoreData?.byDomain.map(f =>
     f.maxScore > 0 ? (f.score / f.maxScore) * 100 : 0
   ) || [];
 
-  const sortedFamilies = scoreData?.byFamily
-    ? [...scoreData.byFamily].sort((a, b) =>
+  const sortedDomains = scoreData?.byDomain
+    ? [...scoreData.byDomain].sort((a, b) =>
         (b.maxScore > 0 ? b.score / b.maxScore : 0) - (a.maxScore > 0 ? a.score / a.maxScore : 0)
       )
     : [];
 
-  const topFamilies = sortedFamilies.slice(0, 3);
-  const bottomFamilies = sortedFamilies.slice(-3).reverse();
+  const topDomains = sortedDomains.slice(0, 3);
+  const bottomDomains = sortedDomains.slice(-3).reverse();
 
-  const totalPct = scoreData?.byFamily
+  const totalPct = scoreData?.byDomain
     ? (() => {
-        const totalScore = scoreData.byFamily.reduce((s, f) => s + f.score, 0);
-        const maxScore = scoreData.byFamily.reduce((s, f) => s + f.maxScore, 0);
+        const totalScore = scoreData.byDomain.reduce((s, f) => s + f.score, 0);
+        const maxScore = scoreData.byDomain.reduce((s, f) => s + f.maxScore, 0);
         return maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
       })()
     : 0;
@@ -121,7 +121,7 @@ export function SystemDetail() {
                 ))}
               </div>
             ) : (
-              <BarChart labels={familyLabels} data={familyPercentages} />
+              <BarChart labels={domainLabels} data={domainPercentages} />
             )}
           </Card>
 
@@ -130,12 +130,12 @@ export function SystemDetail() {
             <Card>
               <h3 className="text-sm font-semibold text-green-600 mb-3">{t('detail.topStrengths', 'Top Strengths')}</h3>
               <div className="space-y-2">
-                {topFamilies.map(f => {
+                {topDomains.map(f => {
                   const pct = f.maxScore > 0 ? (f.score / f.maxScore) * 100 : 0;
                   return (
-                    <div key={f.familyCode}>
+                    <div key={f.domainCode}>
                       <div className="flex justify-between text-sm mb-1">
-                        <span className="text-gray-700 dark:text-gray-300">{f.familyName}</span>
+                        <span className="text-gray-700 dark:text-gray-300">{f.domainName}</span>
                         <span className="font-semibold text-green-600">{formatPercent(pct)}</span>
                       </div>
                       <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
@@ -150,12 +150,12 @@ export function SystemDetail() {
             <Card>
               <h3 className="text-sm font-semibold text-red-500 mb-3">{t('detail.capabilityGaps', 'Capability Gaps')}</h3>
               <div className="space-y-2">
-                {bottomFamilies.map(f => {
+                {bottomDomains.map(f => {
                   const pct = f.maxScore > 0 ? (f.score / f.maxScore) * 100 : 0;
                   return (
-                    <div key={f.familyCode}>
+                    <div key={f.domainCode}>
                       <div className="flex justify-between text-sm mb-1">
-                        <span className="text-gray-700 dark:text-gray-300">{f.familyName}</span>
+                        <span className="text-gray-700 dark:text-gray-300">{f.domainName}</span>
                         <span className="font-semibold text-red-500">{formatPercent(pct)}</span>
                       </div>
                       <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
@@ -173,16 +173,16 @@ export function SystemDetail() {
             <Card>
               <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">{t('detail.allScoresByFamily', 'All Scores by Family')}</h3>
               <div className="space-y-6">
-                {scoreData.byFamily.map(family => (
-                  <div key={family.familyCode}>
+                {scoreData.byDomain.map(domain => (
+                  <div key={domain.domainCode}>
                     <div className="flex justify-between items-center mb-2">
-                      <h4 className="text-sm font-semibold text-gray-800 dark:text-white">{family.familyName}</h4>
+                      <h4 className="text-sm font-semibold text-gray-800 dark:text-white">{domain.domainName}</h4>
                       <span className="text-xs text-gray-500">
-                        {family.score}/{family.maxScore} ({family.maxScore > 0 ? Math.round((family.score / family.maxScore) * 100) : 0}%)
+                        {domain.score}/{domain.maxScore} ({domain.maxScore > 0 ? Math.round((domain.score / domain.maxScore) * 100) : 0}%)
                       </span>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                      {family.capabilities.map(cap => (
+                      {domain.capabilities.map(cap => (
                         <div
                           key={cap.code}
                           className="flex items-center gap-2 text-xs p-2 rounded-lg border border-gray-100 dark:border-gray-700"

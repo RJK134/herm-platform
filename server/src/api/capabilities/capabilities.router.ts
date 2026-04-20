@@ -1,9 +1,9 @@
 import { Router } from 'express';
-import { listCapabilities, getByCode, listFamilies } from './capabilities.controller';
+import { listCapabilities, getByCode, listDomains } from './capabilities.controller';
 
 const router = Router();
 
-router.get('/families', listFamilies);
+router.get('/domains', listDomains);
 router.get('/', listCapabilities);
 router.get('/:code', getByCode);
 

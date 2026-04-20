@@ -66,13 +66,13 @@ export const updateApprovalSchema = z.object({
 });
 
 export const updateEvaluationSchema = z.object({
-  hermScore: z.number().min(0).max(100).optional(),
+  frameworkScore: z.number().min(0).max(100).optional(),
   technicalScore: z.number().min(0).max(100).optional(),
   commercialScore: z.number().min(0).max(100).optional(),
   implementationScore: z.number().min(0).max(100).optional(),
   referenceScore: z.number().min(0).max(100).optional(),
   weightingProfile: z.object({
-    herm: z.number(),
+    framework: z.number(),
     technical: z.number(),
     commercial: z.number(),
     implementation: z.number(),
@@ -86,7 +86,7 @@ export const addEvaluationSchema = z.object({
   systemId: z.string().min(1),
   evaluatorName: z.string().optional(),
   weightingProfile: z.object({
-    herm: z.number(),
+    framework: z.number(),
     technical: z.number(),
     commercial: z.number(),
     implementation: z.number(),

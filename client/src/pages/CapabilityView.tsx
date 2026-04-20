@@ -3,21 +3,26 @@ import { useTranslation } from 'react-i18next';
 import { Header } from '../components/layout/Header';
 import { Card } from '../components/ui/Card';
 import { BarChart } from '../components/charts/BarChart';
-import { useFamilies, useCapabilities, useCapability } from '../hooks/useApi';
+import { LicenceAttribution } from '../components/LicenceAttribution';
+import { useDomains, useCapabilities, useCapability } from '../hooks/useApi';
+import { useFramework } from '../contexts/FrameworkContext';
 import { CATEGORY_COLORS } from '../lib/constants';
 
 export function CapabilityView() {
   const { t } = useTranslation('capabilities');
-  const { data: families } = useFamilies();
-  const { data: capabilities } = useCapabilities();
-  const [selectedFamily, setSelectedFamily] = useState('');
+  const { activeFramework } = useFramework();
+  // Scope every hook to the active framework so the domain filter,
+  // capability list, and capability detail all belong to the same framework.
+  const { data: domains } = useDomains(activeFramework?.id);
+  const { data: capabilities } = useCapabilities(activeFramework?.id);
+  const [selectedDomain, setSelectedDomain] = useState('');
   const [selectedCode, setSelectedCode] = useState('');
 
-  const filteredCaps = selectedFamily
-    ? (capabilities || []).filter(c => c.family?.code === selectedFamily)
+  const filteredCaps = selectedDomain
+    ? (capabilities || []).filter(c => c.domain?.code === selectedDomain)
     : (capabilities || []);
 
-  const { data: capDetail, isLoading } = useCapability(selectedCode);
+  const { data: capDetail, isLoading } = useCapability(selectedCode, activeFramework?.id);
 
   const systemLabels = capDetail?.scores?.map((s: { system: { name: string } }) => s.system.name) || [];
   const systemValues = capDetail?.scores?.map((s: { value: number }) => s.value) || [];
@@ -29,7 +34,7 @@ export function CapabilityView() {
     <div>
       <Header
         title={t('view.title', 'Capability View')}
-        subtitle={t('view.subtitle', 'See which systems support any HERM capability')}
+        subtitle={t('view.subtitle', `See which systems support any ${activeFramework?.name ?? 'framework'} capability`)}
       />
 
       <Card className="mb-6">
@@ -37,12 +42,12 @@ export function CapabilityView() {
           <div>
             <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-2">{t('view.family', 'Family')}</label>
             <select
-              value={selectedFamily}
-              onChange={e => { setSelectedFamily(e.target.value); setSelectedCode(''); }}
+              value={selectedDomain}
+              onChange={e => { setSelectedDomain(e.target.value); setSelectedCode(''); }}
               className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white"
             >
               <option value="">{t('view.allFamilies', 'All Families')}</option>
-              {(families || []).map(f => (
+              {(domains || []).map(f => (
                 <option key={f.code} value={f.code}>{f.name}</option>
               ))}
             </select>
@@ -75,7 +80,7 @@ export function CapabilityView() {
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-1">
                       <span className="font-mono text-sm text-teal font-semibold">{capDetail.code}</span>
-                      <span className="text-xs text-gray-400">{capDetail.family?.name}</span>
+                      <span className="text-xs text-gray-400">{capDetail.domain?.name}</span>
                     </div>
                     <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{capDetail.name}</h2>
                     {capDetail.description && (
@@ -97,7 +102,7 @@ export function CapabilityView() {
 
               <Card>
                 <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
-                  {t('view.allSystemsCoverage', 'All 21 Systems \u2014 Coverage for {{code}}', { code: capDetail.code })}
+                  {t('view.allSystemsCoverage', 'All Systems \u2014 Coverage for {{code}}', { code: capDetail.code })}
                 </h3>
                 <BarChart
                   labels={systemLabels}
@@ -115,10 +120,12 @@ export function CapabilityView() {
         <Card>
           <div className="text-center py-16 text-gray-400">
             <p className="text-lg mb-2">{t('view.selectPromptTitle', 'Select a capability above')}</p>
-            <p className="text-sm">{t('view.selectPromptSubtitle', "You'll see which of the 21 systems cover it and to what degree")}</p>
+            <p className="text-sm">{t('view.selectPromptSubtitle', "You'll see which systems cover it and to what degree")}</p>
           </div>
         </Card>
       )}
+
+      <LicenceAttribution />
     </div>
   );
 }

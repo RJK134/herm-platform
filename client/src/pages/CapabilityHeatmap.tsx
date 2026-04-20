@@ -2,7 +2,9 @@ import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Header } from '../components/layout/Header';
 import { Card } from '../components/ui/Card';
-import { useHeatmap, useFamilies } from '../hooks/useApi';
+import { LicenceAttribution } from '../components/LicenceAttribution';
+import { useHeatmap, useDomains } from '../hooks/useApi';
+import { useFramework } from '../contexts/FrameworkContext';
 
 
 function scoreToHex(value: number): string {
@@ -13,21 +15,25 @@ function scoreToHex(value: number): string {
 
 export function CapabilityHeatmap() {
   const { t } = useTranslation('capabilities');
-  const { data, isLoading } = useHeatmap();
-  const { data: families } = useFamilies();
-  const [familyFilter, setFamilyFilter] = useState('');
+  const { activeFramework } = useFramework();
+  const { data, isLoading } = useHeatmap(activeFramework?.id);
+  // Scope the domain dropdown to the same framework as the heatmap so the
+  // filter options and the heatmap data match (fixes the cross-framework
+  // mismatch flagged by Bugbot / Copilot).
+  const { data: domains } = useDomains(activeFramework?.id);
+  const [domainFilter, setDomainFilter] = useState('');
   const [hoveredCell, setHoveredCell] = useState<{ systemId: string; capCode: string } | null>(null);
 
   const filteredCapabilities = useMemo(() => {
     if (!data) return [];
-    if (!familyFilter) return data.capabilities;
-    return data.capabilities.filter(c => c.family?.code === familyFilter);
-  }, [data, familyFilter]);
+    if (!domainFilter) return data.capabilities;
+    return data.capabilities.filter(c => c.domain?.code === domainFilter);
+  }, [data, domainFilter]);
 
   if (isLoading) {
     return (
       <div>
-        <Header title={t('heatmap.title', 'Capability Heatmap')} subtitle={t('heatmap.subtitleLoading', 'Full HERM capability coverage matrix')} />
+        <Header title={t('heatmap.title', 'Capability Heatmap')} subtitle={t('heatmap.subtitleLoading', `Full ${activeFramework?.name ?? 'capability'} coverage matrix`)} />
         <Card>
           <div className="text-center py-20 text-gray-400">{t('heatmap.loading', 'Loading heatmap data \u2014 this may take a moment...')}</div>
         </Card>
@@ -52,12 +58,12 @@ export function CapabilityHeatmap() {
 
       <div className="flex items-center gap-4 mb-4 flex-wrap">
         <select
-          value={familyFilter}
-          onChange={e => setFamilyFilter(e.target.value)}
+          value={domainFilter}
+          onChange={e => setDomainFilter(e.target.value)}
           className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white"
         >
           <option value="">{t('heatmap.allFamilies', 'All Families ({{count}} capabilities)', { count: data.capabilities.length })}</option>
-          {(families || []).map(f => (
+          {(domains || []).map(f => (
             <option key={f.code} value={f.code}>
               {f.name} ({f._count?.capabilities || 0})
             </option>
@@ -151,6 +157,8 @@ export function CapabilityHeatmap() {
       <div className="mt-2 text-xs text-gray-400 text-right">
         {t('heatmap.hint', 'Hover over a cell to see details \u00b7 Green = Full \u00b7 Amber = Partial \u00b7 Light = None')}
       </div>
+
+      <LicenceAttribution />
     </div>
   );
 }

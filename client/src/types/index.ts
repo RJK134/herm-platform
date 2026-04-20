@@ -11,27 +11,27 @@ export interface VendorSystem {
   updatedAt: string;
 }
 
-export interface HermFamily {
+export interface FrameworkDomain {
   id: string;
   code: string;
   name: string;
   category: 'Core' | 'Enabling';
   sortOrder: number;
-  capabilities?: HermCapability[];
+  capabilities?: Capability[];
   _count?: { capabilities: number };
 }
 
-export interface HermCapability {
+export interface Capability {
   id: string;
   code: string;
   name: string;
   description?: string;
-  familyId: string;
-  family?: HermFamily;
+  domainId: string;
+  domain?: FrameworkDomain;
   sortOrder: number;
 }
 
-export interface Score {
+export interface CapabilityScore {
   id: string;
   systemId: string;
   capabilityId: string;
@@ -39,9 +39,9 @@ export interface Score {
   evidence?: string;
 }
 
-export interface FamilyScore {
-  familyCode: string;
-  familyName: string;
+export interface DomainScore {
+  domainCode: string;
+  domainName: string;
   score: number;
   maxScore: number;
   percentage: number;
@@ -53,12 +53,12 @@ export interface LeaderboardEntry {
   maxScore: number;
   percentage: number;
   rank: number;
-  familyScores: FamilyScore[];
+  domainScores: DomainScore[];
 }
 
 export interface HeatmapData {
   systems: VendorSystem[];
-  capabilities: (HermCapability & { family: HermFamily })[];
+  capabilities: (Capability & { domain: FrameworkDomain })[];
   matrix: Record<string, Record<string, number>>;
 }
 
@@ -74,7 +74,7 @@ export interface CapabilityBasket {
 export interface BasketItem {
   id: string;
   capabilityId: string;
-  capability: HermCapability & { family?: HermFamily };
+  capability: Capability & { domain?: FrameworkDomain };
   priority: 'must' | 'should' | 'could' | 'wont';
   weight: number;
   notes?: string;

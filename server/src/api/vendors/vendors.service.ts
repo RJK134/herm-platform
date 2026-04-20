@@ -35,7 +35,7 @@ export class VendorsService {
       include: {
         scores: {
           include: {
-            capability: { include: { family: true } },
+            capability: { include: { domain: true } },
           },
         },
       },

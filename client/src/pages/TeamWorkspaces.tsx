@@ -33,8 +33,8 @@ interface EvaluationProject {
   }>;
   domainAssignments: Array<{
     id: string;
-    familyId: string;
-    family: { code: string; name: string };
+    domainId: string;
+    domain: { code: string; name: string };
     assignedToId: string;
     assignedTo: { name: string; email: string };
     status: string;
@@ -70,7 +70,7 @@ interface AggregatedSystem {
   rank: number;
   variance: number;
   highVariance: boolean;
-  familyScores: Array<{ familyCode: string; familyName: string; avgScore: number; evaluatorCount: number }>;
+  domainScores: Array<{ domainCode: string; domainName: string; avgScore: number; evaluatorCount: number }>;
 }
 
 interface AggregateResponse {
@@ -309,8 +309,8 @@ export function TeamWorkspaces() {
   });
 
   const assignDomainMutation = useMutation({
-    mutationFn: ({ familyId, userId }: { familyId: string; userId: string }) =>
-      axios.post(`/api/evaluations/${selectedProjectId}/domains/assign`, { familyId, userId }),
+    mutationFn: ({ domainId, userId }: { domainId: string; userId: string }) =>
+      axios.post(`/api/evaluations/${selectedProjectId}/domains/assign`, { domainId, userId }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['evaluation', selectedProjectId] }),
   });
 
@@ -414,7 +414,7 @@ export function TeamWorkspaces() {
             <DomainAssignmentPanel
               project={selectedProject}
               onAutoAssign={() => autoAssignMutation.mutate()}
-              onAssign={(familyId, userId) => assignDomainMutation.mutate({ familyId, userId })}
+              onAssign={(domainId, userId) => assignDomainMutation.mutate({ domainId, userId })}
             />
           )}
         </div>
@@ -472,7 +472,7 @@ export function TeamWorkspaces() {
 interface DomainAssignmentPanelProps {
   project: EvaluationProject;
   onAutoAssign: () => void;
-  onAssign: (familyId: string, userId: string) => void;
+  onAssign: (domainId: string, userId: string) => void;
 }
 
 function DomainAssignmentPanel({ project, onAutoAssign, onAssign }: DomainAssignmentPanelProps) {
@@ -505,12 +505,12 @@ function DomainAssignmentPanel({ project, onAutoAssign, onAssign }: DomainAssign
             {project.domainAssignments.map(da => (
               <tr key={da.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
                 <td className="px-4 py-3 font-medium dark:text-white">
-                  {da.family.code} — {da.family.name}
+                  {da.domain.code} — {da.domain.name}
                 </td>
                 <td className="px-4 py-3">
                   <select
                     value={da.assignedToId}
-                    onChange={e => onAssign(da.familyId, e.target.value)}
+                    onChange={e => onAssign(da.domainId, e.target.value)}
                     className="text-xs px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-teal-500 outline-none"
                   >
                     <option value="">Unassigned</option>
@@ -692,12 +692,12 @@ function AggregationPanel({ aggregate, onFinalise, isPending }: AggregationPanel
             </button>
             {openSystem === sys.systemId && (
               <div className="border-t border-gray-100 dark:border-gray-700 px-5 py-4 space-y-2">
-                {sys.familyScores.map(fs => {
-                  const maxFamilyScore = 100;
-                  const pct = Math.min(fs.avgScore, maxFamilyScore);
+                {sys.domainScores.map(fs => {
+                  const maxDomainScore = 100;
+                  const pct = Math.min(fs.avgScore, maxDomainScore);
                   return (
-                    <div key={fs.familyCode} className="flex items-center gap-3">
-                      <span className="text-xs w-28 text-gray-500 dark:text-gray-400 truncate">{fs.familyCode}</span>
+                    <div key={fs.domainCode} className="flex items-center gap-3">
+                      <span className="text-xs w-28 text-gray-500 dark:text-gray-400 truncate">{fs.domainCode}</span>
                       <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full">
                         <div
                           className="h-full bg-teal-500 rounded-full"

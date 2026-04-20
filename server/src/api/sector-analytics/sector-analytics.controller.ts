@@ -62,9 +62,9 @@ export const getCapabilities = async (_req: Request, res: Response, next: NextFu
       take: 20,
     });
     const ids = caps.map(c => c.capabilityId);
-    const capabilities = await prisma.hermCapability.findMany({
+    const capabilities = await prisma.capability.findMany({
       where: { id: { in: ids } },
-      select: { id: true, code: true, name: true, family: { select: { name: true } } },
+      select: { id: true, code: true, name: true, domain: { select: { name: true } } },
     });
     const capMap = new Map(capabilities.map(c => [c.id, c]));
     const enriched = caps.map(c => ({
@@ -72,7 +72,7 @@ export const getCapabilities = async (_req: Request, res: Response, next: NextFu
       count: c._count.capabilityId,
       code: capMap.get(c.capabilityId)?.code ?? c.capabilityId,
       name: capMap.get(c.capabilityId)?.name ?? c.capabilityId,
-      family: capMap.get(c.capabilityId)?.family?.name ?? '',
+      domain: capMap.get(c.capabilityId)?.domain?.name ?? '',
     }));
     res.json({ success: true, data: enriched });
   } catch (err) { next(err); }

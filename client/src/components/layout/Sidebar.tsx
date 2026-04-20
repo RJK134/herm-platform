@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../hooks/useAuth';
 import { useSidebar } from '../../contexts/SidebarContext';
+import { useFramework } from '../../contexts/FrameworkContext';
 import { NotificationBell } from '../NotificationBell';
 import { LanguageSelector } from '../LanguageSelector';
 
@@ -41,6 +42,7 @@ const procurementItems = [
 
 const insightsItems = [
   { to: '/sector', icon: PieChart, label: 'Sector Analytics' },
+  { to: '/framework-mapping', icon: Map, label: 'Framework Mapping' },
 ];
 
 const adminItems = [
@@ -110,6 +112,7 @@ export function Sidebar() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { isCollapsed, isMobileOpen, toggleCollapse, closeMobile } = useSidebar();
+  const { frameworks, activeFramework, setActiveFramework } = useFramework();
 
   const handleLogout = () => {
     logout();
@@ -151,14 +154,32 @@ export function Sidebar() {
           ) : (
             <>
               <div className="text-xs font-medium text-teal uppercase tracking-wider mb-1">
-                HERM Dashboard v3.1
+                {activeFramework?.name ?? 'Capability Platform'}
               </div>
               <div className="text-white font-heading font-bold text-lg leading-tight">
-                {isAuthenticated ? user!.institutionName : 'HERM Platform'}
+                {isAuthenticated ? user!.institutionName : (activeFramework?.name ?? 'Capability Platform')}
               </div>
               <div className="text-white/50 text-xs mt-1">
-                UCISA HERM v3.1 · 165 Capabilities
+                {activeFramework
+                  ? `${activeFramework.name} · ${activeFramework.capabilityCount} Capabilities`
+                  : 'Loading...'}
               </div>
+              {frameworks.length > 1 && (
+                <select
+                  value={activeFramework?.id ?? ''}
+                  onChange={e => {
+                    const fw = frameworks.find(f => f.id === e.target.value);
+                    if (fw) setActiveFramework(fw);
+                  }}
+                  className="mt-2 w-full px-2 py-1 text-xs bg-white/10 border border-white/20 rounded text-white/80"
+                >
+                  {frameworks.map(fw => (
+                    <option key={fw.id} value={fw.id} className="text-gray-900">
+                      {fw.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </>
           )}
         </div>
@@ -268,7 +289,11 @@ export function Sidebar() {
 
           {!isCollapsed && (
             <>
-              <div className="text-white/20 text-xs">HERM v3.1 · 165 Capabilities · 21 Systems</div>
+              <div className="text-white/20 text-xs">
+                {activeFramework
+                  ? `${activeFramework.name} · ${activeFramework.capabilityCount} Capabilities`
+                  : 'Capability Platform'}
+              </div>
               <div className="text-white/20 text-[10px] mt-2 space-y-0.5">
                 <a href="https://futurehorizonseducation.com" target="_blank" rel="noopener" className="text-teal/60 hover:text-teal transition-colors block">futurehorizonseducation.com</a>
                 <span>info@futurehorizonseducation.com</span>
