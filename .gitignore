@@ -7,4 +7,9 @@ Thumbs.db
 prisma/generated/
 server/node_modules/
 client/node_modules/
-FHE_Strategic_Intelligence_Report_9Apr2026.docx
+# Keep internal strategy / briefing documents out of the repo.
+# Pattern instead of a specific filename to avoid advertising what exists.
+*.docx
+*.pdf
+/docs-private/
+/briefings/

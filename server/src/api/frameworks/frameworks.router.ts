@@ -29,6 +29,10 @@ router.get('/', optionalJWT, async (req: Request, res: Response, next: NextFunct
         publisher: true,
         description: true,
         licenceType: true,
+        // licenceNotice + licenceUrl are read by the LicenceAttribution
+        // client component to render accurate attribution per framework.
+        licenceNotice: true,
+        licenceUrl: true,
         isPublic: true,
         isDefault: true,
         domainCount: true,
