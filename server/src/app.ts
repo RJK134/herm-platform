@@ -2,9 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import prisma from './utils/prisma';
 import { checkEnvironment } from './utils/env-check';
-
-// Validate environment variables at startup
-checkEnvironment();
 import { errorHandler } from './middleware/errorHandler';
 import { helmetMiddleware, apiRateLimiter, authRateLimiter } from './middleware/security';
 import systemsRouter from './api/systems/systems.router';
@@ -31,6 +28,11 @@ import adminRouter from './api/admin/admin.router';
 import sectorAnalyticsRouter from './api/sector-analytics/sector-analytics.router';
 import notificationsRouter from './api/notifications/notifications.router';
 import keysRouter from './api/keys/keys.router';
+
+// Validate environment variables at startup.
+// Placed after all imports because ES module static imports are hoisted —
+// a call here between imports would not actually run first.
+checkEnvironment();
 
 const app = express();
 
