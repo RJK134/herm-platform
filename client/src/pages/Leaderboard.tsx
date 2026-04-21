@@ -8,17 +8,23 @@ import { Badge } from '../components/ui/Badge';
 import { SearchInput } from '../components/ui/SearchInput';
 import { DataTable } from '../components/tables/DataTable';
 import { SkeletonTable } from '../components/ui/Skeleton';
+import { LicenceAttribution } from '../components/LicenceAttribution';
 import { useLeaderboard } from '../hooks/useApi';
+import { useFramework } from '../contexts/FrameworkContext';
 import { formatPercent } from '../lib/utils';
 import { CATEGORY_COLORS } from '../lib/constants';
 import type { LeaderboardEntry } from '../types';
 
+const PAGE_SIZE = 10;
+
 export function Leaderboard() {
   const { t } = useTranslation('leaderboard');
   const navigate = useNavigate();
-  const { data, isLoading, error } = useLeaderboard();
+  const { activeFramework } = useFramework();
+  const { data, isLoading, error } = useLeaderboard(activeFramework?.id);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
+  const [page, setPage] = useState(0);
 
   const filtered = (data || []).filter(e => {
     const matchSearch =
@@ -93,7 +99,7 @@ export function Leaderboard() {
     },
     {
       key: 'score',
-      header: t('table.hermScore', 'HERM Score'),
+      header: t('table.hermScore', `${activeFramework?.name ?? 'Capability'} Score`),
       render: row => (
         <div className="flex items-center gap-3 min-w-[160px]">
           <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
@@ -138,8 +144,8 @@ export function Leaderboard() {
   return (
     <div>
       <Header
-        title={t('title', 'HERM Capability Leaderboard')}
-        subtitle={t('subtitle', 'Ranked coverage of all 165 UCISA HERM v3.1 capabilities across 21 systems')}
+        title={t('title', `${activeFramework?.name ?? 'Capability'} Leaderboard`)}
+        subtitle={t('subtitle', `Ranked coverage of all ${activeFramework?.capabilityCount ?? ''} ${activeFramework?.name ?? ''} capabilities across {{count}} systems`, { count: data?.length ?? 0 })}
       />
 
       {/* KPI Cards */}
@@ -162,8 +168,8 @@ export function Leaderboard() {
               <TrendingUp className="w-5 h-5 text-purple-600" />
             </div>
             <div>
-              <div className="text-2xl font-bold text-gray-900 dark:text-white">165</div>
-              <div className="text-xs text-gray-500">{t('kpis.hermCapabilities', 'HERM Capabilities')}</div>
+              <div className="text-2xl font-bold text-gray-900 dark:text-white">{activeFramework?.capabilityCount ?? '...'}</div>
+              <div className="text-xs text-gray-500">{t('kpis.hermCapabilities', `${activeFramework?.name ?? 'Framework'} Capabilities`)}</div>
             </div>
           </div>
         </Card>
@@ -215,11 +221,11 @@ export function Leaderboard() {
       <Card className="mb-4">
         <div className="flex gap-3 items-center flex-wrap">
           <div className="flex-1 min-w-[200px]">
-            <SearchInput value={search} onChange={setSearch} placeholder={t('filters.searchSystems', 'Search systems...')} />
+            <SearchInput value={search} onChange={v => { setSearch(v); setPage(0); }} placeholder={t('filters.searchSystems', 'Search systems...')} />
           </div>
           <select
             value={category}
-            onChange={e => setCategory(e.target.value)}
+            onChange={e => { setCategory(e.target.value); setPage(0); }}
             className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white"
           >
             <option value="">{t('filters.allCategories', 'All Categories')}</option>
@@ -238,16 +244,41 @@ export function Leaderboard() {
         {isLoading ? (
           <div className="p-6"><SkeletonTable rows={10} /></div>
         ) : (
-          <DataTable
-            columns={columns}
-            data={filtered}
-            onRowClick={(row) => navigate(`/system?id=${row.system.id}`)}
-            getRowClass={row =>
-              row.system.isOwnSystem ? 'bg-teal/5 dark:bg-teal/10' : ''
-            }
-          />
+          <>
+            <DataTable
+              columns={columns}
+              data={filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)}
+              onRowClick={(row) => navigate(`/system?id=${row.system.id}`)}
+              getRowClass={row =>
+                row.system.isOwnSystem ? 'bg-teal/5 dark:bg-teal/10' : ''
+              }
+            />
+            {filtered.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700 text-sm text-gray-500">
+                <span>{page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPage(p => Math.max(0, p - 1))}
+                    disabled={page === 0}
+                    className="px-3 py-1 rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  >
+                    {t('pagination.prev', 'Prev')}
+                  </button>
+                  <button
+                    onClick={() => setPage(p => p + 1)}
+                    disabled={(page + 1) * PAGE_SIZE >= filtered.length}
+                    className="px-3 py-1 rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  >
+                    {t('pagination.next', 'Next')}
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </Card>
+
+      <LicenceAttribution />
     </div>
   );
 }

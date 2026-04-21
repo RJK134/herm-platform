@@ -4,15 +4,6 @@ import {
   vendorRegisterSchema, vendorLoginSchema,
   vendorProfileUpdateSchema, vendorSubmissionSchema,
 } from './vendor-portal.schema';
-import type { VendorJwtPayload } from './vendor-portal.service';
-
-// Extend express Request to carry vendorUser
-declare module 'express-serve-static-core' {
-  interface Request {
-    vendorUser?: VendorJwtPayload;
-  }
-}
-
 const svc = new VendorPortalService();
 
 export const registerVendor = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -48,7 +39,7 @@ export const updateVendorProfile = async (req: Request, res: Response, next: Nex
 
 export const getVendorScores = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const data = await svc.getOwnScores(req.vendorUser!.vendorAccountId);
+    const data = await svc.getOwnScores(req.vendorUser!.vendorAccountId, req.frameworkId);
     res.json({ success: true, data });
   } catch (err) { next(err); }
 };

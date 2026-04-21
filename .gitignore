@@ -7,3 +7,9 @@ Thumbs.db
 prisma/generated/
 server/node_modules/
 client/node_modules/
+# Keep internal strategy / briefing documents out of the repo.
+# Pattern instead of a specific filename to avoid advertising what exists.
+*.docx
+*.pdf
+/docs-private/
+/briefings/

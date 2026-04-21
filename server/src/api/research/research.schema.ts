@@ -21,6 +21,8 @@ export const listResearchQuerySchema = z.object({
   category: z.string().min(1).max(100).optional(),
   year: z.string().regex(/^\d{4}$/, 'year must be a 4-digit number').optional(),
   tags: z.string().max(500).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(200),
+  offset: z.coerce.number().int().min(0).default(0),
 });
 
 export type CreateResearchInput = z.infer<typeof createResearchSchema>;

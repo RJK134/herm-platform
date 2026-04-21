@@ -57,14 +57,14 @@ async function generateBusinessCase(input: GenerateDocumentInput, date: string):
   if (input.basketId) {
     const basket = await prisma.capabilityBasket.findUnique({
       where: { id: input.basketId },
-      include: { items: { include: { capability: { include: { family: true } } } } },
+      include: { items: { include: { capability: { include: { domain: true } } } } },
     });
     if (basket && basket.items.length > 0) {
       const mustHaves = basket.items.filter((i) => i.priority === 'must');
       const shouldHaves = basket.items.filter((i) => i.priority === 'should');
       basketSection = `**Basket:** ${basket.name} (${basket.items.length} requirements)\n\n` +
         `**Must-Have Requirements (${mustHaves.length}):**\n` +
-        mustHaves.slice(0, 10).map((i) => `- ${i.capability.code}: ${i.capability.name} _(${i.capability.family?.name})_`).join('\n') +
+        mustHaves.slice(0, 10).map((i) => `- ${i.capability.code}: ${i.capability.name} _(${i.capability.domain?.name})_`).join('\n') +
         (mustHaves.length > 10 ? `\n_...and ${mustHaves.length - 10} more_` : '') +
         `\n\n**Should-Have Requirements (${shouldHaves.length}):**\n` +
         shouldHaves.slice(0, 5).map((i) => `- ${i.capability.code}: ${i.capability.name}`).join('\n');
@@ -146,12 +146,12 @@ async function generateRfpItt(input: GenerateDocumentInput): Promise<DocumentSec
   if (input.basketId) {
     const basket = await prisma.capabilityBasket.findUnique({
       where: { id: input.basketId },
-      include: { items: { include: { capability: { include: { family: true } } }, orderBy: [{ priority: 'asc' }] } },
+      include: { items: { include: { capability: { include: { domain: true } } }, orderBy: [{ priority: 'asc' }] } },
     });
     if (basket) {
       const grouped: Record<string, typeof basket.items> = {};
       for (const item of basket.items) {
-        const key = item.capability.family?.name ?? 'Other';
+        const key = item.capability.domain?.name ?? 'Other';
         grouped[key] = grouped[key] ?? [];
         grouped[key].push(item);
       }
@@ -272,35 +272,35 @@ async function generateShortlistReport(input: GenerateDocumentInput): Promise<Do
 async function generateRequirementsSpec(input: GenerateDocumentInput): Promise<DocumentSection[]> {
   const inst = input.institutionName ?? input.metadata?.institution ?? '[INSTITUTION]';
   let requirementsContent = '_No capability basket linked. Connect a basket to generate detailed requirements._';
-  let familySummary = '';
+  let domainSummary = '';
 
   if (input.basketId) {
     const basket = await prisma.capabilityBasket.findUnique({
       where: { id: input.basketId },
       include: {
         items: {
-          include: { capability: { include: { family: true } } },
+          include: { capability: { include: { domain: true } } },
           orderBy: [{ priority: 'asc' }, { capability: { code: 'asc' } }],
         },
       },
     });
     if (basket) {
-      const byFamily: Record<string, typeof basket.items> = {};
+      const byDomain: Record<string, typeof basket.items> = {};
       for (const item of basket.items) {
-        const k = item.capability.family?.name ?? 'Other';
-        byFamily[k] = byFamily[k] ?? [];
-        byFamily[k].push(item);
+        const k = item.capability.domain?.name ?? 'Other';
+        byDomain[k] = byDomain[k] ?? [];
+        byDomain[k].push(item);
       }
 
       const mustCount = basket.items.filter((i) => i.priority === 'must').length;
       const shouldCount = basket.items.filter((i) => i.priority === 'should').length;
       const couldCount = basket.items.filter((i) => i.priority === 'could').length;
 
-      familySummary = `**Basket:** ${basket.name}\n**Total Requirements:** ${basket.items.length} (${mustCount} MUST, ${shouldCount} SHOULD, ${couldCount} COULD)\n\n`;
+      domainSummary = `**Basket:** ${basket.name}\n**Total Requirements:** ${basket.items.length} (${mustCount} MUST, ${shouldCount} SHOULD, ${couldCount} COULD)\n\n`;
 
       requirementsContent =
-        familySummary +
-        Object.entries(byFamily)
+        domainSummary +
+        Object.entries(byDomain)
           .map(([family, items]) => {
             const rows = items.map((i) =>
               `| ${i.capability.code} | ${i.capability.name} | ${i.priority.toUpperCase()} | ${i.weight} | ${i.notes ?? ''} |`

@@ -11,12 +11,14 @@ const service = new ResearchService();
 
 export const list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { publisher, category, year, tags } = listResearchQuerySchema.parse(req.query);
+    const { publisher, category, year, tags, limit, offset } = listResearchQuerySchema.parse(req.query);
     const data = await service.list({
       publisher,
       category,
       year: year ? Number(year) : undefined,
       tags,
+      limit,
+      offset,
     });
     ok(res, data);
   } catch (err) {

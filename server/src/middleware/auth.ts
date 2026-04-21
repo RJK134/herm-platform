@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import type { Request, Response, NextFunction } from 'express';
+import type { VendorJwtPayload } from '../api/vendor-portal/vendor-portal.service';
 
 // Fail fast at startup if JWT_SECRET is not configured — prevents forged tokens
 if (!process.env['JWT_SECRET']) {
@@ -27,6 +28,7 @@ declare global {
   namespace Express {
     interface Request {
       user?: JwtPayload;
+      vendorUser?: VendorJwtPayload;
     }
   }
 }

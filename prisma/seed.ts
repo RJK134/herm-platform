@@ -11,11 +11,12 @@ async function main() {
   await prisma.versionScore.deleteMany();
   await prisma.vendorVersion.deleteMany();
   await prisma.vendorProfile.deleteMany();
-  await prisma.score.deleteMany();
+  await prisma.capabilityScore.deleteMany();
   await prisma.basketItem.deleteMany();
   await prisma.capabilityBasket.deleteMany();
-  await prisma.hermCapability.deleteMany();
-  await prisma.hermFamily.deleteMany();
+  await prisma.capability.deleteMany();
+  await prisma.frameworkDomain.deleteMany();
+  await prisma.framework.deleteMany();
   await prisma.shortlistEntry.deleteMany();
   await prisma.workflowStage.deleteMany();
   await prisma.procurementWorkflow.deleteMany();
@@ -23,6 +24,42 @@ async function main() {
   await prisma.tcoEstimate.deleteMany();
   await prisma.integrationAssessment.deleteMany();
   await prisma.vendorSystem.deleteMany();
+
+  // ── FRAMEWORKS ────────────────────────────────────────────────────────────
+  const hermFramework = await prisma.framework.create({
+    data: {
+      slug: 'herm-v3.1',
+      name: 'UCISA HERM v3.1',
+      version: '3.1',
+      publisher: 'CAUDIT',
+      description: 'Higher Education Reference Model — 165 business capabilities across 11 domains, published under CC BY-NC-SA 4.0.',
+      licenceType: 'CC-BY-NC-SA-4.0',
+      licenceNotice: 'This work is based on the UCISA Higher Education Reference Model (HERM) v3.1, published by the Council of Australasian University Directors of Information Technology (CAUDIT) and licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License.',
+      licenceUrl: 'https://creativecommons.org/licenses/by-nc-sa/4.0/',
+      isPublic: true,
+      isDefault: false,
+      isActive: true,
+      domainCount: 11,
+      capabilityCount: 165,
+    },
+  });
+
+  const fheFramework = await prisma.framework.create({
+    data: {
+      slug: 'fhe-capability-framework',
+      name: 'FHE Capability Framework',
+      version: '1.0',
+      publisher: 'Future Horizons Education',
+      description: 'Proprietary capability management framework for institutional technology assessment, procurement, and maturity evaluation.',
+      licenceType: 'PROPRIETARY',
+      isPublic: false,
+      isDefault: true,
+      isActive: true,
+      domainCount: 0,
+      capabilityCount: 0,
+    },
+  });
+  console.log('Created 2 frameworks (HERM + FHE)');
 
   // ── FAMILIES ──────────────────────────────────────────────────────────────
   const familiesData = [
@@ -39,22 +76,25 @@ async function main() {
     { code: 'SS',  name: 'Supporting Services',        category: 'Enabling', sortOrder: 11 },
   ];
 
-  const familyMap: Record<string, string> = {};
+  const domainMap: Record<string, string> = {};
   for (const f of familiesData) {
-    const fam = await prisma.hermFamily.create({ data: f });
-    familyMap[f.code] = fam.id;
+    const dom = await prisma.frameworkDomain.create({
+      data: { ...f, frameworkId: hermFramework.id },
+    });
+    domainMap[f.code] = dom.id;
   }
-  console.log(`Created ${familiesData.length} families`);
+  console.log(`Created ${familiesData.length} domains`);
 
   // ── CAPABILITIES ──────────────────────────────────────────────────────────
 
   const capabilityMap: Record<string, string> = {};
   for (const c of capabilitiesData) {
-    const cap = await prisma.hermCapability.create({
+    const cap = await prisma.capability.create({
       data: {
         code: c.code,
         name: c.name,
-        familyId: familyMap[c.familyCode],
+        frameworkId: hermFramework.id,
+        domainId: domainMap[c.domainCode],
         sortOrder: c.sortOrder,
       },
     });
@@ -144,8 +184,9 @@ async function main() {
       const capId = capabilityMap[code];
       if (!capId) continue;
       const value = scores[code] ?? 0;
-      await prisma.score.create({
+      await prisma.capabilityScore.create({
         data: {
+          frameworkId: hermFramework.id,
           systemId,
           capabilityId: capId,
           value,
@@ -162,6 +203,21 @@ async function main() {
   const { seedVendorProfiles } = await import('./seeds/vendor-profiles');
   await seedVendorProfiles(prisma);
   console.log('Vendor profiles seeded');
+
+  // Populate FHE Capability Framework domains and capabilities
+  const { seedFheFramework } = await import('./seeds/fhe-framework');
+  await seedFheFramework(prisma);
+  console.log('FHE framework seeded');
+
+  // Seed deterministic FHE capability scores (21 systems × 118 capabilities)
+  // Must run AFTER vendor systems are created and FHE framework is populated.
+  const { seedFheScores } = await import('./seeds/fhe-scores');
+  await seedFheScores(prisma);
+  console.log('FHE scores seeded');
+
+  // Seed the HERM v3.1 → FHE v1.0 cross-framework mapping (Enterprise tier)
+  const { seedFrameworkMappings } = await import('./seeds/framework-mappings');
+  await seedFrameworkMappings(prisma);
 
   // ── Demo institution & user ──────────────────────────────────────────────
   const demoInstitution = await prisma.institution.upsert({
@@ -198,6 +254,60 @@ async function main() {
     },
   });
   console.log('Demo user seeded — demo@demo-university.ac.uk / demo12345');
+
+  // ── Demo capability basket ────────────────────────────────────────────────
+  const demoBasket = await prisma.capabilityBasket.upsert({
+    where: { id: 'demo-basket-001' },
+    update: {},
+    create: {
+      id: 'demo-basket-001',
+      name: 'Core SIS Evaluation',
+      description: 'Standard basket for evaluating Student Information System capabilities across core HERM domains.',
+      frameworkId: hermFramework.id,
+      institutionId: demoInstitution.id,
+      createdById: 'seed',
+      isTemplate: false,
+    },
+  });
+
+  // Add basket items for key capabilities — codes follow BC### pattern from HERM seed
+  const coreCodes = ['BC008', 'BC009', 'BC011', 'BC016', 'BC029', 'BC028', 'BC060', 'BC090'];
+  const coreCaps = await prisma.capability.findMany({
+    where: { code: { in: coreCodes } },
+    select: { id: true, code: true },
+  });
+
+  for (const cap of coreCaps) {
+    await prisma.basketItem.upsert({
+      where: { basketId_capabilityId: { basketId: demoBasket.id, capabilityId: cap.id } },
+      update: {},
+      create: {
+        basketId: demoBasket.id,
+        capabilityId: cap.id,
+        priority: 'must',
+        weight: 3,
+      },
+    });
+  }
+  console.log(`Demo basket seeded with ${coreCaps.length} capabilities`);
+
+  // ── Demo procurement project ──────────────────────────────────────────────
+  await prisma.procurementProject.upsert({
+    where: { id: 'demo-project-001' },
+    update: {},
+    create: {
+      id: 'demo-project-001',
+      name: 'SIS Replacement Programme 2026',
+      description: 'Full procurement exercise to replace the legacy student information system.',
+      institutionId: demoInstitution.id,
+      status: 'draft',
+      basketId: demoBasket.id,
+      jurisdiction: 'UK',
+      estimatedValue: 2500000,
+      procurementRoute: 'open',
+    },
+  });
+  console.log('Demo procurement project seeded');
 
   console.log('Seeding complete!');
 }

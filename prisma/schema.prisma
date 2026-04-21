@@ -7,6 +7,92 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ── Multi-Framework Capability Management ────────────────────────────────────
+// Framework is the root model. HERM is one framework instance (CC BY-NC-SA 4.0).
+// The platform functions fully without HERM loaded — paid tiers use the
+// proprietary FHE Capability Framework by default.
+
+model Framework {
+  id               String   @id @default(cuid())
+  slug             String   @unique          // "herm-v3.1", "fhe-capability-framework"
+  name             String                    // "UCISA HERM v3.1"
+  version          String                    // "3.1"
+  publisher        String                    // "CAUDIT", "FHE"
+  description      String?
+  licenceType      String                    // "CC-BY-NC-SA-4.0", "PROPRIETARY"
+  licenceNotice    String?                   // Full attribution text
+  licenceUrl       String?                   // "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+  isPublic         Boolean  @default(false)  // true = available on free tier
+  isDefault        Boolean  @default(false)  // true = default for paid tier
+  isActive         Boolean  @default(true)
+  domainCount      Int      @default(0)
+  capabilityCount  Int      @default(0)
+  metadata         Json?
+
+  domains          FrameworkDomain[]
+  capabilities     Capability[]
+  scores           CapabilityScore[]
+  versionScores    VersionScore[]
+  baskets          CapabilityBasket[]
+  evaluations      EvaluationProject[]
+  mappingsAsSource FrameworkMapping[] @relation("MappingSource")
+  mappingsAsTarget FrameworkMapping[] @relation("MappingTarget")
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([isPublic])
+  @@index([isDefault])
+}
+
+model FrameworkDomain {
+  id               String      @id @default(cuid())
+  frameworkId      String
+  framework        Framework   @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+  code             String                    // "LT", "RE" for HERM; "DL", "SL" for FHE
+  name             String                    // "Learning & Teaching"
+  category         String
+  description      String?
+  sortOrder        Int
+  colour           String?                   // Hex colour for UI
+  capabilityCount  Int         @default(0)
+
+  capabilities     Capability[]
+  domainAssignments EvaluationDomainAssignment[]
+
+  @@unique([frameworkId, code])
+  @@index([frameworkId])
+}
+
+model Capability {
+  id            String          @id @default(cuid())
+  frameworkId   String
+  framework     Framework       @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+  code          String                      // "BC001" for HERM; "FHE-DL-001" for FHE
+  name          String
+  description   String?
+  domainId      String
+  domain        FrameworkDomain @relation(fields: [domainId], references: [id], onDelete: Restrict)
+  sortOrder     Int
+  level         Int             @default(1)  // Hierarchy depth
+  parentId      String?                      // Self-ref for sub-capabilities
+  parent        Capability?     @relation("CapabilityHierarchy", fields: [parentId], references: [id])
+  children      Capability[]    @relation("CapabilityHierarchy")
+
+  scores        CapabilityScore[]
+  basketItems   BasketItem[]
+  versionScores VersionScore[]
+  sourceMappings CapabilityMapping[] @relation("SourceCapabilityMapping")
+  targetMappings CapabilityMapping[] @relation("TargetCapabilityMapping")
+
+  @@unique([frameworkId, code])
+  @@index([frameworkId])
+  @@index([domainId])
+  @@index([parentId])
+}
+
+// ── Platform Core ────────────────────────────────────────────────────────────
+
 model Institution {
   id           String               @id @default(cuid())
   name         String
@@ -72,29 +158,7 @@ enum UserRole {
   VIEWER
 }
 
-model HermFamily {
-  id           String           @id @default(cuid())
-  code         String           @unique
-  name         String
-  category     String
-  sortOrder    Int
-  capabilities      HermCapability[]
-  domainAssignments EvaluationDomainAssignment[]
-}
-
-model HermCapability {
-  id            String        @id @default(cuid())
-  code          String        @unique
-  name          String
-  description   String?
-  familyId      String
-  family        HermFamily    @relation(fields: [familyId], references: [id], onDelete: Restrict)
-  sortOrder     Int
-  scores        Score[]
-  basketItems   BasketItem[]
-  versionScores VersionScore[]
-  @@index([familyId])
-}
+// ── Vendor Systems ───────────────────────────────────────────────────────────
 
 model VendorSystem {
   id                   String                  @id @default(cuid())
@@ -107,7 +171,7 @@ model VendorSystem {
   website              String?
   logoUrl              String?
   isOwnSystem          Boolean                 @default(false)
-  scores                  Score[]
+  scores                  CapabilityScore[]
   profile                 VendorProfile?
   versions                VendorVersion[]
   tcoEstimates            TcoEstimate[]
@@ -122,19 +186,22 @@ model VendorSystem {
   updatedAt               DateTime                @updatedAt
 }
 
-model Score {
+model CapabilityScore {
   id           String         @id @default(cuid())
+  frameworkId  String
+  framework    Framework      @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
   systemId     String
   system       VendorSystem   @relation(fields: [systemId], references: [id], onDelete: Cascade)
   capabilityId String
-  capability   HermCapability @relation(fields: [capabilityId], references: [id], onDelete: Restrict)
+  capability   Capability     @relation(fields: [capabilityId], references: [id], onDelete: Restrict)
   value        Int
   evidence     String?
   source       String?
   version      Int            @default(1)
   scoredBy     String?
   scoredAt     DateTime       @default(now())
-  @@unique([systemId, capabilityId, version])
+  @@unique([frameworkId, systemId, capabilityId, version])
+  @@index([frameworkId])
   @@index([systemId])
   @@index([capabilityId])
 }
@@ -143,6 +210,8 @@ model CapabilityBasket {
   id            String       @id @default(cuid())
   name          String
   description   String?
+  frameworkId   String?
+  framework     Framework?   @relation(fields: [frameworkId], references: [id], onDelete: SetNull)
   institutionId String?
   institution   Institution? @relation(fields: [institutionId], references: [id], onDelete: SetNull)
   createdById   String
@@ -150,6 +219,7 @@ model CapabilityBasket {
   isTemplate    Boolean      @default(false)
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
+  @@index([frameworkId])
   @@index([institutionId])
 }
 
@@ -158,7 +228,7 @@ model BasketItem {
   basketId     String
   basket       CapabilityBasket @relation(fields: [basketId], references: [id], onDelete: Cascade)
   capabilityId String
-  capability   HermCapability   @relation(fields: [capabilityId], references: [id], onDelete: Restrict)
+  capability   Capability       @relation(fields: [capabilityId], references: [id], onDelete: Restrict)
   priority     String           @default("must")
   weight       Int              @default(1)
   notes        String?
@@ -216,14 +286,17 @@ model VendorVersion {
 
 model VersionScore {
   id             String         @id @default(cuid())
+  frameworkId    String
+  framework      Framework      @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
   versionId      String
   version        VendorVersion  @relation(fields: [versionId], references: [id], onDelete: Cascade)
   capabilityId   String
-  capability     HermCapability @relation(fields: [capabilityId], references: [id], onDelete: Restrict)
+  capability     Capability     @relation(fields: [capabilityId], references: [id], onDelete: Restrict)
   value          Int
   changeFromPrev Int?
   evidence       String?
-  @@unique([versionId, capabilityId])
+  @@unique([frameworkId, versionId, capabilityId])
+  @@index([frameworkId])
   @@index([versionId])
 }
 
@@ -374,20 +447,18 @@ model ArchitectureAssessment {
   id                  String        @id @default(cuid())
   name                String
   institutionId       String?
-  currentSystems      Json          // SystemNode[] — each with name, category, age, criticality, vendor
-  integrationLinks    Json          // IntegrationLink[] — { fromId, toId, protocol, complexity }
+  currentSystems      Json
+  integrationLinks    Json
   architecturePattern String        @default("point-to-point")
   targetSystemId      String?
   targetSystem        VendorSystem? @relation(fields: [targetSystemId], references: [id], onDelete: SetNull)
-  // Risk dimensions (0–100 each)
   dataRisk            Int           @default(0)
   cutoverRisk         Int           @default(0)
   integrationRisk     Int           @default(0)
   changeRisk          Int           @default(0)
-  // Computed scores
   overallRisk         Int           @default(0)
   readinessScore      Int           @default(0)
-  recommendations     Json?         // RecommendationItem[]
+  recommendations     Json?
   notes               String?
   createdById         String        @default("anonymous")
   createdAt           DateTime      @default(now())
@@ -404,33 +475,27 @@ model ValueAnalysis {
   institutionId           String?
   systemId                String?
   targetSystem            VendorSystem? @relation(fields: [systemId], references: [id], onDelete: SetNull)
-  // Institution profile
   studentFte              Int           @default(10000)
   staffFte                Int           @default(500)
   institutionType         String        @default("pre-92")
-  // Current state costs (annual, GBP)
   currentSystemCostAnnual Float         @default(0)
   currentMaintenanceCost  Float         @default(0)
   currentSupportCost      Float         @default(0)
-  // Operational benefits inputs
   adminEfficiencyPct      Float         @default(0)
   adminStaffAffected      Int           @default(0)
   avgAdminSalaryGbp       Float         @default(35000)
   registryEfficiencyPct   Float         @default(0)
   registryStaffAffected   Int           @default(0)
   avgRegistrySalaryGbp    Float         @default(42000)
-  // Strategic benefits inputs
   errorReductionPct       Float         @default(0)
   errorCostCurrentAnnual  Float         @default(0)
   complianceSavingAnnual  Float         @default(0)
   studentExperienceValue  Float         @default(0)
   otherBenefitsAnnual     Float         @default(0)
-  // Investment costs
   implementationCost      Float         @default(0)
   annualLicenceCost       Float         @default(0)
   annualSupportCost       Float         @default(0)
   annualInternalStaffCost Float         @default(0)
-  // Calculated results
   totalAnnualBenefits     Float         @default(0)
   totalAnnualCosts        Float         @default(0)
   netAnnualBenefit        Float         @default(0)
@@ -457,8 +522,8 @@ model GeneratedDocument {
   basketId        String?
   tcoEstimateId   String?
   valueAnalysisId String?
-  sections        Json           // DocumentSection[] — { id, title, content, order, locked }
-  metadata        Json?          // { author, institution, date, version, classification }
+  sections        Json
+  metadata        Json?
   status          DocumentStatus @default(DRAFT)
   wordCount       Int            @default(0)
   createdById     String         @default("anonymous")
@@ -484,7 +549,7 @@ enum DocumentStatus {
   ARCHIVED
 }
 
-// ── Phase 4: Multi-Jurisdiction Procurement Engine ───────────────────────────
+// ── Multi-Jurisdiction Procurement Engine ─────────────────────────────────────
 
 model ProcurementJurisdiction {
   id                  String   @id @default(cuid())
@@ -584,7 +649,7 @@ model ProcurementEvaluation {
   system              VendorSystem       @relation(fields: [systemId], references: [id], onDelete: Restrict)
   evaluatorId         String?
   evaluatorName       String?
-  hermScore           Decimal?           @db.Decimal(5, 2)
+  frameworkScore      Decimal?           @db.Decimal(5, 2)
   technicalScore      Decimal?           @db.Decimal(5, 2)
   commercialScore     Decimal?           @db.Decimal(5, 2)
   implementationScore Decimal?           @db.Decimal(5, 2)
@@ -613,7 +678,7 @@ model ComplianceCheck {
   @@index([projectId])
 }
 
-// ── Phase 5: Vendor Portal, Team Workspaces, Payments ────────────────────────
+// ── Vendor Portal, Team Workspaces, Payments ─────────────────────────────────
 
 model VendorAccount {
   id                   String             @id @default(cuid())
@@ -688,6 +753,8 @@ model EvaluationProject {
   id                String                       @id @default(cuid())
   name              String
   description       String?
+  frameworkId       String?
+  framework         Framework?                   @relation(fields: [frameworkId], references: [id], onDelete: SetNull)
   institutionId     String
   institution       Institution                  @relation(fields: [institutionId], references: [id], onDelete: Cascade)
   leadUserId        String
@@ -699,6 +766,7 @@ model EvaluationProject {
   domainAssignments EvaluationDomainAssignment[]
   createdAt         DateTime                     @default(now())
   updatedAt         DateTime                     @updatedAt
+  @@index([frameworkId])
   @@index([institutionId])
 }
 
@@ -726,15 +794,15 @@ model EvaluationDomainAssignment {
   id           String            @id @default(cuid())
   projectId    String
   project      EvaluationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  familyId     String
-  family       HermFamily        @relation(fields: [familyId], references: [id], onDelete: Restrict)
+  domainId     String
+  domain       FrameworkDomain   @relation(fields: [domainId], references: [id], onDelete: Restrict)
   assignedToId String
   assignedTo   User              @relation("DomainAssignments", fields: [assignedToId], references: [id], onDelete: Cascade)
   status       String            @default("pending")
   score        Json?
   completedAt  DateTime?
   scores       EvaluationDomainScore[]
-  @@unique([projectId, familyId])
+  @@unique([projectId, domainId])
 }
 
 model EvaluationDomainScore {
@@ -763,7 +831,7 @@ model Payment {
   @@index([subscriptionId])
 }
 
-// ── Phase 6: Notifications & API Keys ────────────────────────────────────────
+// ── Notifications & API Keys ─────────────────────────────────────────────────
 
 model Notification {
   id        String   @id @default(cuid())
@@ -791,4 +859,42 @@ model ApiKey {
   isActive      Boolean     @default(true)
   createdAt     DateTime    @default(now())
   @@index([institutionId])
+}
+
+// ── Framework Mapping (Enterprise tier) ──────────────────────────────────────
+
+model FrameworkMapping {
+  id                  String   @id @default(cuid())
+  sourceFrameworkId   String
+  sourceFramework     Framework @relation("MappingSource", fields: [sourceFrameworkId], references: [id], onDelete: Cascade)
+  targetFrameworkId   String
+  targetFramework     Framework @relation("MappingTarget", fields: [targetFrameworkId], references: [id], onDelete: Cascade)
+  name                String               // "HERM v3.1 → FHE v1.0"
+  description         String?
+  mappingType         String               // "official" | "community" | "custom"
+  createdBy           String
+  isActive            Boolean  @default(true)
+  items               CapabilityMapping[]
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  @@unique([sourceFrameworkId, targetFrameworkId, name])
+  @@index([sourceFrameworkId])
+  @@index([targetFrameworkId])
+}
+
+model CapabilityMapping {
+  id                  String   @id @default(cuid())
+  mappingId           String
+  mapping             FrameworkMapping @relation(fields: [mappingId], references: [id], onDelete: Cascade)
+  sourceCapabilityId  String
+  sourceCapability    Capability @relation("SourceCapabilityMapping", fields: [sourceCapabilityId], references: [id], onDelete: Cascade)
+  targetCapabilityId  String
+  targetCapability    Capability @relation("TargetCapabilityMapping", fields: [targetCapabilityId], references: [id], onDelete: Cascade)
+  strength            String   @default("partial")  // "exact" | "strong" | "partial" | "weak"
+  confidence          Int      @default(50)         // 0-100
+  notes               String?
+  @@unique([mappingId, sourceCapabilityId, targetCapabilityId])
+  @@index([mappingId])
+  @@index([sourceCapabilityId])
+  @@index([targetCapabilityId])
 }
