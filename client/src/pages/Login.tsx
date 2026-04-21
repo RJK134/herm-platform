@@ -8,7 +8,12 @@ export function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: string })?.from ?? '/';
+  // Post-login destination can come from two sources:
+  //   1. <Navigate state={{from}}> — set by <ProtectedRoute> client-side
+  //   2. ?returnTo=<path> — set by the axios 401 interceptor (window.location.href)
+  // Prefer the state-based source, fall back to the query param, then '/'.
+  const returnTo = new URLSearchParams(location.search).get('returnTo');
+  const from = (location.state as { from?: string })?.from ?? returnTo ?? '/';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

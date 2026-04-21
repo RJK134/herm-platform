@@ -727,21 +727,21 @@ export class ProcurementEngine {
     }).sort((a, b) => b.overallScore - a.overallScore);
   }
 
-  hermToSpecification(basketItems: Array<{ capability: { code: string; name: string; family: { code: string; name: string } }; priority: string; weight: number; notes?: string | null }>) {
-    const byFamily = new Map<string, { familyCode: string; familyName: string; items: typeof basketItems }>();
+  hermToSpecification(basketItems: Array<{ capability: { code: string; name: string; domain: { code: string; name: string } }; priority: string; weight: number; notes?: string | null }>) {
+    const byDomain = new Map<string, { domainCode: string; domainName: string; items: typeof basketItems }>();
 
     for (const item of basketItems) {
-      const fc = item.capability.family.code;
-      if (!byFamily.has(fc)) {
-        byFamily.set(fc, { familyCode: fc, familyName: item.capability.family.name, items: [] });
+      const fc = item.capability.domain.code;
+      if (!byDomain.has(fc)) {
+        byDomain.set(fc, { domainCode: fc, domainName: item.capability.domain.name, items: [] });
       }
-      byFamily.get(fc)!.items.push(item);
+      byDomain.get(fc)!.items.push(item);
     }
 
-    const sections = Array.from(byFamily.values()).map(family => ({
-      familyCode: family.familyCode,
-      familyName: family.familyName,
-      requirements: family.items.map(item => ({
+    const sections = Array.from(byDomain.values()).map(domain => ({
+      domainCode: domain.domainCode,
+      domainName: domain.domainName,
+      requirements: domain.items.map(item => ({
         code: item.capability.code,
         name: item.capability.name,
         priority: item.priority,
