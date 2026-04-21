@@ -7,7 +7,7 @@ export default defineConfig({
     // Run test files sequentially to avoid shared mock state conflicts
     fileParallelism: false,
     globals: false,
-    testTimeout: 30000,
+    testTimeout: 30_000,
     setupFiles: ['src/test/setup.ts'],
   },
 });
