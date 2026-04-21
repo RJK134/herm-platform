@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import './i18n/config';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -7,7 +8,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { FrameworkProvider } from './contexts/FrameworkContext';
 import { SidebarProvider, useSidebar } from './contexts/SidebarContext';
 import { Sidebar } from './components/layout/Sidebar';
-import { ProtectedRoute } from './components/ProtectedRoute';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Leaderboard } from './pages/Leaderboard';
@@ -41,33 +42,37 @@ import { FrameworkMapping } from './pages/FrameworkMapping';
 import { NotFound } from './pages/NotFound';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
+const ADMIN_ROLES = ['INSTITUTION_ADMIN', 'SUPER_ADMIN'];
+
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 5 * 60 * 1000, retry: 1 } },
 });
 
-/** Mobile hamburger button — visible only below md breakpoint */
 function MobileMenuButton() {
   const { openMobile } = useSidebar();
   return (
     <button
       onClick={openMobile}
-      className="fixed top-4 left-4 z-30 md:hidden p-2 bg-sidebar text-white rounded-lg shadow-lg hover:bg-sidebar/90 transition-colors"
+      className="fixed top-4 left-4 z-30 rounded-lg bg-sidebar p-2 text-white shadow-lg transition-colors hover:bg-sidebar/90 md:hidden"
       aria-label="Open navigation menu"
     >
-      <Menu className="w-5 h-5" />
+      <Menu className="h-5 w-5" />
     </button>
   );
 }
 
-/** Full-screen layout: sidebar + content */
-function AppShell({ children }: { children: React.ReactNode }) {
+function AppShell({ children }: { children: ReactNode }) {
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 font-sans">
-        <a href="#main-content" className="skip-link">Skip to main content</a>
+      <div className="flex min-h-screen bg-gray-50 font-sans dark:bg-gray-900">
+        <a href="#main-content" className="skip-link">
+          Skip to main content
+        </a>
         <Sidebar />
         <MobileMenuButton />
-        <main id="main-content" className="flex-1 overflow-auto p-4 md:p-8">{children}</main>
+        <main id="main-content" className="flex-1 overflow-auto p-4 md:p-8">
+          {children}
+        </main>
       </div>
     </SidebarProvider>
   );
@@ -81,49 +86,115 @@ export default function App() {
           <AuthProvider>
             <FrameworkProvider>
               <Routes>
-                {/* Auth pages — full screen, no sidebar */}
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
 
-                {/* App pages — sidebar layout, gated behind auth */}
                 <Route
                   path="/*"
                   element={
-                    <ProtectedRoute>
-                      <AppShell>
-                        <Routes>
-                          <Route path="/" element={<Leaderboard />} />
-                          <Route path="/radar" element={<RadarComparison />} />
-                          <Route path="/heatmap" element={<CapabilityHeatmap />} />
-                          <Route path="/system" element={<SystemDetail />} />
-                          <Route path="/capability" element={<CapabilityView />} />
-                          <Route path="/basket" element={<CapabilityBasket />} />
-                          <Route path="/export" element={<ExportDownload />} />
-                          <Route path="/admin" element={<AdminSystems />} />
-                          <Route path="/vendor" element={<VendorShowcase />} />
-                          <Route path="/vendor/:id" element={<VendorProfile />} />
-                          <Route path="/how-it-works" element={<HowItWorks />} />
-                          <Route path="/research" element={<ResearchHub />} />
-                          <Route path="/assistant" element={<AiAssistant />} />
-                          <Route path="/tco" element={<TcoCalculator />} />
-                          <Route path="/procurement" element={<ProcurementWorkflow />} />
-                          <Route path="/integration" element={<IntegrationAssessment />} />
-                          <Route path="/architecture" element={<ArchitectureAssessment />} />
-                          <Route path="/value" element={<ValueAnalysis />} />
-                          <Route path="/documents" element={<DocumentGenerator />} />
-                          <Route path="/projects" element={<ProcurementProjects />} />
-                          <Route path="/guide" element={<ProcurementGuide />} />
-                          <Route path="/vendor-portal" element={<VendorPortal />} />
-                          <Route path="/workspaces" element={<TeamWorkspaces />} />
-                          <Route path="/admin/vendors" element={<AdminVendors />} />
-                          <Route path="/subscription" element={<Subscriptions />} />
-                          <Route path="/sector" element={<SectorAnalytics />} />
-                          <Route path="/api-keys" element={<ApiIntegration />} />
-                          <Route path="/framework-mapping" element={<FrameworkMapping />} />
-                          <Route path="*" element={<NotFound />} />
-                        </Routes>
-                      </AppShell>
-                    </ProtectedRoute>
+                    <AppShell>
+                      <Routes>
+                        <Route path="/" element={<Leaderboard />} />
+                        <Route path="/radar" element={<RadarComparison />} />
+                        <Route path="/heatmap" element={<CapabilityHeatmap />} />
+                        <Route path="/system" element={<SystemDetail />} />
+                        <Route path="/capability" element={<CapabilityView />} />
+                        <Route
+                          path="/basket"
+                          element={
+                            <ProtectedRoute>
+                              <CapabilityBasket />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route path="/export" element={<ExportDownload />} />
+                        <Route
+                          path="/admin"
+                          element={
+                            <ProtectedRoute roles={ADMIN_ROLES}>
+                              <AdminSystems />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route path="/vendor" element={<VendorShowcase />} />
+                        <Route path="/vendor/:id" element={<VendorProfile />} />
+                        <Route path="/how-it-works" element={<HowItWorks />} />
+                        <Route path="/research" element={<ResearchHub />} />
+                        <Route
+                          path="/assistant"
+                          element={
+                            <ProtectedRoute>
+                              <AiAssistant />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route path="/tco" element={<TcoCalculator />} />
+                        <Route
+                          path="/procurement"
+                          element={
+                            <ProtectedRoute>
+                              <ProcurementWorkflow />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route path="/integration" element={<IntegrationAssessment />} />
+                        <Route path="/architecture" element={<ArchitectureAssessment />} />
+                        <Route path="/value" element={<ValueAnalysis />} />
+                        <Route
+                          path="/documents"
+                          element={
+                            <ProtectedRoute>
+                              <DocumentGenerator />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="/projects"
+                          element={
+                            <ProtectedRoute>
+                              <ProcurementProjects />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route path="/guide" element={<ProcurementGuide />} />
+                        <Route path="/vendor-portal" element={<VendorPortal />} />
+                        <Route
+                          path="/workspaces"
+                          element={
+                            <ProtectedRoute>
+                              <TeamWorkspaces />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="/admin/vendors"
+                          element={
+                            <ProtectedRoute roles={ADMIN_ROLES}>
+                              <AdminVendors />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="/subscription"
+                          element={
+                            <ProtectedRoute>
+                              <Subscriptions />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route path="/sector" element={<SectorAnalytics />} />
+                        <Route
+                          path="/api-keys"
+                          element={
+                            <ProtectedRoute>
+                              <ApiIntegration />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route path="/framework-mapping" element={<FrameworkMapping />} />
+                        <Route path="*" element={<NotFound />} />
+                      </Routes>
+                    </AppShell>
                   }
                 />
               </Routes>

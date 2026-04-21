@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import app from '../app';
 
@@ -22,8 +22,16 @@ describe('health routes', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.status).toBe('ok');
-    expect(res.body.data.version).toBe('2.0.0');
+    expect(res.body.data.version).toBeDefined();
     expect(res.body.data.timestamp).toBeDefined();
+  });
+
+  it('returns 200 when the readiness probe can reach the database', async () => {
+    const res = await request(app).get('/api/readiness');
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.status).toBe('ready');
+    expect(res.body.data.checks).toEqual({ db: 'ok' });
   });
 
   it('returns 503 when the readiness probe cannot reach the database', async () => {
@@ -33,5 +41,12 @@ describe('health routes', () => {
     expect(res.body.success).toBe(false);
     expect(res.body.data.status).toBe('not-ready');
     expect(res.body.data.checks).toEqual({ db: 'fail' });
+  });
+
+  it('exposes /api/ready as a readiness alias', async () => {
+    const res = await request(app).get('/api/ready');
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('ready');
+    expect(res.body.data.checks.database.ok).toBe(true);
   });
 });

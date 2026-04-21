@@ -1,5 +1,6 @@
 import prisma from '../../utils/prisma';
 import { NotFoundError } from '../../utils/errors';
+import type { UpdateVendorProfileInput } from './vendors.schema';
 
 export class VendorsService {
   async getProfile(systemId: string) {
@@ -14,12 +15,11 @@ export class VendorsService {
     return profile;
   }
 
-  async updateProfile(systemId: string, data: Record<string, unknown>) {
+  async updateProfile(systemId: string, data: UpdateVendorProfileInput) {
     const system = await prisma.vendorSystem.findUnique({ where: { id: systemId } });
     if (!system) throw new NotFoundError(`System not found: ${systemId}`);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (prisma.vendorProfile.upsert as any)({
+    return prisma.vendorProfile.upsert({
       where: { systemId },
       create: { systemId, ...data },
       update: { ...data, lastUpdated: new Date() },

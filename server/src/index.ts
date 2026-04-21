@@ -1,26 +1,23 @@
-import { createApp } from './app';
 import prisma from './utils/prisma';
-import { logger } from './utils/logger';
+import { createApp } from './app';
+import { logger } from './lib/logger';
 
 const app = createApp();
 const PORT = Number(process.env['PORT'] ?? 3002);
 
 const server = app.listen(PORT, () => {
-  logger.info({ port: PORT }, 'HERM Platform API listening');
+  logger.info({ port: PORT }, `HERM Platform API running on http://localhost:${PORT}`);
 });
 
-// Graceful shutdown — closes the HTTP server then disconnects Prisma before
-// exiting so in-flight requests complete and DB connections are cleanly released.
 function shutdown(signal: string): void {
-  logger.info({ signal }, 'received signal, shutting down');
+  logger.info({ signal }, 'shutting down gracefully');
   server.close(async () => {
     await prisma.$disconnect();
-    logger.info('server and DB connections closed');
+    logger.info('server and db connections closed');
     process.exit(0);
   });
-  // Force-exit after 10 seconds if graceful shutdown stalls.
   setTimeout(() => {
-    logger.error('force-exit after shutdown timeout');
+    logger.error('force-exit after timeout');
     process.exit(1);
   }, 10_000).unref();
 }

@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { ValueService } from './value.service';
 import { valueAnalysisInputSchema } from './value.schema';
 

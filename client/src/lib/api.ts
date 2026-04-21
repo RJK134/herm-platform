@@ -21,9 +21,22 @@ import type {
 const TOKEN_KEY = 'herm_auth_token';
 const REQUEST_TIMEOUT_MS = 15_000;
 
-// Hard wall-clock cap on every request so a hung backend doesn't freeze the
-// UI; TanStack Query will then surface an error state instead of an infinite
-// spinner.
+export class ApiError extends Error {
+  code: string;
+  status: number;
+  requestId?: string;
+  details?: unknown;
+
+  constructor(status: number, code: string, message: string, requestId?: string, details?: unknown) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+    this.requestId = requestId;
+    this.details = details;
+  }
+}
+
 const client = axios.create({ baseURL: '/api', timeout: REQUEST_TIMEOUT_MS });
 
 // Attach JWT to every request if present
@@ -36,36 +49,34 @@ client.interceptors.request.use((config) => {
 });
 
 interface ApiErrorBody {
-  success: false;
-  error?: { code?: string; message?: string };
+  success?: false;
+  error?: { code?: string; message?: string; requestId?: string; details?: unknown };
 }
 
-// Centralised response handling:
-// - 401 + AUTHENTICATION_ERROR → clear stale token and bounce to /login.
-// - 5xx → surface once via toast so the user sees *something* when the server
-//   breaks. Per-query error states still render as normal; this is a safety net.
 client.interceptors.response.use(
   (response) => response,
   (error: AxiosError<ApiErrorBody>) => {
-    const status = error.response?.status;
-    const code = error.response?.data?.error?.code;
-    const message = error.response?.data?.error?.message ?? error.message ?? 'Request failed';
+    const status = error.response?.status ?? 0;
+    const body = error.response?.data;
+    const code = body?.error?.code ?? 'NETWORK_ERROR';
+    const message = body?.error?.message ?? error.message ?? 'Request failed';
+    const requestId = body?.error?.requestId;
+    const details = body?.error?.details;
 
-    if (status === 401 && code === 'AUTHENTICATION_ERROR') {
+    if (status === 401 && typeof window !== 'undefined') {
       localStorage.removeItem(TOKEN_KEY);
-      delete axios.defaults.headers.common['Authorization'];
-      if (
-        typeof window !== 'undefined' &&
-        !['/login', '/register'].some((p) => window.location.pathname.startsWith(p))
-      ) {
-        window.location.assign('/login');
+      delete client.defaults.headers.common['Authorization'];
+      const here = window.location.pathname + window.location.search;
+      if (!['/login', '/register'].some((p) => window.location.pathname.startsWith(p))) {
+        const returnTo = encodeURIComponent(here);
+        window.location.href = `/login?returnTo=${returnTo}`;
       }
-    } else if (status && status >= 500) {
+    } else if (status >= 500) {
       toast.error(message);
     }
 
-    return Promise.reject(error);
-  }
+    return Promise.reject(new ApiError(status, code, message, requestId, details));
+  },
 );
 
 export const api = {

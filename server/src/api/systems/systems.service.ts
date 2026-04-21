@@ -46,8 +46,8 @@ export class SystemsService {
       },
     });
 
-    // Scores are stored 0-100 per capability. A domain's `maxScore` is
-    // `capabilities.length * 100`; `score` is the sum of capability values.
+    // Return as map of code -> value and grouped domain totals so callers do not
+    // need to reduce capability values themselves.
     const byCode: Record<string, number> = {};
     const byDomain: Record<
       string,
@@ -72,6 +72,7 @@ export class SystemsService {
           maxScore: 0,
           capabilities: [],
         });
+
       domain.capabilities.push({
         code: s.capability.code,
         name: s.capability.name,

@@ -4,9 +4,11 @@ build
 coverage
 .next
 .cache
-*.min.js
-*.min.css
+client/public
+prisma/migrations
 package-lock.json
 pnpm-lock.yaml
 yarn.lock
-prisma/migrations
+*.min.js
+*.min.css
+*.log

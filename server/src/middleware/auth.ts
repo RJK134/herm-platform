@@ -1,8 +1,7 @@
 import jwt from 'jsonwebtoken';
-import { Request, Response, NextFunction } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import type { VendorJwtPayload } from '../api/vendor-portal/vendor-portal.service';
 
-// Fail fast at startup if JWT_SECRET is not configured — prevents forged tokens
 if (!process.env['JWT_SECRET']) {
   if (process.env['NODE_ENV'] === 'production') {
     throw new Error('JWT_SECRET environment variable must be set in production');
@@ -29,6 +28,7 @@ declare global {
     interface Request {
       user?: JwtPayload;
       vendorUser?: VendorJwtPayload;
+      frameworkId?: string;
     }
   }
 }
@@ -39,7 +39,6 @@ function extractToken(req: Request): string | undefined {
   return undefined;
 }
 
-/** Requires a valid JWT — 401 if missing/invalid */
 export function authenticateJWT(req: Request, res: Response, next: NextFunction): void {
   const token = extractToken(req);
   if (!token) {
@@ -60,23 +59,20 @@ export function authenticateJWT(req: Request, res: Response, next: NextFunction)
   }
 }
 
-/** Attaches user if JWT present but does NOT fail if missing */
 export function optionalJWT(req: Request, _res: Response, next: NextFunction): void {
   const token = extractToken(req);
   if (token) {
     try {
       req.user = jwt.verify(token, JWT_SECRET) as JwtPayload;
     } catch {
-      // Ignore — proceed as anonymous
+      // proceed as anonymous
     }
   }
   next();
 }
 
-/** Legacy alias used by existing routes */
 export const optionalAuth = optionalJWT;
 
-/** Requires authenticated user with one of the given roles */
 export function requireRole(roles: string[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {

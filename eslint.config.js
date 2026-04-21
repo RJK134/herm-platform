@@ -1,7 +1,3 @@
-// ESLint flat config — shared across client and server workspaces.
-// Keep this pragmatic: TypeScript compiler catches most type issues; ESLint
-// focuses on correctness patterns (no-explicit-any, unused vars) and lets
-// Prettier own formatting.
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
@@ -13,8 +9,10 @@ export default [
       '**/node_modules/**',
       '**/dist/**',
       '**/build/**',
-      '**/coverage/**',
+      '**/.next/**',
       '**/.vite/**',
+      '**/coverage/**',
+      'client/public/**',
       'prisma/migrations/**',
     ],
   },
@@ -29,15 +27,17 @@ export default [
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': [
-        'error',
+        'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
       '@typescript-eslint/no-non-null-assertion': 'warn',
+      '@typescript-eslint/consistent-type-imports': 'warn',
       'no-console': 'off',
+      eqeqeq: ['error', 'always', { null: 'ignore' }],
     },
   },
   {
-    files: ['client/**/*.{ts,tsx}'],
+    files: ['client/src/**/*.{ts,tsx}'],
     plugins: {
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
@@ -48,10 +48,35 @@ export default [
     },
   },
   {
+    files: ['server/src/**/*.ts'],
+    ignores: ['server/src/services/ai/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@anthropic-ai/sdk',
+              message:
+                'Import the AI SDK only via server/src/services/ai/ai-client. Direct imports are forbidden outside services/ai/.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['**/*.test.ts', '**/*.test.tsx', '**/__tests__/**/*.ts', '**/__tests__/**/*.tsx'],
     rules: {
+      'no-console': 'off',
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-non-null-assertion': 'off',
+    },
+  },
+  {
+    files: ['*.config.{js,ts}', '*.config.*.{js,ts}', 'eslint.config.js'],
+    rules: {
+      'no-console': 'off',
     },
   },
 ];

@@ -1,10 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import app from '../../app';
 
-// Hoisted alongside vi.mock so the factory below can reference it.
-// frameworkContext middleware (mounted on /api/systems, /api/capabilities,
-// /api/scores, /api/vendor-portal) needs a Framework to resolve during tests.
 const { mockFramework } = vi.hoisted(() => ({
   mockFramework: {
     id: 'fw-herm',

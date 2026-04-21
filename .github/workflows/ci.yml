@@ -2,8 +2,9 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
+    branches: [main, develop]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -11,9 +12,6 @@ concurrency:
 
 env:
   NODE_VERSION: '20'
-  # Dummy DATABASE_URL for workspaces that read it at import time. The postgres
-  # service uses `trust` auth (see the test job) so no password is needed here
-  # or at connection time.
   DATABASE_URL: postgresql://postgres@localhost:5432/herm_test?schema=public
 
 jobs:
@@ -49,9 +47,6 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_DB: herm_test
-          # `trust` auth — the service is only reachable from the CI runner,
-          # and using trust avoids hardcoding a throwaway password (which
-          # secret scanners flag even though there's no security impact).
           POSTGRES_HOST_AUTH_METHOD: trust
         ports: ['5432:5432']
         options: >-
@@ -78,7 +73,7 @@ jobs:
         run: npm run db:generate
       - name: Apply schema
         run: npm run db:push
-      - run: npm test
+      - run: npm run test:ci
 
   build:
     runs-on: ubuntu-latest
@@ -93,3 +88,18 @@ jobs:
       - name: Generate Prisma client
         run: npm run db:generate
       - run: npm run build
+
+  prisma-validate:
+    name: Validate Prisma schema
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Validate schema
+        run: npx prisma validate --schema=prisma/schema.prisma
+      - name: Check schema formatting
+        run: npx prisma format --schema=prisma/schema.prisma --check

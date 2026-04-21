@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { procurementEngine } from '../../services/procurement-engine';
 import { NotFoundError } from '../../utils/errors';
 import prisma from '../../utils/prisma';
