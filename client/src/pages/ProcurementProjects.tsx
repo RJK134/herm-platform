@@ -85,7 +85,7 @@ interface EvaluationEntry {
   id: string;
   systemId: string;
   systemName: string;
-  hermScore?: number;
+  frameworkScore?: number;
   technicalScore?: number;
   commercialScore?: number;
   implementationScore?: number;
@@ -95,7 +95,7 @@ interface EvaluationEntry {
 }
 
 interface WeightingProfile {
-  herm: number;
+  framework: number;
   technical: number;
   commercial: number;
   implementation: number;
@@ -219,7 +219,7 @@ function recommendationBadge(rec: Recommendation): string {
 }
 
 function calcOverall(entry: EvaluationEntry, weights: WeightingProfile): number {
-  const h = ((entry.hermScore ?? 0) * weights.herm) / 100;
+  const h = ((entry.frameworkScore ?? 0) * weights.framework) / 100;
   const t = ((entry.technicalScore ?? 0) * weights.technical) / 100;
   const c = ((entry.commercialScore ?? 0) * weights.commercial) / 100;
   const i = ((entry.implementationScore ?? 0) * weights.implementation) / 100;
@@ -674,7 +674,7 @@ function EvaluationView({ projectId }: { projectId: string }) {
   const { t } = useTranslation("procurement");
   const qc = useQueryClient();
   const [weights, setWeights] = useState<WeightingProfile>({
-    herm: 40, technical: 25, commercial: 20, implementation: 10, references: 5,
+    framework: 40, technical: 25, commercial: 20, implementation: 10, references: 5,
   });
   const [addSystemId, setAddSystemId] = useState('');
 
@@ -722,7 +722,7 @@ function EvaluationView({ projectId }: { projectId: string }) {
   const maxOverall = sorted[0]?.overallScore ?? 100;
 
   const WEIGHT_LABELS: [keyof WeightingProfile, string][] = [
-    ['herm', 'HERM Capability Fit'],
+    ['framework', 'Framework Capability Fit'],
     ['technical', 'Technical Evaluation'],
     ['commercial', 'Commercial/Price'],
     ['implementation', 'Implementation Risk'],
@@ -730,7 +730,7 @@ function EvaluationView({ projectId }: { projectId: string }) {
   ];
 
   const SCORE_FIELDS: [keyof EvaluationEntry, string][] = [
-    ['hermScore', 'HERM'],
+    ['frameworkScore', 'Framework'],
     ['technicalScore', 'Technical'],
     ['commercialScore', 'Commercial'],
     ['implementationScore', 'Implementation'],

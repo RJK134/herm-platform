@@ -44,9 +44,9 @@ interface VendorAnalytics {
   months: string[];
 }
 
-interface ScoreFamily {
-  familyCode: string;
-  familyName: string;
+interface ScoreDomain {
+  domainCode: string;
+  domainName: string;
   capabilities: Array<{
     id: string;
     capability: { id: string; code: string; name: string };
@@ -59,7 +59,7 @@ interface ScoreResponse {
   overallScore: number;
   maxScore: number;
   percentage: number;
-  families: ScoreFamily[];
+  byDomain: ScoreDomain[];
 }
 
 interface Submission {
@@ -653,7 +653,7 @@ interface ChallengeForm {
 
 function ScoresTab({ scores, token, onSubmitted }: { scores: ScoreResponse | undefined; token: string; onSubmitted: () => void }) {
   const { t } = useTranslation('vendor');
-  const [openFamily, setOpenFamily] = useState<string | null>(null);
+  const [openDomain, setOpenDomain] = useState<string | null>(null);
   const [challengeForm, setChallengeForm] = useState<ChallengeForm | null>(null);
 
   const challengeMutation = useMutation({
@@ -700,20 +700,20 @@ function ScoresTab({ scores, token, onSubmitted }: { scores: ScoreResponse | und
         </div>
       </Card>
 
-      {/* Families accordion */}
+      {/* Domains accordion */}
       <div className="space-y-2">
-        {scores.families.map(family => (
-          <Card key={family.familyCode} className="p-0 overflow-hidden">
+        {scores.byDomain.map(domain => (
+          <Card key={domain.domainCode} className="p-0 overflow-hidden">
             <button
               className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-              onClick={() => setOpenFamily(openFamily === family.familyCode ? null : family.familyCode)}
+              onClick={() => setOpenDomain(openDomain === domain.domainCode ? null : domain.domainCode)}
             >
-              <span className="font-semibold text-sm dark:text-white">{family.familyCode} — {family.familyName}</span>
-              {openFamily === family.familyCode ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+              <span className="font-semibold text-sm dark:text-white">{domain.domainCode} — {domain.domainName}</span>
+              {openDomain === domain.domainCode ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
             </button>
-            {openFamily === family.familyCode && (
+            {openDomain === domain.domainCode && (
               <div className="border-t border-gray-100 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
-                {family.capabilities.map(cap => (
+                {domain.capabilities.map(cap => (
                   <div key={cap.id} className="flex items-center justify-between px-5 py-3">
                     <div>
                       <p className="text-sm dark:text-white">{cap.capability.code} — {cap.capability.name}</p>

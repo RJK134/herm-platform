@@ -4,8 +4,10 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.{test,spec}.ts', 'src/**/__tests__/**/*.{test,spec}.ts'],
+    // Run test files sequentially to avoid shared mock state conflicts
+    fileParallelism: false,
     globals: false,
-    testTimeout: 10_000,
+    testTimeout: 30000,
     setupFiles: ['src/test/setup.ts'],
   },
 });

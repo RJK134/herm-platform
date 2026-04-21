@@ -702,17 +702,17 @@ export class ProcurementEngine {
     evaluations: Array<{
       systemId: string;
       systemName: string;
-      hermScore?: number;
+      frameworkScore?: number;
       technicalScore?: number;
       commercialScore?: number;
       implementationScore?: number;
       referenceScore?: number;
     }>,
-    weighting = { herm: 40, technical: 25, commercial: 20, implementation: 10, reference: 5 }
+    weighting = { framework: 40, technical: 25, commercial: 20, implementation: 10, reference: 5 }
   ) {
     return evaluations.map(e => {
       const overall =
-        ((e.hermScore ?? 0) * weighting.herm +
+        ((e.frameworkScore ?? 0) * weighting.framework +
           (e.technicalScore ?? 0) * weighting.technical +
           (e.commercialScore ?? 0) * weighting.commercial +
           (e.implementationScore ?? 0) * weighting.implementation +
@@ -727,21 +727,21 @@ export class ProcurementEngine {
     }).sort((a, b) => b.overallScore - a.overallScore);
   }
 
-  hermToSpecification(basketItems: Array<{ capability: { code: string; name: string; family: { code: string; name: string } }; priority: string; weight: number; notes?: string | null }>) {
-    const byFamily = new Map<string, { familyCode: string; familyName: string; items: typeof basketItems }>();
+  hermToSpecification(basketItems: Array<{ capability: { code: string; name: string; domain: { code: string; name: string } }; priority: string; weight: number; notes?: string | null }>) {
+    const byDomain = new Map<string, { domainCode: string; domainName: string; items: typeof basketItems }>();
 
     for (const item of basketItems) {
-      const fc = item.capability.family.code;
-      if (!byFamily.has(fc)) {
-        byFamily.set(fc, { familyCode: fc, familyName: item.capability.family.name, items: [] });
+      const dc = item.capability.domain.code;
+      if (!byDomain.has(dc)) {
+        byDomain.set(dc, { domainCode: dc, domainName: item.capability.domain.name, items: [] });
       }
-      byFamily.get(fc)!.items.push(item);
+      byDomain.get(dc)!.items.push(item);
     }
 
-    const sections = Array.from(byFamily.values()).map(family => ({
-      familyCode: family.familyCode,
-      familyName: family.familyName,
-      requirements: family.items.map(item => ({
+    const sections = Array.from(byDomain.values()).map(domain => ({
+      domainCode: domain.domainCode,
+      domainName: domain.domainName,
+      requirements: domain.items.map(item => ({
         code: item.capability.code,
         name: item.capability.name,
         priority: item.priority,

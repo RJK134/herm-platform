@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Menu } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
+import { FrameworkProvider } from './contexts/FrameworkContext';
 import { SidebarProvider, useSidebar } from './contexts/SidebarContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -36,6 +37,7 @@ import { AdminVendors } from './pages/AdminVendors';
 import { Subscriptions } from './pages/Subscriptions';
 import { SectorAnalytics } from './pages/SectorAnalytics';
 import { ApiIntegration } from './pages/ApiIntegration';
+import { FrameworkMapping } from './pages/FrameworkMapping';
 import { NotFound } from './pages/NotFound';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
@@ -74,59 +76,62 @@ function AppShell({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <ErrorBoundary>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AuthProvider>
-          <Routes>
-            {/* Auth pages — full screen, no sidebar */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <AuthProvider>
+            <FrameworkProvider>
+              <Routes>
+                {/* Auth pages — full screen, no sidebar */}
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
 
-            {/* App pages — sidebar layout, gated behind auth */}
-            <Route
-              path="/*"
-              element={
-                <ProtectedRoute>
-                  <AppShell>
-                    <Routes>
-                    <Route path="/" element={<Leaderboard />} />
-                    <Route path="/radar" element={<RadarComparison />} />
-                    <Route path="/heatmap" element={<CapabilityHeatmap />} />
-                    <Route path="/system" element={<SystemDetail />} />
-                    <Route path="/capability" element={<CapabilityView />} />
-                    <Route path="/basket" element={<CapabilityBasket />} />
-                    <Route path="/export" element={<ExportDownload />} />
-                    <Route path="/admin" element={<AdminSystems />} />
-                    <Route path="/vendor" element={<VendorShowcase />} />
-                    <Route path="/vendor/:id" element={<VendorProfile />} />
-                    <Route path="/how-it-works" element={<HowItWorks />} />
-                    <Route path="/research" element={<ResearchHub />} />
-                    <Route path="/assistant" element={<AiAssistant />} />
-                    <Route path="/tco" element={<TcoCalculator />} />
-                    <Route path="/procurement" element={<ProcurementWorkflow />} />
-                    <Route path="/integration" element={<IntegrationAssessment />} />
-                    <Route path="/architecture" element={<ArchitectureAssessment />} />
-                    <Route path="/value" element={<ValueAnalysis />} />
-                    <Route path="/documents" element={<DocumentGenerator />} />
-                    <Route path="/projects" element={<ProcurementProjects />} />
-                    <Route path="/guide" element={<ProcurementGuide />} />
-                    <Route path="/vendor-portal" element={<VendorPortal />} />
-                    <Route path="/workspaces" element={<TeamWorkspaces />} />
-                    <Route path="/admin/vendors" element={<AdminVendors />} />
-                    <Route path="/subscription" element={<Subscriptions />} />
-                    <Route path="/sector" element={<SectorAnalytics />} />
-                    <Route path="/api-keys" element={<ApiIntegration />} />
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                  </AppShell>
-                </ProtectedRoute>
-              }
-            />
-          </Routes>
-          <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
-        </AuthProvider>
-      </BrowserRouter>
-    </QueryClientProvider>
+                {/* App pages — sidebar layout, gated behind auth */}
+                <Route
+                  path="/*"
+                  element={
+                    <ProtectedRoute>
+                      <AppShell>
+                        <Routes>
+                          <Route path="/" element={<Leaderboard />} />
+                          <Route path="/radar" element={<RadarComparison />} />
+                          <Route path="/heatmap" element={<CapabilityHeatmap />} />
+                          <Route path="/system" element={<SystemDetail />} />
+                          <Route path="/capability" element={<CapabilityView />} />
+                          <Route path="/basket" element={<CapabilityBasket />} />
+                          <Route path="/export" element={<ExportDownload />} />
+                          <Route path="/admin" element={<AdminSystems />} />
+                          <Route path="/vendor" element={<VendorShowcase />} />
+                          <Route path="/vendor/:id" element={<VendorProfile />} />
+                          <Route path="/how-it-works" element={<HowItWorks />} />
+                          <Route path="/research" element={<ResearchHub />} />
+                          <Route path="/assistant" element={<AiAssistant />} />
+                          <Route path="/tco" element={<TcoCalculator />} />
+                          <Route path="/procurement" element={<ProcurementWorkflow />} />
+                          <Route path="/integration" element={<IntegrationAssessment />} />
+                          <Route path="/architecture" element={<ArchitectureAssessment />} />
+                          <Route path="/value" element={<ValueAnalysis />} />
+                          <Route path="/documents" element={<DocumentGenerator />} />
+                          <Route path="/projects" element={<ProcurementProjects />} />
+                          <Route path="/guide" element={<ProcurementGuide />} />
+                          <Route path="/vendor-portal" element={<VendorPortal />} />
+                          <Route path="/workspaces" element={<TeamWorkspaces />} />
+                          <Route path="/admin/vendors" element={<AdminVendors />} />
+                          <Route path="/subscription" element={<Subscriptions />} />
+                          <Route path="/sector" element={<SectorAnalytics />} />
+                          <Route path="/api-keys" element={<ApiIntegration />} />
+                          <Route path="/framework-mapping" element={<FrameworkMapping />} />
+                          <Route path="*" element={<NotFound />} />
+                        </Routes>
+                      </AppShell>
+                    </ProtectedRoute>
+                  }
+                />
+              </Routes>
+              <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
+            </FrameworkProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
     </ErrorBoundary>
   );
 }

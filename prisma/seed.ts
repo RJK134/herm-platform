@@ -10,11 +10,12 @@ async function main() {
   await prisma.versionScore.deleteMany();
   await prisma.vendorVersion.deleteMany();
   await prisma.vendorProfile.deleteMany();
-  await prisma.score.deleteMany();
+  await prisma.capabilityScore.deleteMany();
   await prisma.basketItem.deleteMany();
   await prisma.capabilityBasket.deleteMany();
-  await prisma.hermCapability.deleteMany();
-  await prisma.hermFamily.deleteMany();
+  await prisma.capability.deleteMany();
+  await prisma.frameworkDomain.deleteMany();
+  await prisma.framework.deleteMany();
   await prisma.shortlistEntry.deleteMany();
   await prisma.workflowStage.deleteMany();
   await prisma.procurementWorkflow.deleteMany();
@@ -22,6 +23,42 @@ async function main() {
   await prisma.tcoEstimate.deleteMany();
   await prisma.integrationAssessment.deleteMany();
   await prisma.vendorSystem.deleteMany();
+
+  // ── FRAMEWORKS ────────────────────────────────────────────────────────────
+  const hermFramework = await prisma.framework.create({
+    data: {
+      slug: 'herm-v3.1',
+      name: 'UCISA HERM v3.1',
+      version: '3.1',
+      publisher: 'CAUDIT',
+      description: 'Higher Education Reference Model — 165 business capabilities across 11 domains, published under CC BY-NC-SA 4.0.',
+      licenceType: 'CC-BY-NC-SA-4.0',
+      licenceNotice: 'This work is based on the UCISA Higher Education Reference Model (HERM) v3.1, published by the Council of Australasian University Directors of Information Technology (CAUDIT) and licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License.',
+      licenceUrl: 'https://creativecommons.org/licenses/by-nc-sa/4.0/',
+      isPublic: true,
+      isDefault: false,
+      isActive: true,
+      domainCount: 11,
+      capabilityCount: 165,
+    },
+  });
+
+  const fheFramework = await prisma.framework.create({
+    data: {
+      slug: 'fhe-capability-framework',
+      name: 'FHE Capability Framework',
+      version: '1.0',
+      publisher: 'Future Horizons Education',
+      description: 'Proprietary capability management framework for institutional technology assessment, procurement, and maturity evaluation.',
+      licenceType: 'PROPRIETARY',
+      isPublic: false,
+      isDefault: true,
+      isActive: true,
+      domainCount: 0,
+      capabilityCount: 0,
+    },
+  });
+  console.log('Created 2 frameworks (HERM + FHE)');
 
   // ── FAMILIES ──────────────────────────────────────────────────────────────
   const familiesData = [
@@ -38,210 +75,213 @@ async function main() {
     { code: 'SS',  name: 'Supporting Services',        category: 'Enabling', sortOrder: 11 },
   ];
 
-  const familyMap: Record<string, string> = {};
+  const domainMap: Record<string, string> = {};
   for (const f of familiesData) {
-    const fam = await prisma.hermFamily.create({ data: f });
-    familyMap[f.code] = fam.id;
+    const dom = await prisma.frameworkDomain.create({
+      data: { ...f, frameworkId: hermFramework.id },
+    });
+    domainMap[f.code] = dom.id;
   }
-  console.log(`Created ${familiesData.length} families`);
+  console.log(`Created ${familiesData.length} domains`);
 
   // ── CAPABILITIES ──────────────────────────────────────────────────────────
-  const capabilitiesData: Array<{ code: string; name: string; familyCode: string; sortOrder: number }> = [
+  const capabilitiesData: Array<{ code: string; name: string; domainCode: string; sortOrder: number }> = [
     // Learning & Teaching (LT) — BC001-BC041
-    { code: 'BC001', name: 'Curriculum Planning',                   familyCode: 'LT', sortOrder: 1  },
-    { code: 'BC002', name: 'Curriculum Design',                     familyCode: 'LT', sortOrder: 2  },
-    { code: 'BC003', name: 'Curriculum Production',                 familyCode: 'LT', sortOrder: 3  },
-    { code: 'BC004', name: 'Curriculum Review',                     familyCode: 'LT', sortOrder: 4  },
-    { code: 'BC005', name: 'Curriculum Accreditation',              familyCode: 'LT', sortOrder: 5  },
-    { code: 'BC006', name: 'Programme of Learning Design',          familyCode: 'LT', sortOrder: 6  },
-    { code: 'BC007', name: 'Programme of Learning Accreditation',   familyCode: 'LT', sortOrder: 7  },
-    { code: 'BC008', name: 'Student Recruitment',                   familyCode: 'LT', sortOrder: 8  },
-    { code: 'BC009', name: 'Admissions Management',                 familyCode: 'LT', sortOrder: 9  },
-    { code: 'BC010', name: 'Student Onboarding',                    familyCode: 'LT', sortOrder: 10 },
-    { code: 'BC011', name: 'Enrolment',                             familyCode: 'LT', sortOrder: 11 },
-    { code: 'BC012', name: 'Student Allocation',                    familyCode: 'LT', sortOrder: 12 },
-    { code: 'BC013', name: 'Timetabling',                           familyCode: 'LT', sortOrder: 13 },
-    { code: 'BC014', name: 'Learning & Teaching Delivery',          familyCode: 'LT', sortOrder: 14 },
-    { code: 'BC015', name: 'Student Attendance Management',         familyCode: 'LT', sortOrder: 15 },
-    { code: 'BC016', name: 'Student Progress Management',           familyCode: 'LT', sortOrder: 16 },
-    { code: 'BC017', name: 'Student Wellbeing Management',          familyCode: 'LT', sortOrder: 17 },
-    { code: 'BC018', name: 'Student Financial Support',             familyCode: 'LT', sortOrder: 18 },
-    { code: 'BC019', name: 'Student Accommodation Management',      familyCode: 'LT', sortOrder: 19 },
-    { code: 'BC020', name: 'Student Engagement Management',         familyCode: 'LT', sortOrder: 20 },
-    { code: 'BC021', name: 'Student Employability Management',      familyCode: 'LT', sortOrder: 21 },
-    { code: 'BC022', name: 'Student Conduct Management',            familyCode: 'LT', sortOrder: 22 },
-    { code: 'BC023', name: 'Student Accessibility & Inclusion',     familyCode: 'LT', sortOrder: 23 },
-    { code: 'BC024', name: 'Learning & Teaching Resource Preparation', familyCode: 'LT', sortOrder: 24 },
-    { code: 'BC025', name: 'Learning & Teaching Resource Management',  familyCode: 'LT', sortOrder: 25 },
-    { code: 'BC026', name: 'Learning Environment Management',       familyCode: 'LT', sortOrder: 26 },
-    { code: 'BC027', name: 'Work-Integrated Learning',              familyCode: 'LT', sortOrder: 27 },
-    { code: 'BC028', name: 'Credit Management',                     familyCode: 'LT', sortOrder: 28 },
-    { code: 'BC029', name: 'Learning Assessment',                   familyCode: 'LT', sortOrder: 29 },
-    { code: 'BC030', name: 'Learning Assessment Moderation',        familyCode: 'LT', sortOrder: 30 },
-    { code: 'BC031', name: 'Student Research Assessment',           familyCode: 'LT', sortOrder: 31 },
-    { code: 'BC032', name: 'Academic Integrity Management',         familyCode: 'LT', sortOrder: 32 },
-    { code: 'BC033', name: 'Graduation & Completion',               familyCode: 'LT', sortOrder: 33 },
-    { code: 'BC034', name: 'Alumni Management',                     familyCode: 'LT', sortOrder: 34 },
-    { code: 'BC035', name: 'Learning & Teaching Quality Assurance', familyCode: 'LT', sortOrder: 35 },
-    { code: 'BC036', name: 'Student Feedback Management',           familyCode: 'LT', sortOrder: 36 },
-    { code: 'BC037', name: 'Learning Analytics',                    familyCode: 'LT', sortOrder: 37 },
-    { code: 'BC038', name: 'Micro-credential Management',           familyCode: 'LT', sortOrder: 38 },
-    { code: 'BC039', name: 'Recognition of Prior Learning',         familyCode: 'LT', sortOrder: 39 },
-    { code: 'BC040', name: 'Student Exchange Management',           familyCode: 'LT', sortOrder: 40 },
-    { code: 'BC041', name: 'Curriculum Disestablishment',           familyCode: 'LT', sortOrder: 41 },
+    { code: 'BC001', name: 'Curriculum Planning',                   domainCode: 'LT', sortOrder: 1  },
+    { code: 'BC002', name: 'Curriculum Design',                     domainCode: 'LT', sortOrder: 2  },
+    { code: 'BC003', name: 'Curriculum Production',                 domainCode: 'LT', sortOrder: 3  },
+    { code: 'BC004', name: 'Curriculum Review',                     domainCode: 'LT', sortOrder: 4  },
+    { code: 'BC005', name: 'Curriculum Accreditation',              domainCode: 'LT', sortOrder: 5  },
+    { code: 'BC006', name: 'Programme of Learning Design',          domainCode: 'LT', sortOrder: 6  },
+    { code: 'BC007', name: 'Programme of Learning Accreditation',   domainCode: 'LT', sortOrder: 7  },
+    { code: 'BC008', name: 'Student Recruitment',                   domainCode: 'LT', sortOrder: 8  },
+    { code: 'BC009', name: 'Admissions Management',                 domainCode: 'LT', sortOrder: 9  },
+    { code: 'BC010', name: 'Student Onboarding',                    domainCode: 'LT', sortOrder: 10 },
+    { code: 'BC011', name: 'Enrolment',                             domainCode: 'LT', sortOrder: 11 },
+    { code: 'BC012', name: 'Student Allocation',                    domainCode: 'LT', sortOrder: 12 },
+    { code: 'BC013', name: 'Timetabling',                           domainCode: 'LT', sortOrder: 13 },
+    { code: 'BC014', name: 'Learning & Teaching Delivery',          domainCode: 'LT', sortOrder: 14 },
+    { code: 'BC015', name: 'Student Attendance Management',         domainCode: 'LT', sortOrder: 15 },
+    { code: 'BC016', name: 'Student Progress Management',           domainCode: 'LT', sortOrder: 16 },
+    { code: 'BC017', name: 'Student Wellbeing Management',          domainCode: 'LT', sortOrder: 17 },
+    { code: 'BC018', name: 'Student Financial Support',             domainCode: 'LT', sortOrder: 18 },
+    { code: 'BC019', name: 'Student Accommodation Management',      domainCode: 'LT', sortOrder: 19 },
+    { code: 'BC020', name: 'Student Engagement Management',         domainCode: 'LT', sortOrder: 20 },
+    { code: 'BC021', name: 'Student Employability Management',      domainCode: 'LT', sortOrder: 21 },
+    { code: 'BC022', name: 'Student Conduct Management',            domainCode: 'LT', sortOrder: 22 },
+    { code: 'BC023', name: 'Student Accessibility & Inclusion',     domainCode: 'LT', sortOrder: 23 },
+    { code: 'BC024', name: 'Learning & Teaching Resource Preparation', domainCode: 'LT', sortOrder: 24 },
+    { code: 'BC025', name: 'Learning & Teaching Resource Management',  domainCode: 'LT', sortOrder: 25 },
+    { code: 'BC026', name: 'Learning Environment Management',       domainCode: 'LT', sortOrder: 26 },
+    { code: 'BC027', name: 'Work-Integrated Learning',              domainCode: 'LT', sortOrder: 27 },
+    { code: 'BC028', name: 'Credit Management',                     domainCode: 'LT', sortOrder: 28 },
+    { code: 'BC029', name: 'Learning Assessment',                   domainCode: 'LT', sortOrder: 29 },
+    { code: 'BC030', name: 'Learning Assessment Moderation',        domainCode: 'LT', sortOrder: 30 },
+    { code: 'BC031', name: 'Student Research Assessment',           domainCode: 'LT', sortOrder: 31 },
+    { code: 'BC032', name: 'Academic Integrity Management',         domainCode: 'LT', sortOrder: 32 },
+    { code: 'BC033', name: 'Graduation & Completion',               domainCode: 'LT', sortOrder: 33 },
+    { code: 'BC034', name: 'Alumni Management',                     domainCode: 'LT', sortOrder: 34 },
+    { code: 'BC035', name: 'Learning & Teaching Quality Assurance', domainCode: 'LT', sortOrder: 35 },
+    { code: 'BC036', name: 'Student Feedback Management',           domainCode: 'LT', sortOrder: 36 },
+    { code: 'BC037', name: 'Learning Analytics',                    domainCode: 'LT', sortOrder: 37 },
+    { code: 'BC038', name: 'Micro-credential Management',           domainCode: 'LT', sortOrder: 38 },
+    { code: 'BC039', name: 'Recognition of Prior Learning',         domainCode: 'LT', sortOrder: 39 },
+    { code: 'BC040', name: 'Student Exchange Management',           domainCode: 'LT', sortOrder: 40 },
+    { code: 'BC041', name: 'Curriculum Disestablishment',           domainCode: 'LT', sortOrder: 41 },
 
     // Research (RE) — BC050-BC074
-    { code: 'BC050', name: 'Research Strategy Management',          familyCode: 'RE', sortOrder: 50 },
-    { code: 'BC051', name: 'Research Funding Management',           familyCode: 'RE', sortOrder: 51 },
-    { code: 'BC052', name: 'Research Partnership Management',       familyCode: 'RE', sortOrder: 52 },
-    { code: 'BC053', name: 'Research Ethics Management',            familyCode: 'RE', sortOrder: 53 },
-    { code: 'BC054', name: 'Research Compliance Management',        familyCode: 'RE', sortOrder: 54 },
-    { code: 'BC055', name: 'Research Programme Management',         familyCode: 'RE', sortOrder: 55 },
-    { code: 'BC056', name: 'Research Project Management',           familyCode: 'RE', sortOrder: 56 },
-    { code: 'BC057', name: 'Research Data Management',              familyCode: 'RE', sortOrder: 57 },
-    { code: 'BC058', name: 'Research Infrastructure Management',    familyCode: 'RE', sortOrder: 58 },
-    { code: 'BC059', name: 'Research Resource Management',          familyCode: 'RE', sortOrder: 59 },
-    { code: 'BC060', name: 'Research Supervision',                  familyCode: 'RE', sortOrder: 60 },
-    { code: 'BC061', name: 'Research Output Management',            familyCode: 'RE', sortOrder: 61 },
-    { code: 'BC062', name: 'Research Publication Management',       familyCode: 'RE', sortOrder: 62 },
-    { code: 'BC063', name: 'Research Commercialisation',            familyCode: 'RE', sortOrder: 63 },
-    { code: 'BC064', name: 'Research Impact Assessment',            familyCode: 'RE', sortOrder: 64 },
-    { code: 'BC065', name: 'Research Performance Management',       familyCode: 'RE', sortOrder: 65 },
-    { code: 'BC066', name: 'Research Recognition & Awards',         familyCode: 'RE', sortOrder: 66 },
-    { code: 'BC067', name: 'Knowledge Transfer',                    familyCode: 'RE', sortOrder: 67 },
-    { code: 'BC068', name: 'Innovation Management',                 familyCode: 'RE', sortOrder: 68 },
-    { code: 'BC069', name: 'Open Access Management',                familyCode: 'RE', sortOrder: 69 },
-    { code: 'BC070', name: 'Research Integrity Management',         familyCode: 'RE', sortOrder: 70 },
-    { code: 'BC071', name: 'HDR Candidature Management',            familyCode: 'RE', sortOrder: 71 },
-    { code: 'BC072', name: 'Research Collaboration Platform Management', familyCode: 'RE', sortOrder: 72 },
-    { code: 'BC073', name: 'Bibliometric Analysis',                 familyCode: 'RE', sortOrder: 73 },
-    { code: 'BC074', name: 'Research Reporting',                    familyCode: 'RE', sortOrder: 74 },
+    { code: 'BC050', name: 'Research Strategy Management',          domainCode: 'RE', sortOrder: 50 },
+    { code: 'BC051', name: 'Research Funding Management',           domainCode: 'RE', sortOrder: 51 },
+    { code: 'BC052', name: 'Research Partnership Management',       domainCode: 'RE', sortOrder: 52 },
+    { code: 'BC053', name: 'Research Ethics Management',            domainCode: 'RE', sortOrder: 53 },
+    { code: 'BC054', name: 'Research Compliance Management',        domainCode: 'RE', sortOrder: 54 },
+    { code: 'BC055', name: 'Research Programme Management',         domainCode: 'RE', sortOrder: 55 },
+    { code: 'BC056', name: 'Research Project Management',           domainCode: 'RE', sortOrder: 56 },
+    { code: 'BC057', name: 'Research Data Management',              domainCode: 'RE', sortOrder: 57 },
+    { code: 'BC058', name: 'Research Infrastructure Management',    domainCode: 'RE', sortOrder: 58 },
+    { code: 'BC059', name: 'Research Resource Management',          domainCode: 'RE', sortOrder: 59 },
+    { code: 'BC060', name: 'Research Supervision',                  domainCode: 'RE', sortOrder: 60 },
+    { code: 'BC061', name: 'Research Output Management',            domainCode: 'RE', sortOrder: 61 },
+    { code: 'BC062', name: 'Research Publication Management',       domainCode: 'RE', sortOrder: 62 },
+    { code: 'BC063', name: 'Research Commercialisation',            domainCode: 'RE', sortOrder: 63 },
+    { code: 'BC064', name: 'Research Impact Assessment',            domainCode: 'RE', sortOrder: 64 },
+    { code: 'BC065', name: 'Research Performance Management',       domainCode: 'RE', sortOrder: 65 },
+    { code: 'BC066', name: 'Research Recognition & Awards',         domainCode: 'RE', sortOrder: 66 },
+    { code: 'BC067', name: 'Knowledge Transfer',                    domainCode: 'RE', sortOrder: 67 },
+    { code: 'BC068', name: 'Innovation Management',                 domainCode: 'RE', sortOrder: 68 },
+    { code: 'BC069', name: 'Open Access Management',                domainCode: 'RE', sortOrder: 69 },
+    { code: 'BC070', name: 'Research Integrity Management',         domainCode: 'RE', sortOrder: 70 },
+    { code: 'BC071', name: 'HDR Candidature Management',            domainCode: 'RE', sortOrder: 71 },
+    { code: 'BC072', name: 'Research Collaboration Platform Management', domainCode: 'RE', sortOrder: 72 },
+    { code: 'BC073', name: 'Bibliometric Analysis',                 domainCode: 'RE', sortOrder: 73 },
+    { code: 'BC074', name: 'Research Reporting',                    domainCode: 'RE', sortOrder: 74 },
 
     // Strategy & Governance (SG) — BC080-BC091
-    { code: 'BC080', name: 'Vision & Strategy Management',          familyCode: 'SG', sortOrder: 80 },
-    { code: 'BC081', name: 'Strategic Plan Management',             familyCode: 'SG', sortOrder: 81 },
-    { code: 'BC082', name: 'Business Capability Management',        familyCode: 'SG', sortOrder: 82 },
-    { code: 'BC083', name: 'Enterprise Architecture',               familyCode: 'SG', sortOrder: 83 },
-    { code: 'BC084', name: 'Policy Management',                     familyCode: 'SG', sortOrder: 84 },
-    { code: 'BC085', name: 'Risk Management',                       familyCode: 'SG', sortOrder: 85 },
-    { code: 'BC086', name: 'Compliance Management',                 familyCode: 'SG', sortOrder: 86 },
-    { code: 'BC087', name: 'Audit Management',                      familyCode: 'SG', sortOrder: 87 },
-    { code: 'BC088', name: 'Quality Assurance Management',          familyCode: 'SG', sortOrder: 88 },
-    { code: 'BC089', name: 'Benefits Management',                   familyCode: 'SG', sortOrder: 89 },
-    { code: 'BC090', name: 'Organisational Design',                 familyCode: 'SG', sortOrder: 90 },
-    { code: 'BC091', name: 'Performance Management',                familyCode: 'SG', sortOrder: 91 },
+    { code: 'BC080', name: 'Vision & Strategy Management',          domainCode: 'SG', sortOrder: 80 },
+    { code: 'BC081', name: 'Strategic Plan Management',             domainCode: 'SG', sortOrder: 81 },
+    { code: 'BC082', name: 'Business Capability Management',        domainCode: 'SG', sortOrder: 82 },
+    { code: 'BC083', name: 'Enterprise Architecture',               domainCode: 'SG', sortOrder: 83 },
+    { code: 'BC084', name: 'Policy Management',                     domainCode: 'SG', sortOrder: 84 },
+    { code: 'BC085', name: 'Risk Management',                       domainCode: 'SG', sortOrder: 85 },
+    { code: 'BC086', name: 'Compliance Management',                 domainCode: 'SG', sortOrder: 86 },
+    { code: 'BC087', name: 'Audit Management',                      domainCode: 'SG', sortOrder: 87 },
+    { code: 'BC088', name: 'Quality Assurance Management',          domainCode: 'SG', sortOrder: 88 },
+    { code: 'BC089', name: 'Benefits Management',                   domainCode: 'SG', sortOrder: 89 },
+    { code: 'BC090', name: 'Organisational Design',                 domainCode: 'SG', sortOrder: 90 },
+    { code: 'BC091', name: 'Performance Management',                domainCode: 'SG', sortOrder: 91 },
 
     // Financial Management (FM) — BC100-BC110, BC194
-    { code: 'BC100', name: 'Financial Planning & Budgeting',        familyCode: 'FM', sortOrder: 100 },
-    { code: 'BC101', name: 'Accounts Payable',                      familyCode: 'FM', sortOrder: 101 },
-    { code: 'BC102', name: 'Accounts Receivable',                   familyCode: 'FM', sortOrder: 102 },
-    { code: 'BC103', name: 'General Accounting',                    familyCode: 'FM', sortOrder: 103 },
-    { code: 'BC104', name: 'Price Modelling',                       familyCode: 'FM', sortOrder: 104 },
-    { code: 'BC105', name: 'Tax Management',                        familyCode: 'FM', sortOrder: 105 },
-    { code: 'BC106', name: 'Payroll Management',                    familyCode: 'FM', sortOrder: 106 },
-    { code: 'BC107', name: 'Treasury Management',                   familyCode: 'FM', sortOrder: 107 },
-    { code: 'BC108', name: 'Investment Management',                 familyCode: 'FM', sortOrder: 108 },
-    { code: 'BC109', name: 'Asset Management',                      familyCode: 'FM', sortOrder: 109 },
-    { code: 'BC110', name: 'Procurement Management',                familyCode: 'FM', sortOrder: 110 },
-    { code: 'BC194', name: 'Project Accounting',                    familyCode: 'FM', sortOrder: 194 },
+    { code: 'BC100', name: 'Financial Planning & Budgeting',        domainCode: 'FM', sortOrder: 100 },
+    { code: 'BC101', name: 'Accounts Payable',                      domainCode: 'FM', sortOrder: 101 },
+    { code: 'BC102', name: 'Accounts Receivable',                   domainCode: 'FM', sortOrder: 102 },
+    { code: 'BC103', name: 'General Accounting',                    domainCode: 'FM', sortOrder: 103 },
+    { code: 'BC104', name: 'Price Modelling',                       domainCode: 'FM', sortOrder: 104 },
+    { code: 'BC105', name: 'Tax Management',                        domainCode: 'FM', sortOrder: 105 },
+    { code: 'BC106', name: 'Payroll Management',                    domainCode: 'FM', sortOrder: 106 },
+    { code: 'BC107', name: 'Treasury Management',                   domainCode: 'FM', sortOrder: 107 },
+    { code: 'BC108', name: 'Investment Management',                 domainCode: 'FM', sortOrder: 108 },
+    { code: 'BC109', name: 'Asset Management',                      domainCode: 'FM', sortOrder: 109 },
+    { code: 'BC110', name: 'Procurement Management',                domainCode: 'FM', sortOrder: 110 },
+    { code: 'BC194', name: 'Project Accounting',                    domainCode: 'FM', sortOrder: 194 },
 
     // Human Resource Management (HR) — BC170-BC182
-    { code: 'BC170', name: 'Organisational Workforce Planning',     familyCode: 'HR', sortOrder: 170 },
-    { code: 'BC171', name: 'Talent Acquisition',                    familyCode: 'HR', sortOrder: 171 },
-    { code: 'BC172', name: 'Workforce Resource Management',         familyCode: 'HR', sortOrder: 172 },
-    { code: 'BC173', name: 'Workforce Relations Management',        familyCode: 'HR', sortOrder: 173 },
-    { code: 'BC174', name: 'Workforce Performance Management',      familyCode: 'HR', sortOrder: 174 },
-    { code: 'BC175', name: 'Remuneration & Benefits Management',    familyCode: 'HR', sortOrder: 175 },
-    { code: 'BC176', name: 'Workforce Support Management',          familyCode: 'HR', sortOrder: 176 },
-    { code: 'BC177', name: 'Leave Management',                      familyCode: 'HR', sortOrder: 177 },
-    { code: 'BC178', name: 'Workforce Separation Management',       familyCode: 'HR', sortOrder: 178 },
-    { code: 'BC182', name: 'Workforce Training & Development',      familyCode: 'HR', sortOrder: 182 },
+    { code: 'BC170', name: 'Organisational Workforce Planning',     domainCode: 'HR', sortOrder: 170 },
+    { code: 'BC171', name: 'Talent Acquisition',                    domainCode: 'HR', sortOrder: 171 },
+    { code: 'BC172', name: 'Workforce Resource Management',         domainCode: 'HR', sortOrder: 172 },
+    { code: 'BC173', name: 'Workforce Relations Management',        domainCode: 'HR', sortOrder: 173 },
+    { code: 'BC174', name: 'Workforce Performance Management',      domainCode: 'HR', sortOrder: 174 },
+    { code: 'BC175', name: 'Remuneration & Benefits Management',    domainCode: 'HR', sortOrder: 175 },
+    { code: 'BC176', name: 'Workforce Support Management',          domainCode: 'HR', sortOrder: 176 },
+    { code: 'BC177', name: 'Leave Management',                      domainCode: 'HR', sortOrder: 177 },
+    { code: 'BC178', name: 'Workforce Separation Management',       domainCode: 'HR', sortOrder: 178 },
+    { code: 'BC182', name: 'Workforce Training & Development',      domainCode: 'HR', sortOrder: 182 },
 
     // ICT Management (ICT) — BC120-BC130
-    { code: 'BC120', name: 'ICT Strategy & Planning',               familyCode: 'ICT', sortOrder: 120 },
-    { code: 'BC121', name: 'Application Management',                familyCode: 'ICT', sortOrder: 121 },
-    { code: 'BC122', name: 'Infrastructure Management',             familyCode: 'ICT', sortOrder: 122 },
-    { code: 'BC123', name: 'Identity & Access Management',          familyCode: 'ICT', sortOrder: 123 },
-    { code: 'BC124', name: 'Information Security Management',       familyCode: 'ICT', sortOrder: 124 },
-    { code: 'BC125', name: 'Service Management',                    familyCode: 'ICT', sortOrder: 125 },
-    { code: 'BC126', name: 'Enterprise Content Management',         familyCode: 'ICT', sortOrder: 126 },
-    { code: 'BC127', name: 'Records Management',                    familyCode: 'ICT', sortOrder: 127 },
-    { code: 'BC128', name: 'Digital Workplace Management',          familyCode: 'ICT', sortOrder: 128 },
-    { code: 'BC129', name: 'Data Integration & Interoperability',   familyCode: 'ICT', sortOrder: 129 },
-    { code: 'BC130', name: 'ICT Vendor Management',                 familyCode: 'ICT', sortOrder: 130 },
+    { code: 'BC120', name: 'ICT Strategy & Planning',               domainCode: 'ICT', sortOrder: 120 },
+    { code: 'BC121', name: 'Application Management',                domainCode: 'ICT', sortOrder: 121 },
+    { code: 'BC122', name: 'Infrastructure Management',             domainCode: 'ICT', sortOrder: 122 },
+    { code: 'BC123', name: 'Identity & Access Management',          domainCode: 'ICT', sortOrder: 123 },
+    { code: 'BC124', name: 'Information Security Management',       domainCode: 'ICT', sortOrder: 124 },
+    { code: 'BC125', name: 'Service Management',                    domainCode: 'ICT', sortOrder: 125 },
+    { code: 'BC126', name: 'Enterprise Content Management',         domainCode: 'ICT', sortOrder: 126 },
+    { code: 'BC127', name: 'Records Management',                    domainCode: 'ICT', sortOrder: 127 },
+    { code: 'BC128', name: 'Digital Workplace Management',          domainCode: 'ICT', sortOrder: 128 },
+    { code: 'BC129', name: 'Data Integration & Interoperability',   domainCode: 'ICT', sortOrder: 129 },
+    { code: 'BC130', name: 'ICT Vendor Management',                 domainCode: 'ICT', sortOrder: 130 },
 
     // Facilities & Estate Management (FE)
-    { code: 'BC116', name: 'Gallery & Museum Management',           familyCode: 'FE', sortOrder: 116 },
-    { code: 'BC117', name: 'Childcare Management',                  familyCode: 'FE', sortOrder: 117 },
-    { code: 'BC118', name: 'Healthcare Management',                 familyCode: 'FE', sortOrder: 118 },
-    { code: 'BC131', name: 'Cleaning & Waste Management',           familyCode: 'FE', sortOrder: 131 },
-    { code: 'BC132', name: 'Facilities Maintenance Management',     familyCode: 'FE', sortOrder: 132 },
-    { code: 'BC133', name: 'Property Management',                   familyCode: 'FE', sortOrder: 133 },
-    { code: 'BC134', name: 'Collection Access Management',          familyCode: 'FE', sortOrder: 134 },
-    { code: 'BC135', name: 'Campus Transportation Management',      familyCode: 'FE', sortOrder: 135 },
-    { code: 'BC136', name: 'Information Governance',                familyCode: 'FE', sortOrder: 136 },
-    { code: 'BC137', name: 'Campus Housing & Accommodation Management', familyCode: 'FE', sortOrder: 137 },
-    { code: 'BC138', name: 'Space Utilisation Management',          familyCode: 'FE', sortOrder: 138 },
-    { code: 'BC139', name: 'Campus Security Management',            familyCode: 'FE', sortOrder: 139 },
-    { code: 'BC140', name: 'Groundskeeping Management',             familyCode: 'FE', sortOrder: 140 },
-    { code: 'BC141', name: 'Environmental Sustainability Management', familyCode: 'FE', sortOrder: 141 },
-    { code: 'BC142', name: 'Health Safety & Wellbeing Management',  familyCode: 'FE', sortOrder: 142 },
+    { code: 'BC116', name: 'Gallery & Museum Management',           domainCode: 'FE', sortOrder: 116 },
+    { code: 'BC117', name: 'Childcare Management',                  domainCode: 'FE', sortOrder: 117 },
+    { code: 'BC118', name: 'Healthcare Management',                 domainCode: 'FE', sortOrder: 118 },
+    { code: 'BC131', name: 'Cleaning & Waste Management',           domainCode: 'FE', sortOrder: 131 },
+    { code: 'BC132', name: 'Facilities Maintenance Management',     domainCode: 'FE', sortOrder: 132 },
+    { code: 'BC133', name: 'Property Management',                   domainCode: 'FE', sortOrder: 133 },
+    { code: 'BC134', name: 'Collection Access Management',          domainCode: 'FE', sortOrder: 134 },
+    { code: 'BC135', name: 'Campus Transportation Management',      domainCode: 'FE', sortOrder: 135 },
+    { code: 'BC136', name: 'Information Governance',                domainCode: 'FE', sortOrder: 136 },
+    { code: 'BC137', name: 'Campus Housing & Accommodation Management', domainCode: 'FE', sortOrder: 137 },
+    { code: 'BC138', name: 'Space Utilisation Management',          domainCode: 'FE', sortOrder: 138 },
+    { code: 'BC139', name: 'Campus Security Management',            domainCode: 'FE', sortOrder: 139 },
+    { code: 'BC140', name: 'Groundskeeping Management',             domainCode: 'FE', sortOrder: 140 },
+    { code: 'BC141', name: 'Environmental Sustainability Management', domainCode: 'FE', sortOrder: 141 },
+    { code: 'BC142', name: 'Health Safety & Wellbeing Management',  domainCode: 'FE', sortOrder: 142 },
 
     // Engagement & Communication (EC)
-    { code: 'BC150', name: 'Communications Management',             familyCode: 'EC', sortOrder: 150 },
-    { code: 'BC151', name: 'Engagement Management',                 familyCode: 'EC', sortOrder: 151 },
-    { code: 'BC152', name: 'Relationship Management',               familyCode: 'EC', sortOrder: 152 },
-    { code: 'BC153', name: 'Customer Experience Management',        familyCode: 'EC', sortOrder: 153 },
-    { code: 'BC154', name: 'Event Management',                      familyCode: 'EC', sortOrder: 154 },
-    { code: 'BC155', name: 'Venue Management',                      familyCode: 'EC', sortOrder: 155 },
-    { code: 'BC156', name: 'Fundraising & Development',             familyCode: 'EC', sortOrder: 156 },
-    { code: 'BC157', name: 'Brand Management',                      familyCode: 'EC', sortOrder: 157 },
-    { code: 'BC158', name: 'Media Production Management',           familyCode: 'EC', sortOrder: 158 },
-    { code: 'BC166', name: 'Complaint & Compliment Management',     familyCode: 'EC', sortOrder: 166 },
-    { code: 'BC233', name: 'Donor Sponsor & Philanthropist Management', familyCode: 'EC', sortOrder: 233 },
+    { code: 'BC150', name: 'Communications Management',             domainCode: 'EC', sortOrder: 150 },
+    { code: 'BC151', name: 'Engagement Management',                 domainCode: 'EC', sortOrder: 151 },
+    { code: 'BC152', name: 'Relationship Management',               domainCode: 'EC', sortOrder: 152 },
+    { code: 'BC153', name: 'Customer Experience Management',        domainCode: 'EC', sortOrder: 153 },
+    { code: 'BC154', name: 'Event Management',                      domainCode: 'EC', sortOrder: 154 },
+    { code: 'BC155', name: 'Venue Management',                      domainCode: 'EC', sortOrder: 155 },
+    { code: 'BC156', name: 'Fundraising & Development',             domainCode: 'EC', sortOrder: 156 },
+    { code: 'BC157', name: 'Brand Management',                      domainCode: 'EC', sortOrder: 157 },
+    { code: 'BC158', name: 'Media Production Management',           domainCode: 'EC', sortOrder: 158 },
+    { code: 'BC166', name: 'Complaint & Compliment Management',     domainCode: 'EC', sortOrder: 166 },
+    { code: 'BC233', name: 'Donor Sponsor & Philanthropist Management', domainCode: 'EC', sortOrder: 233 },
 
     // Information Management (IM) — BC160-BC164
-    { code: 'BC160', name: 'Business Intelligence & Reporting',     familyCode: 'IM', sortOrder: 160 },
-    { code: 'BC161', name: 'Advanced Analytics',                    familyCode: 'IM', sortOrder: 161 },
-    { code: 'BC162', name: 'Data Management',                       familyCode: 'IM', sortOrder: 162 },
-    { code: 'BC163', name: 'Data Governance',                       familyCode: 'IM', sortOrder: 163 },
-    { code: 'BC164', name: 'Institutional Research',                familyCode: 'IM', sortOrder: 164 },
+    { code: 'BC160', name: 'Business Intelligence & Reporting',     domainCode: 'IM', sortOrder: 160 },
+    { code: 'BC161', name: 'Advanced Analytics',                    domainCode: 'IM', sortOrder: 161 },
+    { code: 'BC162', name: 'Data Management',                       domainCode: 'IM', sortOrder: 162 },
+    { code: 'BC163', name: 'Data Governance',                       domainCode: 'IM', sortOrder: 163 },
+    { code: 'BC164', name: 'Institutional Research',                domainCode: 'IM', sortOrder: 164 },
 
     // Legal & Compliance (LC)
-    { code: 'BC190', name: 'Legal Advisory',                        familyCode: 'LC', sortOrder: 190 },
-    { code: 'BC191', name: 'Contract Management',                   familyCode: 'LC', sortOrder: 191 },
-    { code: 'BC192', name: 'Intellectual Property Management',      familyCode: 'LC', sortOrder: 192 },
-    { code: 'BC193', name: 'Regulatory Affairs Management',         familyCode: 'LC', sortOrder: 193 },
-    { code: 'BC226', name: 'Student Grievance Management',          familyCode: 'LC', sortOrder: 226 },
+    { code: 'BC190', name: 'Legal Advisory',                        domainCode: 'LC', sortOrder: 190 },
+    { code: 'BC191', name: 'Contract Management',                   domainCode: 'LC', sortOrder: 191 },
+    { code: 'BC192', name: 'Intellectual Property Management',      domainCode: 'LC', sortOrder: 192 },
+    { code: 'BC193', name: 'Regulatory Affairs Management',         domainCode: 'LC', sortOrder: 193 },
+    { code: 'BC226', name: 'Student Grievance Management',          domainCode: 'LC', sortOrder: 226 },
 
     // Supporting Services (SS) — BC200-BC217
-    { code: 'BC200', name: 'Project Management',                    familyCode: 'SS', sortOrder: 200 },
-    { code: 'BC201', name: 'Programme Management',                  familyCode: 'SS', sortOrder: 201 },
-    { code: 'BC202', name: 'Business Process Management',           familyCode: 'SS', sortOrder: 202 },
-    { code: 'BC203', name: 'Change Management',                     familyCode: 'SS', sortOrder: 203 },
-    { code: 'BC204', name: 'Commercial Tenancy Management',         familyCode: 'SS', sortOrder: 204 },
-    { code: 'BC205', name: 'Retail Management',                     familyCode: 'SS', sortOrder: 205 },
-    { code: 'BC206', name: 'Travel Management',                     familyCode: 'SS', sortOrder: 206 },
-    { code: 'BC207', name: 'Printing Management',                   familyCode: 'SS', sortOrder: 207 },
-    { code: 'BC208', name: 'Mail Management',                       familyCode: 'SS', sortOrder: 208 },
-    { code: 'BC209', name: 'Membership Management',                 familyCode: 'SS', sortOrder: 209 },
-    { code: 'BC210', name: 'Sport & Recreation Management',         familyCode: 'SS', sortOrder: 210 },
-    { code: 'BC211', name: 'Intercollegiate Athletics Management',  familyCode: 'SS', sortOrder: 211 },
-    { code: 'BC212', name: 'Fleet Management',                      familyCode: 'SS', sortOrder: 212 },
-    { code: 'BC213', name: 'Artefact & Collection Management',      familyCode: 'SS', sortOrder: 213 },
-    { code: 'BC214', name: 'Digital Preservation Management',       familyCode: 'SS', sortOrder: 214 },
-    { code: 'BC215', name: 'Library Management',                    familyCode: 'SS', sortOrder: 215 },
-    { code: 'BC216', name: 'Insurance Management',                  familyCode: 'SS', sortOrder: 216 },
-    { code: 'BC217', name: 'Service Level Management',              familyCode: 'SS', sortOrder: 217 },
+    { code: 'BC200', name: 'Project Management',                    domainCode: 'SS', sortOrder: 200 },
+    { code: 'BC201', name: 'Programme Management',                  domainCode: 'SS', sortOrder: 201 },
+    { code: 'BC202', name: 'Business Process Management',           domainCode: 'SS', sortOrder: 202 },
+    { code: 'BC203', name: 'Change Management',                     domainCode: 'SS', sortOrder: 203 },
+    { code: 'BC204', name: 'Commercial Tenancy Management',         domainCode: 'SS', sortOrder: 204 },
+    { code: 'BC205', name: 'Retail Management',                     domainCode: 'SS', sortOrder: 205 },
+    { code: 'BC206', name: 'Travel Management',                     domainCode: 'SS', sortOrder: 206 },
+    { code: 'BC207', name: 'Printing Management',                   domainCode: 'SS', sortOrder: 207 },
+    { code: 'BC208', name: 'Mail Management',                       domainCode: 'SS', sortOrder: 208 },
+    { code: 'BC209', name: 'Membership Management',                 domainCode: 'SS', sortOrder: 209 },
+    { code: 'BC210', name: 'Sport & Recreation Management',         domainCode: 'SS', sortOrder: 210 },
+    { code: 'BC211', name: 'Intercollegiate Athletics Management',  domainCode: 'SS', sortOrder: 211 },
+    { code: 'BC212', name: 'Fleet Management',                      domainCode: 'SS', sortOrder: 212 },
+    { code: 'BC213', name: 'Artefact & Collection Management',      domainCode: 'SS', sortOrder: 213 },
+    { code: 'BC214', name: 'Digital Preservation Management',       domainCode: 'SS', sortOrder: 214 },
+    { code: 'BC215', name: 'Library Management',                    domainCode: 'SS', sortOrder: 215 },
+    { code: 'BC216', name: 'Insurance Management',                  domainCode: 'SS', sortOrder: 216 },
+    { code: 'BC217', name: 'Service Level Management',              domainCode: 'SS', sortOrder: 217 },
   ];
 
   const capabilityMap: Record<string, string> = {};
   for (const c of capabilitiesData) {
-    const cap = await prisma.hermCapability.create({
+    const cap = await prisma.capability.create({
       data: {
         code: c.code,
         name: c.name,
-        familyId: familyMap[c.familyCode],
+        frameworkId: hermFramework.id,
+        domainId: domainMap[c.domainCode],
         sortOrder: c.sortOrder,
       },
     });
@@ -331,8 +371,9 @@ async function main() {
       const capId = capabilityMap[code];
       if (!capId) continue;
       const value = scores[code] ?? 0;
-      await prisma.score.create({
+      await prisma.capabilityScore.create({
         data: {
+          frameworkId: hermFramework.id,
           systemId,
           capabilityId: capId,
           value,
@@ -349,6 +390,21 @@ async function main() {
   const { seedVendorProfiles } = await import('./seeds/vendor-profiles');
   await seedVendorProfiles(prisma);
   console.log('Vendor profiles seeded');
+
+  // Populate FHE Capability Framework domains and capabilities
+  const { seedFheFramework } = await import('./seeds/fhe-framework');
+  await seedFheFramework(prisma);
+  console.log('FHE framework seeded');
+
+  // Seed deterministic FHE capability scores (21 systems × 118 capabilities)
+  // Must run AFTER vendor systems are created and FHE framework is populated.
+  const { seedFheScores } = await import('./seeds/fhe-scores');
+  await seedFheScores(prisma);
+  console.log('FHE scores seeded');
+
+  // Seed the HERM v3.1 → FHE v1.0 cross-framework mapping (Enterprise tier)
+  const { seedFrameworkMappings } = await import('./seeds/framework-mappings');
+  await seedFrameworkMappings(prisma);
 
   // ── Demo institution & user ──────────────────────────────────────────────
   const demoInstitution = await prisma.institution.upsert({
@@ -385,6 +441,60 @@ async function main() {
     },
   });
   console.log('Demo user seeded — demo@demo-university.ac.uk / demo12345');
+
+  // ── Demo capability basket ────────────────────────────────────────────────
+  const demoBasket = await prisma.capabilityBasket.upsert({
+    where: { id: 'demo-basket-001' },
+    update: {},
+    create: {
+      id: 'demo-basket-001',
+      name: 'Core SIS Evaluation',
+      description: 'Standard basket for evaluating Student Information System capabilities across core HERM domains.',
+      frameworkId: hermFramework.id,
+      institutionId: demoInstitution.id,
+      createdById: 'seed',
+      isTemplate: false,
+    },
+  });
+
+  // Add basket items for key capabilities — codes follow BC### pattern from HERM seed
+  const coreCodes = ['BC008', 'BC009', 'BC011', 'BC016', 'BC029', 'BC028', 'BC060', 'BC090'];
+  const coreCaps = await prisma.capability.findMany({
+    where: { code: { in: coreCodes } },
+    select: { id: true, code: true },
+  });
+
+  for (const cap of coreCaps) {
+    await prisma.basketItem.upsert({
+      where: { basketId_capabilityId: { basketId: demoBasket.id, capabilityId: cap.id } },
+      update: {},
+      create: {
+        basketId: demoBasket.id,
+        capabilityId: cap.id,
+        priority: 'must',
+        weight: 3,
+      },
+    });
+  }
+  console.log(`Demo basket seeded with ${coreCaps.length} capabilities`);
+
+  // ── Demo procurement project ──────────────────────────────────────────────
+  await prisma.procurementProject.upsert({
+    where: { id: 'demo-project-001' },
+    update: {},
+    create: {
+      id: 'demo-project-001',
+      name: 'SIS Replacement Programme 2026',
+      description: 'Full procurement exercise to replace the legacy student information system.',
+      institutionId: demoInstitution.id,
+      status: 'draft',
+      basketId: demoBasket.id,
+      jurisdiction: 'UK',
+      estimatedValue: 2500000,
+      procurementRoute: 'open',
+    },
+  });
+  console.log('Demo procurement project seeded');
 
   console.log('Seeding complete!');
 }

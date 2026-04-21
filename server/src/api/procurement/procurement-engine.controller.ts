@@ -146,13 +146,13 @@ export const addEvaluation = async (req: Request, res: Response, next: NextFunct
     const data = addEvaluationSchema.parse(req.body);
     const evaluation = await prisma.procurementEvaluation.upsert({
       where: { projectId_systemId_evaluatorId: { projectId: req.params['id'] as string, systemId: data.systemId, evaluatorId: req.user?.userId ?? 'anonymous' } },
-      update: { weightingProfile: (data.weightingProfile ?? { herm: 40, technical: 25, commercial: 20, implementation: 10, reference: 5 }) as unknown as import('@prisma/client').Prisma.InputJsonValue },
+      update: { weightingProfile: (data.weightingProfile ?? { framework: 40, technical: 25, commercial: 20, implementation: 10, reference: 5 }) as unknown as import('@prisma/client').Prisma.InputJsonValue },
       create: {
         projectId: req.params['id'] as string,
         systemId: data.systemId,
         evaluatorId: req.user?.userId ?? 'anonymous',
         evaluatorName: data.evaluatorName ?? req.user?.name ?? 'Evaluator',
-        weightingProfile: (data.weightingProfile ?? { herm: 40, technical: 25, commercial: 20, implementation: 10, reference: 5 }) as unknown as import('@prisma/client').Prisma.InputJsonValue,
+        weightingProfile: (data.weightingProfile ?? { framework: 40, technical: 25, commercial: 20, implementation: 10, reference: 5 }) as unknown as import('@prisma/client').Prisma.InputJsonValue,
       },
       include: { system: { select: { id: true, name: true, vendor: true } } },
     });
@@ -180,15 +180,15 @@ export const updateEvaluation = async (req: Request, res: Response, next: NextFu
     if (!existing) throw new NotFoundError('Evaluation not found');
 
     // Auto-calculate overall score
-    const wp = (data.weightingProfile ?? existing.weightingProfile ?? { herm: 40, technical: 25, commercial: 20, implementation: 10, reference: 5 }) as Record<string, number>;
-    const hermScore = Number(data.hermScore ?? existing.hermScore ?? 0);
+    const wp = (data.weightingProfile ?? existing.weightingProfile ?? { framework: 40, technical: 25, commercial: 20, implementation: 10, reference: 5 }) as Record<string, number>;
+    const frameworkScore = Number(data.frameworkScore ?? existing.frameworkScore ?? 0);
     const technicalScore = Number(data.technicalScore ?? existing.technicalScore ?? 0);
     const commercialScore = Number(data.commercialScore ?? existing.commercialScore ?? 0);
     const implementationScore = Number(data.implementationScore ?? existing.implementationScore ?? 0);
     const referenceScore = Number(data.referenceScore ?? existing.referenceScore ?? 0);
 
     const overallScore = (
-      hermScore * (wp['herm'] ?? 40) +
+      frameworkScore * (wp['framework'] ?? 40) +
       technicalScore * (wp['technical'] ?? 25) +
       commercialScore * (wp['commercial'] ?? 20) +
       implementationScore * (wp['implementation'] ?? 10) +
@@ -200,7 +200,7 @@ export const updateEvaluation = async (req: Request, res: Response, next: NextFu
     const updated = await prisma.procurementEvaluation.update({
       where: { id: req.params['evalId'] as string },
       data: {
-        hermScore: data.hermScore ?? undefined,
+        frameworkScore: data.frameworkScore ?? undefined,
         technicalScore: data.technicalScore ?? undefined,
         commercialScore: data.commercialScore ?? undefined,
         implementationScore: data.implementationScore ?? undefined,
@@ -249,7 +249,7 @@ export const getSpecification = async (req: Request, res: Response, next: NextFu
         items: {
           include: {
             capability: {
-              include: { family: true },
+              include: { domain: true },
             },
           },
         },
