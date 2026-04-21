@@ -39,7 +39,7 @@ describe('GET /api/readiness', () => {
     expect(res.status).toBe(503);
     expect(res.body).toMatchObject({
       success: false,
-      data: { status: 'not-ready', checks: { db: 'fail' } },
+      data: { status: 'not_ready', checks: { db: 'fail' } },
     });
   });
 });

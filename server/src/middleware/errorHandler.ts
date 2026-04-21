@@ -4,6 +4,10 @@ import { ZodError } from 'zod';
 import { logger } from '../lib/logger';
 import { AppError } from '../utils/errors';
 
+/**
+ * Maps Prisma known request errors onto our AppError taxonomy so clients see
+ * a consistent error shape. P2025 = record not found, P2002 = unique constraint.
+ */
 function mapPrismaError(err: Prisma.PrismaClientKnownRequestError): AppError {
   if (err.code === 'P2025') {
     return new AppError(404, 'NOT_FOUND', 'Record not found');

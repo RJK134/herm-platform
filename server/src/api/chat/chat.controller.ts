@@ -8,7 +8,6 @@ function requireUser(req: Request): string {
   if (!req.user?.userId) throw new AuthError('Authentication required');
   return req.user.userId;
 }
-
 function requireFrameworkId(req: Request): string {
   if (!req.frameworkId) {
     throw new AppError(

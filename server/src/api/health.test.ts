@@ -31,7 +31,8 @@ describe('health routes', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.status).toBe('ready');
-    expect(res.body.data.checks).toEqual({ db: 'ok' });
+    expect(res.body.data.checks.db).toBe('ok');
+    expect(res.body.data.checks.database.ok).toBe(true);
   });
 
   it('returns 503 when the readiness probe cannot reach the database', async () => {
@@ -39,8 +40,9 @@ describe('health routes', () => {
     const res = await request(app).get('/api/readiness');
     expect(res.status).toBe(503);
     expect(res.body.success).toBe(false);
-    expect(res.body.data.status).toBe('not-ready');
-    expect(res.body.data.checks).toEqual({ db: 'fail' });
+    expect(res.body.data.status).toBe('not_ready');
+    expect(res.body.data.checks.db).toBe('fail');
+    expect(res.body.data.checks.database.ok).toBe(false);
   });
 
   it('exposes /api/ready as a readiness alias', async () => {

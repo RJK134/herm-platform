@@ -20,7 +20,7 @@ function shutdown(signal: string): void {
     logger.error('force-exit after timeout');
     process.exit(1);
   }, 10_000).unref();
-}
+};
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));

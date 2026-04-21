@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import app from '../../app';
-
 const { mockFramework } = vi.hoisted(() => ({
   mockFramework: {
     id: 'fw-herm',
