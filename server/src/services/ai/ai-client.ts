@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { logger } from '../../lib/logger';
+import { AppError } from '../../utils/errors';
 
 /**
  * Centralised AI client. This is the ONLY module allowed to import
@@ -30,16 +31,25 @@ const INJECTION_MARKERS = [
   /<\|im_end\|>/gi,
 ];
 
-export class AiNotConfiguredError extends Error {
+/**
+ * Both AI errors extend AppError so the central errorHandler maps them to
+ * the right HTTP status with the descriptive message preserved (instead of
+ * falling through to the generic 500 branch).
+ */
+export class AiNotConfiguredError extends AppError {
   constructor() {
-    super('AI is not configured on this instance (ANTHROPIC_API_KEY missing)');
+    super(
+      503,
+      'AI_NOT_CONFIGURED',
+      'AI is not configured on this instance (ANTHROPIC_API_KEY missing)',
+    );
     this.name = 'AiNotConfiguredError';
   }
 }
 
-export class AiLimitExceededError extends Error {
+export class AiLimitExceededError extends AppError {
   constructor(what: string) {
-    super(`AI request exceeds limit: ${what}`);
+    super(400, 'AI_LIMIT_EXCEEDED', `AI request exceeds limit: ${what}`);
     this.name = 'AiLimitExceededError';
   }
 }
@@ -48,14 +58,21 @@ export function sanitiseUserInput(raw: string): string {
   // Strip ASCII control characters (C0 + DEL). The literal control-char range
   // in the regex is intentional — that's exactly what we want to remove.
   // eslint-disable-next-line no-control-regex
-  let cleaned = raw.replace(/[\u0000-\u001f\u007f]/g, ' ').trim();
-  for (const marker of INJECTION_MARKERS) {
-    cleaned = cleaned.replace(marker, '[filtered]');
-  }
+  const cleaned = raw.replace(/[\u0000-\u001f\u007f]/g, ' ').trim();
+  // Length check runs against the input the caller actually supplied (after
+  // only non-increasing transformations). Doing this before injection-marker
+  // replacement avoids rejecting legitimate inputs whose post-replacement
+  // length grows past the cap — e.g. `x`.repeat(1996) + 'user:' is 1998 chars
+  // pre-replacement but 2001 chars after 'user:' → '[filtered]'.
   if (cleaned.length > AI_LIMITS.maxInputChars) {
     throw new AiLimitExceededError(`input too long (max ${AI_LIMITS.maxInputChars} chars)`);
   }
-  return cleaned;
+
+  let out = cleaned;
+  for (const marker of INJECTION_MARKERS) {
+    out = out.replace(marker, '[filtered]');
+  }
+  return out;
 }
 
 function getAnthropicClient(): Anthropic | null {

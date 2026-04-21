@@ -40,6 +40,17 @@ export interface ChatParams {
   userId: string;
   userMessage: string;
   requestId?: string;
+  /**
+   * Scope the AI's "current platform context" summary to a single framework.
+   * `CapabilityScore` is framework-scoped — without this filter the summary
+   * would mix scores from HERM + FHE (and any other frameworks) which misleads
+   * the model.
+   *
+   * **Required.** HTTP callers get it from `req.frameworkId` (populated by the
+   * `frameworkContext` middleware, which 404s if no framework is resolvable).
+   * Non-HTTP callers must resolve a framework themselves before calling `chat`.
+   */
+  frameworkId: string;
 }
 
 export async function chat(params: ChatParams): Promise<string> {
@@ -47,7 +58,7 @@ export async function chat(params: ChatParams): Promise<string> {
     return FALLBACK_RESPONSE;
   }
 
-  const { sessionId, userId, requestId } = params;
+  const { sessionId, userId, requestId, frameworkId } = params;
   const userMessage = sanitiseUserInput(params.userMessage);
 
   await assertSessionOwnership(sessionId, userId);
@@ -59,7 +70,14 @@ export async function chat(params: ChatParams): Promise<string> {
   });
 
   const systems = await prisma.vendorSystem.findMany({
-    include: { scores: { select: { value: true } } },
+    include: {
+      // CapabilityScore is framework-scoped; the filter is mandatory to avoid
+      // cross-framework data bleed into the AI prompt context.
+      scores: {
+        where: { frameworkId },
+        select: { value: true },
+      },
+    },
     take: 21,
   });
 

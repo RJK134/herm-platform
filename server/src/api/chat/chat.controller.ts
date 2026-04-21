@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import * as aiAssistant from '../../services/ai/ai-assistant';
-import { AuthError } from '../../utils/errors';
+import { AppError, AuthError } from '../../utils/errors';
 import { ok } from '../../lib/respond';
 
 const sendMessageSchema = z.object({
@@ -22,6 +22,22 @@ function requireUser(req: Request): string {
   return req.user.userId;
 }
 
+/**
+ * `frameworkContext` populates `req.frameworkId` (or 404s before we get here).
+ * If it's still undefined, the router was mis-wired — fail loudly rather than
+ * running an unscoped query that would mix cross-framework scores.
+ */
+function requireFrameworkId(req: Request): string {
+  if (!req.frameworkId) {
+    throw new AppError(
+      500,
+      'INTERNAL_ERROR',
+      'Framework context missing — POST /api/chat must mount frameworkContext middleware',
+    );
+  }
+  return req.frameworkId;
+}
+
 export const sendMessage = async (
   req: Request,
   res: Response,
@@ -29,12 +45,14 @@ export const sendMessage = async (
 ): Promise<void> => {
   try {
     const userId = requireUser(req);
+    const frameworkId = requireFrameworkId(req);
     const { sessionId, message } = sendMessageSchema.parse(req.body);
     const reply = await aiAssistant.chat({
       sessionId,
       userId,
       userMessage: message,
       requestId: String(req.id),
+      frameworkId,
     });
     ok(res, { reply, sessionId });
   } catch (err) {

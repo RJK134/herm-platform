@@ -53,6 +53,39 @@ describe('ai-client governance', () => {
     expect(() => sanitiseUserInput('x'.repeat(5000))).toThrow(/input too long/);
   });
 
+  it('sanitiseUserInput does NOT reject input whose length only grows after marker replacement', async () => {
+    // Regression: previously the length check ran after injection-marker
+    // replacement, which swapped 'user:' (5 chars) for '[filtered]' (10 chars).
+    // With a leading word boundary (space) so the regex matches, 1993 x-chars
+    // + ' user:' is 1999 chars (under the 2000 cap) but became 2004 chars
+    // after replacement, so the old sanitiser threw. It should now pass.
+    const { sanitiseUserInput } = await import('../services/ai/ai-client');
+    const input = 'x'.repeat(1993) + ' user:';
+    expect(input.length).toBeLessThanOrEqual(2000);
+    expect(() => sanitiseUserInput(input)).not.toThrow();
+    const out = sanitiseUserInput(input);
+    expect(out).toContain('[filtered]');
+    expect(out).not.toContain('user:');
+  });
+
+  it('AiLimitExceededError maps to HTTP 400 via AppError', async () => {
+    const { AiLimitExceededError } = await import('../services/ai/ai-client');
+    const { AppError } = await import('../utils/errors');
+    const err = new AiLimitExceededError('input too long');
+    expect(err).toBeInstanceOf(AppError);
+    expect(err.statusCode).toBe(400);
+    expect(err.code).toBe('AI_LIMIT_EXCEEDED');
+  });
+
+  it('AiNotConfiguredError maps to HTTP 503 via AppError', async () => {
+    const { AiNotConfiguredError } = await import('../services/ai/ai-client');
+    const { AppError } = await import('../utils/errors');
+    const err = new AiNotConfiguredError();
+    expect(err).toBeInstanceOf(AppError);
+    expect(err.statusCode).toBe(503);
+    expect(err.code).toBe('AI_NOT_CONFIGURED');
+  });
+
   it('createCompletion refuses non-allowlisted models', async () => {
     const { createCompletion } = await import('../services/ai/ai-client');
     await expect(
