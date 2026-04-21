@@ -4,6 +4,18 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { LogIn, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
+/**
+ * Returns the path if it's a safe same-origin route, otherwise null.
+ * Rejects protocol-relative URLs (`//foo`), absolute URLs (`http://…`),
+ * `javascript:`/`data:` schemes, and anything that doesn't start with `/`.
+ */
+function safeInternalPath(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (!path.startsWith('/')) return null;
+  if (path.startsWith('//') || path.startsWith('/\\')) return null;
+  return path;
+}
+
 export function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -12,8 +24,12 @@ export function Login() {
   //   1. <Navigate state={{from}}> — set by <ProtectedRoute> client-side
   //   2. ?returnTo=<path> — set by the axios 401 interceptor (window.location.href)
   // Prefer the state-based source, fall back to the query param, then '/'.
-  const returnTo = new URLSearchParams(location.search).get('returnTo');
-  const from = (location.state as { from?: string })?.from ?? returnTo ?? '/';
+  // Both are passed through `safeInternalPath` to prevent open-redirects
+  // like `?returnTo=//evil.com` (protocol-relative) or `?returnTo=javascript:…`.
+  const rawFrom =
+    (location.state as { from?: string })?.from ??
+    new URLSearchParams(location.search).get('returnTo');
+  const from = safeInternalPath(rawFrom) ?? '/';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
