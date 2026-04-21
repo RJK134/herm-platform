@@ -35,6 +35,7 @@ export const sendMessage = async (
       userId,
       userMessage: message,
       requestId: String(req.id),
+      frameworkId: req.frameworkId,
     });
     ok(res, { reply, sessionId });
   } catch (err) {
