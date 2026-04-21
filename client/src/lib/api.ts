@@ -19,6 +19,22 @@ import type {
 
 const TOKEN_KEY = 'herm_auth_token';
 
+export class ApiError extends Error {
+  code: string;
+  status: number;
+  requestId?: string;
+  details?: unknown;
+
+  constructor(status: number, code: string, message: string, requestId?: string, details?: unknown) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+    this.requestId = requestId;
+    this.details = details;
+  }
+}
+
 const client = axios.create({ baseURL: '/api' });
 
 // Attach JWT to every request if present
@@ -29,6 +45,35 @@ client.interceptors.request.use((config) => {
   }
   return config;
 });
+
+/**
+ * Centralised response handling:
+ *  - 401 clears the stored token and redirects to /login, preserving returnTo
+ *  - All API errors are normalised into ApiError with request-id + details
+ */
+client.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status ?? 0;
+    const body = error?.response?.data;
+    const code = body?.error?.code ?? 'NETWORK_ERROR';
+    const message = body?.error?.message ?? error.message ?? 'Request failed';
+    const requestId = body?.error?.requestId;
+    const details = body?.error?.details;
+
+    if (status === 401 && typeof window !== 'undefined') {
+      localStorage.removeItem(TOKEN_KEY);
+      delete client.defaults.headers.common['Authorization'];
+      const here = window.location.pathname + window.location.search;
+      if (!window.location.pathname.startsWith('/login')) {
+        const returnTo = encodeURIComponent(here);
+        window.location.href = `/login?returnTo=${returnTo}`;
+      }
+    }
+
+    return Promise.reject(new ApiError(status, code, message, requestId, details));
+  },
+);
 
 export const api = {
   // Auth

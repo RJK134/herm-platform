@@ -1,47 +1,72 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import * as aiAssistant from '../../services/ai-assistant';
+import * as aiAssistant from '../../services/ai/ai-assistant';
+import { AuthError } from '../../utils/errors';
+import { ok } from '../../lib/respond';
 
 const sendMessageSchema = z.object({
   sessionId: z.string().min(1).max(128),
-  // Limit message length to prevent prompt injection / abuse; strip surrounding whitespace
-  message: z.string().min(1, 'message cannot be empty').max(2000, 'message too long (max 2000 characters)').trim(),
+  message: z
+    .string()
+    .min(1, 'message cannot be empty')
+    .max(2000, 'message too long (max 2000 characters)')
+    .trim(),
 });
 
-export const sendMessage = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const parsed = sendMessageSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message ?? 'Invalid request body' },
-      });
-      return;
-    }
-    const { sessionId, message } = parsed.data;
+const sessionParamSchema = z.object({
+  sessionId: z.string().min(1).max(128),
+});
 
-    const reply = await aiAssistant.chat(sessionId, message);
-    res.json({ success: true, data: { reply, sessionId } });
+function requireUser(req: Request): string {
+  if (!req.user?.userId) throw new AuthError('Authentication required');
+  return req.user.userId;
+}
+
+export const sendMessage = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const userId = requireUser(req);
+    const { sessionId, message } = sendMessageSchema.parse(req.body);
+    const reply = await aiAssistant.chat({
+      sessionId,
+      userId,
+      userMessage: message,
+      requestId: String(req.id),
+    });
+    ok(res, { reply, sessionId });
   } catch (err) {
     next(err);
   }
 };
 
-export const getHistory = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const getHistory = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   try {
-    const { sessionId } = req.params;
-    const data = await aiAssistant.getHistory(sessionId as string);
-    res.json({ success: true, data });
+    const userId = requireUser(req);
+    const { sessionId } = sessionParamSchema.parse(req.params);
+    const data = await aiAssistant.getHistory(sessionId, userId);
+    ok(res, data);
   } catch (err) {
     next(err);
   }
 };
 
-export const clearHistory = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const clearHistory = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   try {
-    const { sessionId } = req.params;
-    await aiAssistant.clearHistory(sessionId as string);
-    res.json({ success: true, data: { cleared: true } });
+    const userId = requireUser(req);
+    const { sessionId } = sessionParamSchema.parse(req.params);
+    await aiAssistant.clearHistory(sessionId, userId);
+    ok(res, { cleared: true });
   } catch (err) {
     next(err);
   }

@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import type { VendorJwtPayload } from '../api/vendor-portal/vendor-portal.service';
 
 // Fail fast at startup if JWT_SECRET is not configured — prevents forged tokens

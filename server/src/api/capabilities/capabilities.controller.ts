@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { CapabilitiesService } from './capabilities.service';
 
 const service = new CapabilitiesService();

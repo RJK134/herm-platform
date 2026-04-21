@@ -46,7 +46,8 @@ export class SystemsService {
       },
     });
 
-    // Return as map of code -> value and full grouped structure
+    // Return as map of code -> value and full grouped structure, with family totals
+    // precomputed so callers don't need to reduce.
     const byCode: Record<string, number> = {};
     const byDomain: Record<string, {
       domainCode: string;

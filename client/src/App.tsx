@@ -38,6 +38,9 @@ import { ApiIntegration } from './pages/ApiIntegration';
 import { FrameworkMapping } from './pages/FrameworkMapping';
 import { NotFound } from './pages/NotFound';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
+
+const ADMIN_ROLES = ['INSTITUTION_ADMIN', 'SUPER_ADMIN'];
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 5 * 60 * 1000, retry: 1 } },
@@ -94,28 +97,28 @@ export default function App() {
                       <Route path="/heatmap" element={<CapabilityHeatmap />} />
                       <Route path="/system" element={<SystemDetail />} />
                       <Route path="/capability" element={<CapabilityView />} />
-                      <Route path="/basket" element={<CapabilityBasket />} />
+                      <Route path="/basket" element={<ProtectedRoute><CapabilityBasket /></ProtectedRoute>} />
                       <Route path="/export" element={<ExportDownload />} />
-                      <Route path="/admin" element={<AdminSystems />} />
+                      <Route path="/admin" element={<ProtectedRoute roles={ADMIN_ROLES}><AdminSystems /></ProtectedRoute>} />
                       <Route path="/vendor" element={<VendorShowcase />} />
                       <Route path="/vendor/:id" element={<VendorProfile />} />
                       <Route path="/how-it-works" element={<HowItWorks />} />
                       <Route path="/research" element={<ResearchHub />} />
-                      <Route path="/assistant" element={<AiAssistant />} />
+                      <Route path="/assistant" element={<ProtectedRoute><AiAssistant /></ProtectedRoute>} />
                       <Route path="/tco" element={<TcoCalculator />} />
-                      <Route path="/procurement" element={<ProcurementWorkflow />} />
+                      <Route path="/procurement" element={<ProtectedRoute><ProcurementWorkflow /></ProtectedRoute>} />
                       <Route path="/integration" element={<IntegrationAssessment />} />
                       <Route path="/architecture" element={<ArchitectureAssessment />} />
                       <Route path="/value" element={<ValueAnalysis />} />
-                      <Route path="/documents" element={<DocumentGenerator />} />
-                      <Route path="/projects" element={<ProcurementProjects />} />
+                      <Route path="/documents" element={<ProtectedRoute><DocumentGenerator /></ProtectedRoute>} />
+                      <Route path="/projects" element={<ProtectedRoute><ProcurementProjects /></ProtectedRoute>} />
                       <Route path="/guide" element={<ProcurementGuide />} />
                       <Route path="/vendor-portal" element={<VendorPortal />} />
-                      <Route path="/workspaces" element={<TeamWorkspaces />} />
-                      <Route path="/admin/vendors" element={<AdminVendors />} />
-                      <Route path="/subscription" element={<Subscriptions />} />
+                      <Route path="/workspaces" element={<ProtectedRoute><TeamWorkspaces /></ProtectedRoute>} />
+                      <Route path="/admin/vendors" element={<ProtectedRoute roles={ADMIN_ROLES}><AdminVendors /></ProtectedRoute>} />
+                      <Route path="/subscription" element={<ProtectedRoute><Subscriptions /></ProtectedRoute>} />
                       <Route path="/sector" element={<SectorAnalytics />} />
-                      <Route path="/api-keys" element={<ApiIntegration />} />
+                      <Route path="/api-keys" element={<ProtectedRoute><ApiIntegration /></ProtectedRoute>} />
                       <Route path="/framework-mapping" element={<FrameworkMapping />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>

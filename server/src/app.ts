@@ -1,9 +1,11 @@
 import express from 'express';
 import cors from 'cors';
-import prisma from './utils/prisma';
 import { checkEnvironment } from './utils/env-check';
 import { errorHandler } from './middleware/errorHandler';
 import { helmetMiddleware, apiRateLimiter, authRateLimiter } from './middleware/security';
+import { requestId } from './middleware/requestId';
+import { httpLogger } from './middleware/httpLogger';
+import { liveness, readiness } from './api/health/health.controller';
 import systemsRouter from './api/systems/systems.router';
 import capabilitiesRouter from './api/capabilities/capabilities.router';
 import scoresRouter from './api/scores/scores.router';
@@ -44,38 +46,18 @@ const app = express();
 // Allow CORS origin to be configured per environment
 const ALLOWED_ORIGIN = process.env['FRONTEND_URL'] || 'http://localhost:5173';
 
-// Middleware
+// Baseline middleware — order matters: requestId first so every log carries it
+app.use(requestId);
+app.use(httpLogger);
 app.use(helmetMiddleware);
 app.use(cors({ origin: ALLOWED_ORIGIN, credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/api', apiRateLimiter);
 
-// Health check — verifies DB connectivity before returning healthy
-app.get('/api/health', async (_req, res) => {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    res.json({
-      success: true,
-      data: {
-        status: 'ok',
-        timestamp: new Date().toISOString(),
-        version: '2.0.0',
-        db: 'connected',
-      },
-    });
-  } catch {
-    res.status(503).json({
-      success: false,
-      data: {
-        status: 'degraded',
-        timestamp: new Date().toISOString(),
-        version: '2.0.0',
-        db: 'unavailable',
-      },
-    });
-  }
-});
+// Health & readiness (no rate limit, no auth)
+app.get('/api/health', liveness);
+app.get('/api/ready', readiness);
 
 // Auth (unauthenticated — stricter rate limit)
 app.use('/api/auth', authRateLimiter, authRouter);
@@ -143,10 +125,10 @@ app.use('/api/frameworks', frameworksRouter);
 app.use('/api/framework-mappings', frameworkMappingsRouter);
 
 // 404
-app.use((_req, res) => {
+app.use((req, res) => {
   res.status(404).json({
     success: false,
-    error: { code: 'NOT_FOUND', message: 'Route not found' },
+    error: { code: 'NOT_FOUND', message: 'Route not found', requestId: req.id },
   });
 });
 

@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { AuthService } from './auth.service';
 import { registerSchema, loginSchema, updateProfileSchema } from './auth.schema';
 
