@@ -46,7 +46,7 @@ export function AsyncBoundary<T>({
     );
   }
 
-  if (isError || !data) {
+  if (isError || data === undefined) {
     const message = error instanceof Error ? error.message : 'Something went wrong';
     return (
       <>
