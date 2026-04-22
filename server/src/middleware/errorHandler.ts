@@ -55,6 +55,38 @@ export function errorHandler(
     return;
   }
 
+  // Connection / startup failures surface as PrismaClientInitializationError —
+  // most commonly a stale DATABASE_URL (wrong port after the docker-compose
+  // port change in PR #9), wrong credentials, or Postgres not running.
+  // Surface as 503 with an actionable message instead of a generic 500, and
+  // log the underlying Prisma message so the dev's terminal shows what's wrong.
+  if (err instanceof Prisma.PrismaClientInitializationError) {
+    logger.error(
+      { requestId, prismaCode: err.errorCode, path: req.path, method: req.method, err: err.message },
+      'Database unreachable — check DATABASE_URL and that Postgres is running',
+    );
+    // Prisma's message is a multi-line dump (query context + error). Pull out
+    // the "Can't reach database server..." line specifically; fall back to
+    // the last non-empty line so the dev still sees something useful.
+    const lines = err.message.split('\n').map((l) => l.trim()).filter(Boolean);
+    const reachLine =
+      lines.find((l) => /reach database server|connect.*database|authentication failed/i.test(l)) ??
+      lines[lines.length - 1] ??
+      'connection refused';
+    res.status(503).json({
+      success: false,
+      error: {
+        code: 'DATABASE_UNAVAILABLE',
+        message:
+          process.env['NODE_ENV'] === 'development'
+            ? `Database unreachable: ${reachLine}`
+            : 'Database is currently unavailable',
+        requestId,
+      },
+    });
+    return;
+  }
+
   if (err instanceof AppError) {
     const log = err.statusCode >= 500 ? logger.error : logger.warn;
     log(
