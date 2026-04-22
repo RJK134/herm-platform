@@ -1,5 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import request from 'supertest';
+import jwt from 'jsonwebtoken';
 import app from '../../app';
 import bcrypt from 'bcryptjs';
 
@@ -89,6 +90,47 @@ describe('POST /api/auth/login', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.success).toBe(false);
+  });
+});
+
+describe('POST /api/auth/login — tier claim on JWT', () => {
+  const USER_WITH_SUB = {
+    ...MOCK_USER,
+    institution: {
+      ...MOCK_USER.institution,
+      subscription: { tier: 'PROFESSIONAL', status: 'active' },
+    },
+  };
+
+  afterEach(() => {
+    delete process.env['DEV_UNLOCK_ALL_TIERS'];
+  });
+
+  it('without DEV_UNLOCK_ALL_TIERS, tier claim reflects the subscription tier', async () => {
+    const prisma = (await import('../../utils/prisma')).default;
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(USER_WITH_SUB as never);
+
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'admin@demo.ac.uk', password: 'password123' });
+
+    expect(res.status).toBe(200);
+    const decoded = jwt.decode(res.body.data.token) as { tier?: string } | null;
+    expect(decoded?.tier).toBe('professional');
+  });
+
+  it('with DEV_UNLOCK_ALL_TIERS=true, tier claim is forced to "enterprise"', async () => {
+    process.env['DEV_UNLOCK_ALL_TIERS'] = 'true';
+    const prisma = (await import('../../utils/prisma')).default;
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(USER_WITH_SUB as never);
+
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'admin@demo.ac.uk', password: 'password123' });
+
+    expect(res.status).toBe(200);
+    const decoded = jwt.decode(res.body.data.token) as { tier?: string } | null;
+    expect(decoded?.tier).toBe('enterprise');
   });
 });
 
