@@ -19,9 +19,11 @@ docker-compose up -d
 if errorlevel 1 (
     echo.
     echo   Docker failed to start. If you see "port is already allocated"
-    echo   for 5432 or 6379, an old container is still pinned to the old
-    echo   port mapping. Recover with:
+    echo   for 5434 or 6380, an old container is still pinned to the old
+    echo   port mapping, or another container on this host is using the
+    echo   port. Recover with:
     echo       docker-compose down
+    echo       docker ps -a --format "table {{.Names}}\t{{.Ports}}"
     echo       start.bat
     exit /b 1
 )
