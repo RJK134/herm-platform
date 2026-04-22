@@ -41,15 +41,8 @@ function buildApp(opts: { mountFrameworkContext: boolean }) {
       req.frameworkId = 'fw-test';
       req.framework = {
         id: 'fw-test',
-        slug: 'fhe-capability-framework',
         name: 'FHE Capability Framework',
-        isPublic: false,
-        isDefault: true,
-        licenceType: 'PROPRIETARY',
-        publisher: 'FHE',
-        licenceUrl: null,
-        licenceNotice: null,
-      };
+      } as NonNullable<Express.Request['framework']>;
       next();
     });
   }
