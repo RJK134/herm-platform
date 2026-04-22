@@ -1,8 +1,8 @@
-import type { Request, Response, NextFunction } from 'express';
-import { ZodError } from 'zod';
+import type { NextFunction, Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
-import { AppError } from '../utils/errors';
+import { ZodError } from 'zod';
 import { logger } from '../lib/logger';
+import { AppError } from '../utils/errors';
 
 /**
  * Maps Prisma known request errors onto our AppError taxonomy so clients see
@@ -56,8 +56,8 @@ export function errorHandler(
   }
 
   if (err instanceof AppError) {
-    // Client-originated errors: log at info level, never include stack
-    logger.info(
+    const log = err.statusCode >= 500 ? logger.error : logger.warn;
+    log(
       { requestId, code: err.code, status: err.statusCode, path: req.path, method: req.method },
       err.message,
     );
@@ -68,7 +68,6 @@ export function errorHandler(
     return;
   }
 
-  // Truly unexpected error: log full stack
   logger.error(
     { requestId, err, path: req.path, method: req.method },
     'Unhandled server error',

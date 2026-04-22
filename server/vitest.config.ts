@@ -4,14 +4,9 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['src/**/*.test.ts', 'src/__tests__/**/*.test.ts'],
-    // Run test files sequentially to avoid shared mock state conflicts
+    include: ['src/**/*.{test,spec}.ts', 'src/**/__tests__/**/*.{test,spec}.ts'],
     fileParallelism: false,
-    testTimeout: 30000,
-    coverage: {
-      reporter: ['text', 'html'],
-      include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts', 'src/__tests__/**'],
-    },
+    testTimeout: 30_000,
+    setupFiles: ['src/test/setup.ts'],
   },
 });

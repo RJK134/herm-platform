@@ -1,11 +1,12 @@
-import express from 'express';
+import express, { type Express } from 'express';
 import cors from 'cors';
 import { checkEnvironment } from './utils/env-check';
 import { errorHandler } from './middleware/errorHandler';
 import { helmetMiddleware, apiRateLimiter, authRateLimiter } from './middleware/security';
 import { requestId } from './middleware/requestId';
 import { httpLogger } from './middleware/httpLogger';
-import { liveness, readiness } from './api/health/health.controller';
+import healthRouter from './api/health/health.router';
+import { readiness } from './api/health/health.controller';
 import systemsRouter from './api/systems/systems.router';
 import capabilitiesRouter from './api/capabilities/capabilities.router';
 import scoresRouter from './api/scores/scores.router';
@@ -36,103 +37,70 @@ import { frameworkContext } from './middleware/framework-context';
 import { tierGate } from './middleware/tier-gate';
 import { optionalJWT } from './middleware/auth';
 
-// Validate environment variables at startup.
-// Placed after all imports because ES module static imports are hoisted —
-// a call here between imports would not actually run first.
 checkEnvironment();
 
-const app = express();
+export function createApp(): Express {
+  const app = express();
+  const allowedOrigin = process.env['FRONTEND_URL'] || 'http://localhost:5173';
 
-// Allow CORS origin to be configured per environment
-const ALLOWED_ORIGIN = process.env['FRONTEND_URL'] || 'http://localhost:5173';
+  app.use(requestId);
+  app.use(httpLogger);
+  app.use(helmetMiddleware);
+  app.use(cors({ origin: allowedOrigin, credentials: true }));
+  app.use(express.json({ limit: '1mb' }));
+  app.use(express.urlencoded({ extended: true }));
+  app.use('/api', apiRateLimiter);
 
-// Baseline middleware — order matters: requestId first so every log carries it
-app.use(requestId);
-app.use(httpLogger);
-app.use(helmetMiddleware);
-app.use(cors({ origin: ALLOWED_ORIGIN, credentials: true }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use('/api', apiRateLimiter);
+  app.use('/api', healthRouter);
+  app.get('/api/ready', readiness);
 
-// Health & readiness (no rate limit, no auth)
-app.get('/api/health', liveness);
-app.get('/api/ready', readiness);
+  app.use('/api/auth', authRateLimiter, authRouter);
+  app.use('/api/institutions', institutionsRouter);
 
-// Auth (unauthenticated — stricter rate limit)
-app.use('/api/auth', authRateLimiter, authRouter);
+  const frameworkScoped = [optionalJWT, frameworkContext, tierGate] as const;
+  app.use('/api/systems', ...frameworkScoped, systemsRouter);
+  app.use('/api/capabilities', ...frameworkScoped, capabilitiesRouter);
+  app.use('/api/scores', ...frameworkScoped, scoresRouter);
+  app.use('/api/export', ...frameworkScoped, exportRouter);
 
-// Institution management (authenticated — guards inside router)
-app.use('/api/institutions', institutionsRouter);
+  app.use('/api/vendors', vendorsRouter);
+  app.use('/api/research', researchRouter);
+  app.use('/api/scoring', scoringRouter);
+  app.use('/api/chat', chatRouter);
 
-// Framework-scoped analytics + reference data.
-//
-// Middleware chain:
-//   1. optionalJWT   — populates req.user when a valid token is present so
-//                      the tier can be read; anonymous callers just get
-//                      req.user === undefined.
-//   2. frameworkContext — resolves req.framework / req.frameworkId from
-//                      ?frameworkId (explicit) or the first public active
-//                      framework (default). Without it, service-layer
-//                      queries would mix frameworks.
-//   3. tierGate       — rejects free/anonymous callers trying to reach a
-//                      non-public framework even by explicit id. This
-//                      closes the paywall-bypass that explicit
-//                      ?frameworkId=<proprietary-id> would otherwise open.
-const frameworkScoped = [optionalJWT, frameworkContext, tierGate];
-app.use('/api/systems', ...frameworkScoped, systemsRouter);
-app.use('/api/capabilities', ...frameworkScoped, capabilitiesRouter);
-app.use('/api/scores', ...frameworkScoped, scoresRouter);
-// Export endpoints format framework-scoped data (scores, domains,
-// capabilities) so they sit behind the same chain.
-app.use('/api/export', ...frameworkScoped, exportRouter);
+  app.use('/api/baskets', basketsRouter);
+  app.use('/api/tco', tcoRouter);
+  app.use('/api/procurement', procurementRouter);
+  app.use('/api/integration', integrationRouter);
 
-// Intelligence layer (open — reference data)
-app.use('/api/vendors', vendorsRouter);
-app.use('/api/research', researchRouter);
-app.use('/api/scoring', scoringRouter);
-app.use('/api/chat', chatRouter);
+  app.use('/api/architecture', architectureRouter);
+  app.use('/api/value', valueRouter);
+  app.use('/api/documents', documentsRouter);
 
-// Procurement tools (anonymous-friendly via default institution)
-app.use('/api/baskets', basketsRouter);
-app.use('/api/tco', tcoRouter);
-app.use('/api/procurement', procurementRouter);
-app.use('/api/integration', integrationRouter);
+  app.use('/api/vendor-portal', ...frameworkScoped, vendorPortalRouter);
+  app.use('/api/evaluations', evaluationsRouter);
+  app.use('/api/subscriptions', subscriptionsRouter);
+  app.use('/api/admin', adminRouter);
 
-// Phase 3 — Architecture, Value Analysis, Document Generation
-app.use('/api/architecture', architectureRouter);
-app.use('/api/value', valueRouter);
-app.use('/api/documents', documentsRouter);
+  app.use('/api/sector/analytics', sectorAnalyticsRouter);
+  app.use('/api/notifications', notificationsRouter);
+  app.use('/api/keys', keysRouter);
 
-// Phase 5 — Vendor Portal, Team Workspaces, Payments.
-// Same framework-scoped chain: optionalJWT → frameworkContext → tierGate
-// so getOwnScores can scope CapabilityScore and vendors cannot pass a
-// proprietary frameworkId they are not entitled to.
-app.use('/api/vendor-portal', ...frameworkScoped, vendorPortalRouter);
-app.use('/api/evaluations', evaluationsRouter);
-app.use('/api/subscriptions', subscriptionsRouter);
-app.use('/api/admin', adminRouter);
+  app.use('/api/frameworks', frameworksRouter);
+  app.use('/api/framework-mappings', frameworkMappingsRouter);
 
-// Phase 6 — Sector Analytics, Notifications, API Keys
-app.use('/api/sector/analytics', sectorAnalyticsRouter);
-app.use('/api/notifications', notificationsRouter);
-app.use('/api/keys', keysRouter);
-
-// Phase 7 — Multi-framework support
-app.use('/api/frameworks', frameworksRouter);
-
-// Phase 8 — Cross-framework mappings (Enterprise tier)
-app.use('/api/framework-mappings', frameworkMappingsRouter);
-
-// 404
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    error: { code: 'NOT_FOUND', message: 'Route not found', requestId: req.id },
+  app.use((req, res) => {
+    res.status(404).json({
+      success: false,
+      error: { code: 'NOT_FOUND', message: 'Route not found', requestId: req.id },
+    });
   });
-});
 
-// Global error handler
-app.use(errorHandler);
+  app.use(errorHandler);
+
+  return app;
+}
+
+const app = createApp();
 
 export default app;

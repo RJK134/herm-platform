@@ -1,33 +1,13 @@
-import type { Request, Response, NextFunction } from 'express';
-import { z } from 'zod';
+import type { NextFunction, Request, Response } from 'express';
 import * as aiAssistant from '../../services/ai/ai-assistant';
-import { AppError, AuthError } from '../../utils/errors';
 import { ok } from '../../lib/respond';
-
-const sendMessageSchema = z.object({
-  sessionId: z.string().min(1).max(128),
-  message: z
-    .string()
-    .min(1, 'message cannot be empty')
-    .max(2000, 'message too long (max 2000 characters)')
-    .trim(),
-});
-
-const sessionParamSchema = z.object({
-  sessionId: z.string().min(1).max(128),
-});
+import { AppError, AuthError } from '../../utils/errors';
+import { sendMessageSchema, sessionParamSchema } from './chat.schema';
 
 function requireUser(req: Request): string {
   if (!req.user?.userId) throw new AuthError('Authentication required');
   return req.user.userId;
 }
-
-/**
- * `frameworkContext` populates `req.framework` (or 404s before we get here).
- * If it's still undefined, the router was mis-wired — fail loudly rather than
- * running an unscoped query that would mix cross-framework scores, *and*
- * avoid handing the AI a generic/incorrect framework label.
- */
 function requireFramework(req: Request): { id: string; name: string } {
   if (!req.framework?.id || !req.framework?.name) {
     throw new AppError(

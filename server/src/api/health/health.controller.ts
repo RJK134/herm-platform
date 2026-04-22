@@ -19,20 +19,24 @@ export function liveness(_req: Request, res: Response): void {
  * Used by container orchestrators; not by the client.
  */
 export async function readiness(req: Request, res: Response): Promise<void> {
-  const checks: Record<string, { ok: boolean; message?: string }> = {};
+  const checks: Record<string, unknown> = {};
+  let databaseOk = true;
+  let databaseMessage: string | undefined;
 
   try {
     await prisma.$queryRaw`SELECT 1`;
-    checks['database'] = { ok: true };
   } catch (err) {
     logger.warn({ requestId: req.id, err }, 'readiness: database check failed');
-    checks['database'] = {
-      ok: false,
-      message: err instanceof Error ? err.message : 'unknown error',
-    };
+    databaseOk = false;
+    databaseMessage = err instanceof Error ? err.message : 'unknown error';
   }
 
-  const allOk = Object.values(checks).every((c) => c.ok);
+  checks['db'] = databaseOk ? 'ok' : 'fail';
+  checks['database'] = databaseMessage
+    ? { ok: databaseOk, message: databaseMessage }
+    : { ok: databaseOk };
+
+  const allOk = databaseOk;
   res.status(allOk ? 200 : 503).json({
     success: allOk,
     data: {

@@ -6,17 +6,19 @@ import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { BarChart } from '../components/charts/BarChart';
 import { Skeleton } from '../components/ui/Skeleton';
+import { useFramework } from '../contexts/FrameworkContext';
 import { useSystems, useSystemScores } from '../hooks/useApi';
 import { formatPercent, scoreColor, scoreLabel } from '../lib/utils';
 
 export function SystemDetail() {
   const { t } = useTranslation('systems');
+  const { activeFramework } = useFramework();
   const { data: systems, isLoading: loadingSystems } = useSystems();
   const [searchParams] = useSearchParams();
   const [selectedId, setSelectedId] = useState(searchParams.get('id') || '');
 
   const effectiveId = selectedId || (systems?.[0]?.id ?? '');
-  const { data: scoreData, isLoading: loadingScores } = useSystemScores(effectiveId);
+  const { data: scoreData, isLoading: loadingScores } = useSystemScores(effectiveId, activeFramework?.id);
 
   const system = systems?.find(s => s.id === effectiveId);
 

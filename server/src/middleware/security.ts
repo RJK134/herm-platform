@@ -44,3 +44,11 @@ export const exportRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+export const vendorPortalRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: { success: false, error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Vendor portal rate limit exceeded. Please slow down.' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+});

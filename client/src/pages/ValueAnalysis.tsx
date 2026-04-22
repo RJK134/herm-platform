@@ -94,7 +94,6 @@ const npvColour = (npv: number) =>
   npv >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400';
 
 const STEPS = ['Setup', 'Current State', 'Benefits', 'Investment', 'Results'] as const;
-type Step = typeof STEPS[number];
 
 const INSTITUTION_TYPES = [
   { value: 'pre-92', label: 'Pre-92 University (Russell Group, Plateglass)' },

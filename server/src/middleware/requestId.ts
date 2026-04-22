@@ -1,5 +1,5 @@
-import type { Request, Response, NextFunction } from 'express';
-import { nanoid } from 'nanoid';
+import { randomUUID } from 'node:crypto';
+import type { NextFunction, Request, Response } from 'express';
 
 const HEADER = 'x-request-id';
 
@@ -14,9 +14,10 @@ declare global {
 
 export function requestId(req: Request, res: Response, next: NextFunction): void {
   const incoming = req.header(HEADER);
-  const id = typeof incoming === 'string' && incoming.length > 0 && incoming.length <= 64
-    ? incoming
-    : nanoid();
+  const id =
+    typeof incoming === 'string' && incoming.length > 0 && incoming.length <= 64
+      ? incoming
+      : randomUUID();
   req.id = id;
   res.setHeader(HEADER, id);
   next();

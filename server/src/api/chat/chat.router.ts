@@ -1,17 +1,26 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { authenticateJWT } from '../../middleware/auth';
 import { frameworkContext } from '../../middleware/framework-context';
+import { validateBody } from '../../middleware/validate';
+import { sendMessageSchema } from './chat.schema';
 import { sendMessage, getHistory, clearHistory } from './chat.controller';
 
 const router = Router();
 
-// All chat endpoints require authentication — see docs/AI_GOVERNANCE.md
-router.use(authenticateJWT);
+const chatLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: { code: 'RATE_LIMITED', message: 'Too many chat requests; slow down.' },
+  },
+});
 
-// POST / needs an active framework so the AI's system-summary context is
-// scoped to a single framework's scores. GET/DELETE session endpoints only
-// touch ChatMessage rows and don't need it.
-router.post('/', frameworkContext, sendMessage);
+router.use(authenticateJWT);
+router.post('/', frameworkContext, chatLimiter, validateBody(sendMessageSchema), sendMessage);
 router.get('/sessions/:sessionId', getHistory);
 router.delete('/sessions/:sessionId', clearHistory);
 

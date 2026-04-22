@@ -46,36 +46,40 @@ export class SystemsService {
       },
     });
 
-    // Return as map of code -> value and full grouped structure, with family totals
-    // precomputed so callers don't need to reduce.
+    // Return as map of code -> value and grouped domain totals so callers do not
+    // need to reduce capability values themselves.
     const byCode: Record<string, number> = {};
-    const byDomain: Record<string, {
-      domainCode: string;
-      domainName: string;
-      score: number;
-      maxScore: number;
-      capabilities: Array<{ code: string; name: string; value: number }>;
-    }> = {};
+    const byDomain: Record<
+      string,
+      {
+        domainCode: string;
+        domainName: string;
+        score: number;
+        maxScore: number;
+        capabilities: Array<{ code: string; name: string; value: number }>;
+      }
+    > = {};
 
     for (const s of scores) {
       byCode[s.capability.code] = s.value;
-      const fCode = s.capability.domain.code;
-      if (!byDomain[fCode]) {
-        byDomain[fCode] = {
-          domainCode: fCode,
+      const domainCode = s.capability.domain.code;
+      const domain =
+        byDomain[domainCode] ??
+        (byDomain[domainCode] = {
+          domainCode,
           domainName: s.capability.domain.name,
           score: 0,
           maxScore: 0,
           capabilities: [],
-        };
-      }
-      byDomain[fCode].capabilities.push({
+        });
+
+      domain.capabilities.push({
         code: s.capability.code,
         name: s.capability.name,
         value: s.value,
       });
-      byDomain[fCode].score += s.value;
-      byDomain[fCode].maxScore += 100; // CapabilityScore.value is 0/50/100 per capability (consistent with vendor-portal.service.ts and scores.service.ts)
+      domain.score += s.value;
+      domain.maxScore += 100; // CapabilityScore.value is 0/50/100 per capability (consistent with vendor-portal.service.ts and scores.service.ts)
     }
 
     return { system, byCode, byDomain: Object.values(byDomain) };

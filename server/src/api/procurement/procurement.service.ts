@@ -18,9 +18,6 @@ const WORKFLOW_STAGES = [
   { stageNumber: 8, title: 'Contract Award', status: 'pending' },
 ] as const;
 
-// Default institution for demo use (created on-demand)
-const DEFAULT_INSTITUTION_ID = 'default';
-
 async function ensureDefaultInstitution(): Promise<string> {
   const existing = await prisma.institution.findFirst({
     where: { slug: 'default' },

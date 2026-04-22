@@ -8,11 +8,6 @@ import {
   AiNotConfiguredError,
 } from './ai-client';
 
-/**
- * Build the system prompt dynamically so it describes the *active* framework
- * rather than hardcoding HERM. Product branding ("HERM Procurement Assistant")
- * stays fixed — that's the product name, not the framework in use.
- */
 export function buildSystemPrompt(frameworkName: string): string {
   return `You are the HERM Procurement Assistant, an expert in UK higher education IT systems procurement. The active capability framework for this conversation is "${frameworkName}". You have knowledge of UCISA HERM v3.1, the Future Horizons Education (FHE) capability framework, and major SIS/LMS/CRM vendors. When citing capabilities, use codes from the active framework (e.g. BC011, BC086 for HERM). Give balanced vendor assessments — never recommend a specific vendor. Keep responses concise and structured.`;
 }

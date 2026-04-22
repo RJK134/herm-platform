@@ -41,15 +41,8 @@ function buildApp(opts: { mountFrameworkContext: boolean }) {
       req.frameworkId = 'fw-test';
       req.framework = {
         id: 'fw-test',
-        slug: 'fhe-capability-framework',
         name: 'FHE Capability Framework',
-        isPublic: false,
-        isDefault: true,
-        licenceType: 'PROPRIETARY',
-        publisher: 'FHE',
-        licenceUrl: null,
-        licenceNotice: null,
-      };
+      } as NonNullable<Express.Request['framework']>;
       next();
     });
   }
@@ -91,7 +84,7 @@ describe('chat.controller — requireFramework guard', () => {
     expect(chatMock).not.toHaveBeenCalled();
   });
 
-  it('forwards the full framework (id + name) to the chat service', async () => {
+  it('forwards the full framework to the chat service when the middleware is mounted', async () => {
     const res = await request(buildApp({ mountFrameworkContext: true }))
       .post('/api/chat')
       .set('Authorization', `Bearer ${validToken}`)
