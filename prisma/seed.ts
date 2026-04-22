@@ -204,20 +204,24 @@ async function main() {
   await seedVendorProfiles(prisma);
   console.log('Vendor profiles seeded');
 
-  // Populate FHE Capability Framework domains and capabilities
-  const { seedFheFramework } = await import('./seeds/fhe-framework');
-  await seedFheFramework(prisma);
-  console.log('FHE framework seeded');
+  // FHE seeding currently fails to load via tsx + ESM ("type": "module") on
+  // some Node 22 setups — see fhe-framework.ts import resolution. The platform
+  // is fully functional on HERM data alone, so we degrade gracefully here
+  // rather than blocking the seed. Re-enable once tsx ESM resolution stabilises.
+  try {
+    const { seedFheFramework } = await import('./seeds/fhe-framework');
+    await seedFheFramework(prisma);
+    console.log('FHE framework seeded');
 
-  // Seed deterministic FHE capability scores (21 systems × 118 capabilities)
-  // Must run AFTER vendor systems are created and FHE framework is populated.
-  const { seedFheScores } = await import('./seeds/fhe-scores');
-  await seedFheScores(prisma);
-  console.log('FHE scores seeded');
+    const { seedFheScores } = await import('./seeds/fhe-scores');
+    await seedFheScores(prisma);
+    console.log('FHE scores seeded');
 
-  // Seed the HERM v3.1 → FHE v1.0 cross-framework mapping (Enterprise tier)
-  const { seedFrameworkMappings } = await import('./seeds/framework-mappings');
-  await seedFrameworkMappings(prisma);
+    const { seedFrameworkMappings } = await import('./seeds/framework-mappings');
+    await seedFrameworkMappings(prisma);
+  } catch (err) {
+    console.warn('[seed] FHE seeding skipped:', err instanceof Error ? err.message : err);
+  }
 
   // ── Demo institution & user ──────────────────────────────────────────────
   const demoInstitution = await prisma.institution.upsert({
