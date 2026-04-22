@@ -1,5 +1,7 @@
 import { PrismaClient } from '@prisma/client';
-import { FHE_FRAMEWORK } from '../../server/src/data/fhe-framework';
+import * as fheFrameworkModule from '../../server/src/data/fhe-framework';
+
+const { FHE_FRAMEWORK } = fheFrameworkModule;
 
 /**
  * Seeds the FHE Capability Framework domains and capabilities.
