@@ -8,15 +8,15 @@ function requireUser(req: Request): string {
   if (!req.user?.userId) throw new AuthError('Authentication required');
   return req.user.userId;
 }
-function requireFrameworkId(req: Request): string {
-  if (!req.frameworkId) {
+function requireFramework(req: Request): { id: string; name: string } {
+  if (!req.framework?.id || !req.framework?.name) {
     throw new AppError(
       500,
       'INTERNAL_ERROR',
       'Framework context missing — POST /api/chat must mount frameworkContext middleware',
     );
   }
-  return req.frameworkId;
+  return { id: req.framework.id, name: req.framework.name };
 }
 
 export const sendMessage = async (
@@ -26,14 +26,14 @@ export const sendMessage = async (
 ): Promise<void> => {
   try {
     const userId = requireUser(req);
-    const frameworkId = requireFrameworkId(req);
+    const framework = requireFramework(req);
     const { sessionId, message } = sendMessageSchema.parse(req.body);
     const reply = await aiAssistant.chat({
       sessionId,
       userId,
       userMessage: message,
       requestId: String(req.id),
-      frameworkId,
+      framework,
     });
     ok(res, { reply, sessionId });
   } catch (err) {

@@ -8,7 +8,9 @@ import {
   AiNotConfiguredError,
 } from './ai-client';
 
-const SYSTEM_PROMPT = `You are the HERM Procurement Assistant, an expert in UK higher education IT systems procurement. You have deep knowledge of UCISA HERM v3.1, the 165 capability framework, and all major SIS/LMS/CRM vendors. You help universities evaluate and compare systems. Be specific, cite HERM capability codes (e.g. BC011, BC086), and give balanced vendor assessments. Never recommend a specific vendor — present evidence and let the user decide. Keep responses concise and structured.`;
+export function buildSystemPrompt(frameworkName: string): string {
+  return `You are the HERM Procurement Assistant, an expert in UK higher education IT systems procurement. The active capability framework for this conversation is "${frameworkName}". You have knowledge of UCISA HERM v3.1, the Future Horizons Education (FHE) capability framework, and major SIS/LMS/CRM vendors. When citing capabilities, use codes from the active framework (e.g. BC011, BC086 for HERM). Give balanced vendor assessments — never recommend a specific vendor. Keep responses concise and structured.`;
+}
 
 const FALLBACK_RESPONSE = [
   'The AI Assistant requires an ANTHROPIC_API_KEY environment variable to function. Please add it to your .env file.',
@@ -42,15 +44,18 @@ export interface ChatParams {
   requestId?: string;
   /**
    * Scope the AI's "current platform context" summary to a single framework.
-   * `CapabilityScore` is framework-scoped — without this filter the summary
-   * would mix scores from HERM + FHE (and any other frameworks) which misleads
-   * the model.
+   * Both `id` and `name` are used:
+   *   - `id` filters the `CapabilityScore` relation so only scores for this
+   *     framework enter the prompt (no cross-framework data bleed).
+   *   - `name` is the human-readable label embedded in the system prompt and
+   *     each system's coverage line, so the AI is told which framework's
+   *     scores it is reading.
    *
-   * **Required.** HTTP callers get it from `req.frameworkId` (populated by the
+   * **Required.** HTTP callers get it from `req.framework` (populated by the
    * `frameworkContext` middleware, which 404s if no framework is resolvable).
    * Non-HTTP callers must resolve a framework themselves before calling `chat`.
    */
-  frameworkId: string;
+  framework: { id: string; name: string };
 }
 
 export async function chat(params: ChatParams): Promise<string> {
@@ -58,7 +63,7 @@ export async function chat(params: ChatParams): Promise<string> {
     return FALLBACK_RESPONSE;
   }
 
-  const { sessionId, userId, requestId, frameworkId } = params;
+  const { sessionId, userId, requestId, framework } = params;
   const userMessage = sanitiseUserInput(params.userMessage);
 
   await assertSessionOwnership(sessionId, userId);
@@ -74,7 +79,7 @@ export async function chat(params: ChatParams): Promise<string> {
       // CapabilityScore is framework-scoped; the filter is mandatory to avoid
       // cross-framework data bleed into the AI prompt context.
       scores: {
-        where: { frameworkId },
+        where: { frameworkId: framework.id },
         select: { value: true },
       },
     },
@@ -86,7 +91,7 @@ export async function chat(params: ChatParams): Promise<string> {
       const total = s.scores.reduce((sum, sc) => sum + sc.value, 0);
       const max = s.scores.length * 100;
       const pct = max > 0 ? Math.round((total / max) * 100) : 0;
-      return `${s.name} (${s.category}): ${pct}% overall HERM coverage`;
+      return `${s.name} (${s.category}): ${pct}% overall ${framework.name} coverage`;
     })
     .join('\n');
 
@@ -102,7 +107,7 @@ export async function chat(params: ChatParams): Promise<string> {
   try {
     const result = await createCompletion({
       model: 'claude-sonnet-4-20250514',
-      systemPrompt: `${SYSTEM_PROMPT}\n\nCurrent platform context:\n${systemSummary}`,
+      systemPrompt: `${buildSystemPrompt(framework.name)}\n\nCurrent platform context:\n${systemSummary}`,
       messages,
       requestId,
       userId,

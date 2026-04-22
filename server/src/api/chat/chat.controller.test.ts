@@ -39,6 +39,17 @@ function buildApp(opts: { mountFrameworkContext: boolean }) {
   if (opts.mountFrameworkContext) {
     app.use((req, _res, next) => {
       req.frameworkId = 'fw-test';
+      req.framework = {
+        id: 'fw-test',
+        slug: 'fhe-capability-framework',
+        name: 'FHE Capability Framework',
+        isPublic: false,
+        isDefault: true,
+        licenceType: 'PROPRIETARY',
+        publisher: 'FHE',
+        licenceUrl: null,
+        licenceNotice: null,
+      };
       next();
     });
   }
@@ -62,7 +73,7 @@ const validToken = jwt.sign(
   { expiresIn: '1h' },
 );
 
-describe('chat.controller — requireFrameworkId guard', () => {
+describe('chat.controller — requireFramework guard', () => {
   beforeEach(() => {
     chatMock.mockReset();
     chatMock.mockResolvedValue('pong');
@@ -80,7 +91,7 @@ describe('chat.controller — requireFrameworkId guard', () => {
     expect(chatMock).not.toHaveBeenCalled();
   });
 
-  it('forwards frameworkId to the chat service when the middleware is mounted', async () => {
+  it('forwards the full framework to the chat service when the middleware is mounted', async () => {
     const res = await request(buildApp({ mountFrameworkContext: true }))
       .post('/api/chat')
       .set('Authorization', `Bearer ${validToken}`)
@@ -92,7 +103,7 @@ describe('chat.controller — requireFrameworkId guard', () => {
         sessionId: 's1',
         userId: 'user-1',
         userMessage: 'hi',
-        frameworkId: 'fw-test',
+        framework: { id: 'fw-test', name: 'FHE Capability Framework' },
       }),
     );
   });
