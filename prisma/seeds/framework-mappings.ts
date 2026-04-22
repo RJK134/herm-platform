@@ -1,5 +1,7 @@
 import { PrismaClient } from '@prisma/client';
-import { HERM_TO_FHE_MAPPINGS } from '../../server/src/data/herm-to-fhe-mapping';
+import * as hermToFheMappingModule from '../../server/src/data/herm-to-fhe-mapping';
+
+const { HERM_TO_FHE_MAPPINGS } = hermToFheMappingModule;
 
 /**
  * Seeds the official HERM v3.1 → FHE v1.0 cross-framework mapping.
