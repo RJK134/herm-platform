@@ -6,6 +6,7 @@ import React, {
   useCallback,
 } from 'react';
 import { api } from '../lib/api';
+import { isPaidTier } from '../lib/branding';
 import { useAuthContext } from './AuthContext';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -37,11 +38,6 @@ interface FrameworkContextValue {
 
 const FrameworkContext = createContext<FrameworkContextValue | null>(null);
 
-// Tiers that should default to the paid / non-public "isDefault" framework.
-// Kept in sync with server-side tier gates — add new tiers here if they are
-// introduced on the subscription model.
-const PAID_TIERS = new Set(['professional', 'enterprise', 'admin']);
-
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 export function FrameworkProvider({ children }: { children: React.ReactNode }) {
@@ -54,7 +50,7 @@ export function FrameworkProvider({ children }: { children: React.ReactNode }) {
     (list: Framework[]) => {
       if (list.length === 0) return null;
 
-      const isPaid = user?.tier ? PAID_TIERS.has(user.tier) : false;
+      const isPaid = isPaidTier(user?.tier);
 
       // Paid users default to isDefault=true; free/anonymous default to isPublic=true.
       const preferred = isPaid
