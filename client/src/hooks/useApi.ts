@@ -13,8 +13,12 @@ export const useSystems = (category?: string) =>
 export const useSystem = (id: string) =>
   useQuery({ queryKey: ['system', id], queryFn: () => api.getSystem(id).then(r => r.data.data), enabled: !!id });
 
-export const useSystemScores = (id: string) =>
-  useQuery({ queryKey: ['system-scores', id], queryFn: () => api.getSystemScores(id).then(r => r.data.data), enabled: !!id });
+export const useSystemScores = (id: string, frameworkId?: string) =>
+  useQuery({
+    queryKey: ['system-scores', id, frameworkId ?? 'default'],
+    queryFn: () => api.getSystemScores(id, frameworkId).then(r => r.data.data),
+    enabled: !!id,
+  });
 
 // Framework-scoped hooks — callers should pass the active framework id
 // (from FrameworkContext) so the returned data matches the rest of the

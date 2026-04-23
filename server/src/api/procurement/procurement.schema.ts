@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PROJECT_STATUSES } from '../../services/domain/procurement/project-status';
 
 export const createProjectSchema = z.object({
   name: z.string().min(1).max(200),
@@ -7,9 +8,14 @@ export const createProjectSchema = z.object({
   basketId: z.string().optional(),
 });
 
+// Phase 3: `status` is intentionally omitted here. Status changes must
+// go through the governed state-machine endpoint (POST
+// /projects/:id/status/transitions) so every move gets audit-logged,
+// validated, and reviewer-attributed. Accepting status on a generic
+// PATCH would let a caller jump any state in one call, skipping the
+// entire governance surface.
 export const updateProjectSchema = z.object({
   name: z.string().min(1).max(200).optional(),
-  status: z.string().optional(),
   jurisdiction: z.string().optional(),
   basketId: z.string().optional(),
 });
@@ -33,11 +39,36 @@ export const updateShortlistEntrySchema = z.object({
   score: z.number().optional(),
 });
 
+// ── Phase 3: workflow state transitions + shortlist governance ──────────────
+// `PROJECT_STATUSES` is imported at the top of the file.
+
+export const transitionProjectSchema = z.object({
+  to: z.enum(PROJECT_STATUSES),
+  note: z.string().max(2000).optional(),
+});
+
+/**
+ * Decision payload for a shortlist entry. `rationale` is required — a
+ * procurement decision without a written rationale is the very thing
+ * Phase 3 is trying to prevent.
+ *
+ * Reviewer attribution (`decidedBy`) is intentionally NOT accepted from
+ * the body. `authenticateJWT` guarantees a valid caller, and the server
+ * stamps `decidedBy` from the JWT `name`/`userId` so the audit trail
+ * can't be spoofed by a request body claiming someone else decided.
+ */
+export const decideShortlistSchema = z.object({
+  decisionStatus: z.enum(['approved', 'rejected']),
+  rationale: z.string().min(1).max(4000),
+});
+
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
 export type UpdateStageInput = z.infer<typeof updateStageSchema>;
 export type AddShortlistEntryInput = z.infer<typeof addShortlistEntrySchema>;
 export type UpdateShortlistEntryInput = z.infer<typeof updateShortlistEntrySchema>;
+export type TransitionProjectInput = z.infer<typeof transitionProjectSchema>;
+export type DecideShortlistInput = z.infer<typeof decideShortlistSchema>;
 
 // Phase 4: Enhanced schemas
 

@@ -4,6 +4,11 @@ This document captures what's in place, what's deliberately deferred, and what m
 
 ## What's in place
 
+### HERM licence compliance
+- Attribution is delivered three ways: `<LicenceAttribution />` banner on the main HERM pages, a persistent `<LicenceFooter />` in the app shell, and a `meta.provenance.framework{…}` block on every framework-scoped API response via `server/src/lib/provenance.ts`. CSV exports carry `x-framework-*` response headers.
+- Free-tier / anonymous users can always reach HERM data: `frameworkContext` middleware falls back to the first **public** active framework rather than `isDefault: true`.
+- Commercial gating of proprietary features flows through `requirePaidTier` (returns `403 SUBSCRIPTION_REQUIRED`). Currently applied enterprise-only to `/api/framework-mappings/*` and `/api/keys/*`. See [HERM_COMPLIANCE](../HERM_COMPLIANCE.md) for the authoritative route table + release-time audit checklist.
+
 ### Quality gates
 - **Lint** — ESLint 9 flat config with `@typescript-eslint`, React-Hooks rules, and an `no-restricted-imports` rule that forbids direct `@anthropic-ai/sdk` imports outside `server/src/services/ai/`.
 - **Typecheck** — `tsc --noEmit` per workspace; server uses `strict: true`.

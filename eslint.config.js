@@ -1,6 +1,7 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
+import reactRefresh from 'eslint-plugin-react-refresh';
 
 export default [
   {
@@ -9,6 +10,7 @@ export default [
       '**/dist/**',
       '**/build/**',
       '**/.next/**',
+      '**/.vite/**',
       '**/coverage/**',
       'client/public/**',
       'prisma/migrations/**',
@@ -23,26 +25,29 @@ export default [
       sourceType: 'module',
     },
     rules: {
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': [
         'warn',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
+      '@typescript-eslint/no-non-null-assertion': 'warn',
       '@typescript-eslint/consistent-type-imports': 'warn',
       'no-console': 'off',
-      'eqeqeq': ['error', 'always', { null: 'ignore' }],
+      eqeqeq: ['error', 'always', { null: 'ignore' }],
     },
   },
   {
     files: ['client/src/**/*.{ts,tsx}'],
-    plugins: { 'react-hooks': reactHooks },
+    plugins: {
+      'react-hooks': reactHooks,
+      'react-refresh': reactRefresh,
+    },
     rules: {
-      'react-hooks/rules-of-hooks': 'error',
-      'react-hooks/exhaustive-deps': 'warn',
+      ...reactHooks.configs.recommended.rules,
+      'react-refresh/only-export-components': 'warn',
     },
   },
   {
-    // AI SDK may only be imported from inside services/ai/
     files: ['server/src/**/*.ts'],
     ignores: ['server/src/services/ai/**'],
     rules: {
@@ -61,10 +66,11 @@ export default [
     },
   },
   {
-    files: ['**/*.test.ts', '**/*.test.tsx', '**/__tests__/**'],
+    files: ['**/*.test.ts', '**/*.test.tsx', '**/__tests__/**/*.ts', '**/__tests__/**/*.tsx'],
     rules: {
       'no-console': 'off',
       '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-non-null-assertion': 'off',
     },
   },
   {

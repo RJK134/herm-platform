@@ -9,8 +9,11 @@
 // Expected output: 21 systems × 118 capabilities = 2,478 CapabilityScore rows.
 
 import { PrismaClient } from '@prisma/client';
-import { FHE_SCORING_RULES } from '../../server/src/data/fhe-scoring-rules';
-import { FHE_MANUAL_SCORES } from '../../server/src/data/fhe-manual-scores';
+import * as fheScoringRulesModule from '../../server/src/data/fhe-scoring-rules';
+import * as fheManualScoresModule from '../../server/src/data/fhe-manual-scores';
+
+const { FHE_SCORING_RULES } = fheScoringRulesModule;
+const { FHE_MANUAL_SCORES } = fheManualScoresModule;
 
 // Mirror of the slug -> system name mapping from the main prisma/seed.ts systemsData
 // array. The VendorSystem table does not persist a slug column, so we rebuild this

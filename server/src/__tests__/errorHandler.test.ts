@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import type { Request, Response, NextFunction } from 'express';
 import { errorHandler } from '../middleware/errorHandler';
 import { AppError, NotFoundError, ForbiddenError } from '../utils/errors';
@@ -76,6 +77,24 @@ describe('errorHandler', () => {
     errorHandler(new Error('boom'), makeReq(), res, vi.fn() as unknown as NextFunction);
     expect(res.statusCode).toBe(500);
     expect(res.body.error.code).toBe('INTERNAL_ERROR');
+    expect(res.body.error.requestId).toBe('req-test');
+  });
+
+  // Regression: before this mapping, a stale DATABASE_URL (e.g. .env still
+  // pointing at 5432 after docker-compose moved Postgres to 5434 in PR #9)
+  // caused the demo login to 500 with "Unhandled server error", leaving
+  // the developer with no clue what was wrong. The dedicated 503
+  // DATABASE_UNAVAILABLE mapping gives them an actionable response.
+  it('maps PrismaClientInitializationError to 503 DATABASE_UNAVAILABLE', () => {
+    const err = new Prisma.PrismaClientInitializationError(
+      "Can't reach database server at `localhost:5432`",
+      '5.22.0',
+      'P1001',
+    );
+    const res = makeRes();
+    errorHandler(err, makeReq(), res, vi.fn() as unknown as NextFunction);
+    expect(res.statusCode).toBe(503);
+    expect(res.body.error.code).toBe('DATABASE_UNAVAILABLE');
     expect(res.body.error.requestId).toBe('req-test');
   });
 });

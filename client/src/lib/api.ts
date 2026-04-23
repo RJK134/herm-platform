@@ -1,4 +1,5 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
+import toast from 'react-hot-toast';
 import type {
   VendorSystem,
   Capability,
@@ -18,6 +19,7 @@ import type {
 } from '../types';
 
 const TOKEN_KEY = 'herm_auth_token';
+const REQUEST_TIMEOUT_MS = 15_000;
 
 export class ApiError extends Error {
   code: string;
@@ -35,7 +37,7 @@ export class ApiError extends Error {
   }
 }
 
-const client = axios.create({ baseURL: '/api' });
+const client = axios.create({ baseURL: '/api', timeout: REQUEST_TIMEOUT_MS });
 
 // Attach JWT to every request if present
 client.interceptors.request.use((config) => {
@@ -46,16 +48,16 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
-/**
- * Centralised response handling:
- *  - 401 clears the stored token and redirects to /login, preserving returnTo
- *  - All API errors are normalised into ApiError with request-id + details
- */
+interface ApiErrorBody {
+  success?: false;
+  error?: { code?: string; message?: string; requestId?: string; details?: unknown };
+}
+
 client.interceptors.response.use(
   (response) => response,
-  (error) => {
-    const status = error?.response?.status ?? 0;
-    const body = error?.response?.data;
+  (error: AxiosError<ApiErrorBody>) => {
+    const status = error.response?.status ?? 0;
+    const body = error.response?.data;
     const code = body?.error?.code ?? 'NETWORK_ERROR';
     const message = body?.error?.message ?? error.message ?? 'Request failed';
     const requestId = body?.error?.requestId;
@@ -65,10 +67,12 @@ client.interceptors.response.use(
       localStorage.removeItem(TOKEN_KEY);
       delete client.defaults.headers.common['Authorization'];
       const here = window.location.pathname + window.location.search;
-      if (!window.location.pathname.startsWith('/login')) {
+      if (!['/login', '/register'].some((p) => window.location.pathname.startsWith(p))) {
         const returnTo = encodeURIComponent(here);
         window.location.href = `/login?returnTo=${returnTo}`;
       }
+    } else if (status >= 500) {
+      toast.error(message);
     }
 
     return Promise.reject(new ApiError(status, code, message, requestId, details));
@@ -108,8 +112,21 @@ export const api = {
     client.get<ApiResponse<VendorSystem[]>>('/systems', { params }),
   getSystem: (id: string) =>
     client.get<ApiResponse<VendorSystem>>(`/systems/${id}`),
-  getSystemScores: (id: string) =>
-    client.get<ApiResponse<{ byCode: Record<string, number>; byDomain: Array<{ domainCode: string; domainName: string; score: number; maxScore: number; capabilities: Array<{ code: string; name: string; value: number }> }> }>>(`/systems/${id}/scores`),
+  getSystemScores: (id: string, frameworkId?: string) =>
+    client.get<
+      ApiResponse<{
+        byCode: Record<string, number>;
+        byDomain: Array<{
+          domainCode: string;
+          domainName: string;
+          score: number;
+          maxScore: number;
+          capabilities: Array<{ code: string; name: string; value: number }>;
+        }>;
+      }>
+    >(`/systems/${id}/scores`, {
+      params: frameworkId ? { frameworkId } : {},
+    }),
   compareSystems: (ids: string[]) =>
     client.get<ApiResponse<LeaderboardEntry[]>>('/systems/compare', { params: { ids: ids.join(',') } }),
 

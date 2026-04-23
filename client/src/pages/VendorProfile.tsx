@@ -2,12 +2,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useSystem, useSystemScores, useVendorProfile, useDomains } from '../hooks/useApi';
 import { useFramework } from '../contexts/FrameworkContext';
-import { Header } from '../components/layout/Header';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { CATEGORY_COLORS } from '../lib/constants';
 import { ArrowLeft, Globe, CheckCircle, XCircle, Building2, DollarSign, Cpu } from 'lucide-react';
+import { LicenceAttribution } from '../components/LicenceAttribution';
 
 export function VendorProfile() {
   const { t } = useTranslation('vendor');
@@ -16,7 +16,7 @@ export function VendorProfile() {
   const { activeFramework } = useFramework();
   const { data: system, isLoading: sysLoading } = useSystem(id!);
   const { data: profile, isLoading: profLoading } = useVendorProfile(id!);
-  const { data: scores } = useSystemScores(id!);
+  const { data: scores } = useSystemScores(id!, activeFramework?.id);
   // Scope domains to the active framework so the strengths / weaknesses
   // aggregation lines up with the same framework the scores belong to.
   const { data: domains } = useDomains(activeFramework?.id);
@@ -224,6 +224,8 @@ export function VendorProfile() {
           </Card>
         </div>
       </div>
+
+      <LicenceAttribution />
     </div>
   );
 }

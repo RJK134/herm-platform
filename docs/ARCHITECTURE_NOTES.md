@@ -26,8 +26,12 @@
 | Routing           | `server/src/api/<domain>/`               | Express routers, request/response shape, wiring middleware              |
 | Validation        | `server/src/middleware/validate.ts`      | `validate({body,query,params})` helpers over Zod                        |
 | Auth / AuthZ      | `server/src/middleware/auth.ts`          | `authenticateJWT`, `optionalJWT`, `requireRole`                         |
+| Framework context | `server/src/middleware/framework-context.ts` + `tier-gate.ts` | Resolves `req.framework` from `?frameworkId=…`, enforces free-tier can only read public frameworks |
+| Commercial gates  | `server/src/middleware/require-paid-tier.ts` | Gates proprietary *features* (not frameworks) by subscription tier. Returns `403 SUBSCRIPTION_REQUIRED` |
 | Errors            | `server/src/middleware/errorHandler.ts`  | Maps Zod / AppError / Prisma errors to the `{success,error}` envelope   |
 | Observability     | `server/src/middleware/requestId.ts`, `httpLogger.ts` + `lib/logger.ts` | pino + pino-http + nanoid correlation                 |
+| Provenance        | `server/src/lib/provenance.ts` + `lib/branding.ts` | HERM attribution block attached to every framework-scoped response. See [HERM_COMPLIANCE](../HERM_COMPLIANCE.md) |
+| Procurement state | `server/src/services/domain/procurement/project-status.ts` | Project-status state machine + transition validation. See [PROCUREMENT_WORKFLOW](../PROCUREMENT_WORKFLOW.md) |
 | Domain services   | `server/src/services/domain/`            | Procurement engine, workflow rules                                      |
 | Integration       | `server/src/services/integration/`       | Stripe (external integrations live here)                                |
 | AI (governed)     | `server/src/services/ai/`                | **Only** place allowed to import `@anthropic-ai/sdk`. See AI_GOVERNANCE.|
@@ -118,6 +122,19 @@ Protected routes are declared in `client/src/App.tsx` via `<ProtectedRoute>` (or
 ## Configuration
 
 All config is environment-driven (`.env.example` lists every variable). Production fails fast on missing `JWT_SECRET`; other keys (Stripe, Anthropic) degrade gracefully when absent.
+
+## Compliance boundaries
+
+HERM content (CC-BY-NC-SA-4.0) and the proprietary FHE Capability Framework coexist in the same schema but must never be blurred for commercial or legal purposes. The authoritative mapping between route, auth, tier, and provenance requirements lives in [HERM_COMPLIANCE.md](../HERM_COMPLIANCE.md). The two bright-line rules:
+
+1. **HERM capability access is free.** Every route scoped to the HERM framework must be reachable by anonymous / free-tier callers.
+2. **HERM attribution travels with the data.** `lib/provenance.ts::okWithProvenance` attaches a `meta.provenance.framework{…}` block to every framework-scoped response; `frameworkPairProvenance(source, target)` emits both sides for `/api/framework-mappings/*`; `/api/export/*` additionally sets `x-framework-*` response headers; the UI renders `<LicenceAttribution />` on the main HERM pages and `<LicenceFooter />` globally.
+
+The `tierGate` middleware gates framework **data** (HERM vs FHE); the separate `requirePaidTier` middleware gates proprietary **features** (framework-mappings API, API keys). They are independent — a free-tier caller can still reach HERM data via `tierGate`, and a paid-tier caller can still be refused by `requirePaidTier` if the feature is enterprise-only.
+
+## Client IA and tier UX
+
+The four-section ASPT IA (HERM Explorer, Procurement Workspace, Sector Intelligence, Account & Billing) is declared once in `client/src/lib/navigation.ts` and consumed by `components/layout/Sidebar.tsx` for navigation and by `App.tsx` for route-level tier gating. The `<RequireTier>` wrapper (in `components/auth/RequireTier.tsx`) mirrors the server's `requirePaidTier` contract — anonymous bounces to `/login?returnTo=…`, `SUPER_ADMIN` bypasses, and non-qualifying tiers render `<UpgradeCard />` (which explicitly notes HERM remains free). Paid-only nav items render a lock icon; usage-capped free-tier items show their cap in the hover title.
 
 ## Future-facing notes
 

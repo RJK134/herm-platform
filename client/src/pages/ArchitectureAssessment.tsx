@@ -46,7 +46,6 @@ interface AnalysisResult {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const SYSTEM_CATEGORIES = ['SIS', 'LMS', 'CRM', 'HCM', 'Finance', 'HR', 'Library', 'Portal', 'Email', 'VLE', 'Other'];
-const PROTOCOLS = ['REST', 'SOAP', 'SFTP', 'Database', 'CSV', 'Message Queue', 'Proprietary', 'None'];
 const ARCH_PATTERNS = [
   { id: 'point-to-point', label: 'Point-to-Point', desc: 'Direct system-to-system connections', risk: 'high' },
   { id: 'file-transfer', label: 'File Transfer (SFTP)', desc: 'Batch file exchange between systems', risk: 'medium' },
@@ -120,8 +119,8 @@ export function ArchitectureAssessment() {
   // System form state
   const [newSystem, setNewSystem] = useState<Partial<SystemNode>>({ category: 'SIS', ageYears: 5, criticalityScore: 3, userCount: 0, cloudNative: false });
 
-  // Fetch existing systems for target selection
-  const { data: vendorSystems } = useQuery({
+  // Fetch existing systems for target selection (read for cache warmth; not consumed directly)
+  useQuery({
     queryKey: ['systems'],
     queryFn: () => axios.get<ApiResponse<{ id: string; name: string; vendor: string }[]>>('/api/systems').then((r) => r.data.data),
   });

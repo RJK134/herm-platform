@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import prisma from '../../utils/prisma';
 import { generateToken, type JwtPayload } from '../../middleware/auth';
-import { AppError, ValidationError, ConflictError } from '../../utils/errors';
+import { AppError, ConflictError } from '../../utils/errors';
 import type { RegisterInput, LoginInput } from './auth.schema';
 
 function buildSlug(name: string): string {

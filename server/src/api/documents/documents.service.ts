@@ -12,7 +12,7 @@ interface DocumentSection {
 
 // ── Template generators ───────────────────────────────────────────────────────
 
-async function generateBusinessCase(input: GenerateDocumentInput, date: string): Promise<DocumentSection[]> {
+async function generateBusinessCase(input: GenerateDocumentInput, _date: string): Promise<DocumentSection[]> {
   let tcoSection = '_No TCO data linked. Add a TCO estimate ID to populate this section._';
   let valueSection = '_No value analysis linked. Add a value analysis ID to populate this section._';
   let basketSection = '_No requirements basket linked. Add a basket ID to populate this section._';

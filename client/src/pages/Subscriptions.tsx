@@ -107,7 +107,7 @@ export function Subscriptions() {
   const qc = useQueryClient();
   const [upgradeMsg, setUpgradeMsg] = useState('');
   const [upgradeMsgOpen, setUpgradeMsgOpen] = useState(false);
-  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [_cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
 
   const subQuery = useQuery<SubscriptionData>({
     queryKey: ['subscription'],

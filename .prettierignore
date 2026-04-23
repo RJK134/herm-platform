@@ -3,7 +3,12 @@ dist
 build
 coverage
 .next
+.cache
 client/public
 prisma/migrations
 package-lock.json
+pnpm-lock.yaml
+yarn.lock
+*.min.js
+*.min.css
 *.log
