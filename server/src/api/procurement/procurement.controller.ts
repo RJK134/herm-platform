@@ -284,6 +284,7 @@ export const clearShortlistDecision = async (
     const entry = await service.clearShortlistDecision(
       req.params['id'] as string,
       req.params['entryId'] as string,
+      actorFromReq(req),
     );
     res.json({ success: true, data: entry });
   } catch (err) {

@@ -114,6 +114,23 @@ describe('ProcurementService.transitionStatus', () => {
     expect(prisma.auditLog.create).not.toHaveBeenCalled();
   });
 
+  it('throws NotFoundError when the race loser finds the row deleted', async () => {
+    // Concurrent delete: initial read succeeds, updateMany flips nothing,
+    // second read returns null. Previously this surfaced a misleading
+    // "cannot transition from 'draft' to …" InvalidTransitionError;
+    // now it correctly reports the project is gone.
+    vi.mocked(prisma.procurementProject.findUnique)
+      .mockResolvedValueOnce({ id: 'p1', status: 'draft' } as never)
+      .mockResolvedValueOnce(null);
+    vi.mocked(prisma.procurementProject.updateMany).mockResolvedValueOnce({
+      count: 0,
+    } as never);
+
+    await expect(
+      service.transitionStatus('p1', { to: 'active_review' }),
+    ).rejects.toThrow(/Project not found/);
+  });
+
   it('throws InvalidTransitionError on forbidden jump', async () => {
     vi.mocked(prisma.procurementProject.findUnique).mockResolvedValueOnce({
       id: 'p1',
@@ -301,6 +318,10 @@ describe('ProcurementService.decideShortlistEntry — tenant scoping', () => {
       id: 'e1',
       projectId: 'p1',
       systemId: 's1',
+      decisionStatus: 'pending',
+      rationale: null,
+      decidedBy: null,
+      decidedAt: null,
     } as never);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (prisma.shortlistEntry.update as any).mockImplementationOnce((args: { data: object }) =>
@@ -406,19 +427,84 @@ describe('ProcurementService.decideShortlistEntry — tenant scoping', () => {
     );
     expect((result as unknown as { decidedBy: string }).decidedBy).toBe('Alice');
   });
-});
 
-describe('ProcurementService.clearShortlistDecision — tenant scoping', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('resets the decision back to pending and nulls reviewer fields', async () => {
-    vi.mocked(prisma.shortlistEntry.findFirst).mockResolvedValueOnce({ id: 'e1' } as never);
+  it('writes an AuditLog entry capturing previous + next decision state', async () => {
+    // The previous decision (stored on the row before we overwrite it)
+    // must survive in AuditLog.changes.previous so governance history
+    // isn't lost when someone re-decides or clears.
+    const priorDecidedAt = new Date('2026-03-01T10:00:00Z');
+    vi.mocked(prisma.shortlistEntry.findFirst).mockResolvedValueOnce({
+      id: 'e1',
+      projectId: 'p1',
+      systemId: 's1',
+      decisionStatus: 'rejected',
+      rationale: 'Missing SSO',
+      decidedBy: 'Alice',
+      decidedAt: priorDecidedAt,
+    } as never);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (prisma.shortlistEntry.update as any).mockImplementationOnce((args: { data: object }) =>
       Promise.resolve({ ...args.data }),
     );
+    vi.mocked(prisma.auditLog.create).mockResolvedValueOnce({} as never);
 
-    const result = await service.clearShortlistDecision('p1', 'e1');
+    await service.decideShortlistEntry(
+      'p1',
+      'e1',
+      { decisionStatus: 'approved', rationale: 'SSO available after all' },
+      { userId: 'u2', name: 'Bob' },
+    );
+
+    expect(prisma.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'procurement.shortlist.decision',
+        entityType: 'ShortlistEntry',
+        entityId: 'e1',
+        userId: 'u2',
+        changes: expect.objectContaining({
+          projectId: 'p1',
+          systemId: 's1',
+          previous: expect.objectContaining({
+            decisionStatus: 'rejected',
+            rationale: 'Missing SSO',
+            decidedBy: 'Alice',
+            decidedAt: priorDecidedAt.toISOString(),
+          }),
+          next: expect.objectContaining({
+            decisionStatus: 'approved',
+            rationale: 'SSO available after all',
+            decidedBy: 'Bob',
+          }),
+          actorName: 'Bob',
+        }),
+      }),
+    });
+  });
+});
+
+describe('ProcurementService.clearShortlistDecision — tenant scoping + audit', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('resets the decision back to pending and nulls reviewer fields', async () => {
+    vi.mocked(prisma.shortlistEntry.findFirst).mockResolvedValueOnce({
+      id: 'e1',
+      projectId: 'p1',
+      systemId: 's1',
+      decisionStatus: 'approved',
+      rationale: 'X',
+      decidedBy: 'Alice',
+      decidedAt: new Date(),
+    } as never);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prisma.shortlistEntry.update as any).mockImplementationOnce((args: { data: object }) =>
+      Promise.resolve({ ...args.data }),
+    );
+    vi.mocked(prisma.auditLog.create).mockResolvedValueOnce({} as never);
+
+    const result = await service.clearShortlistDecision('p1', 'e1', {
+      userId: 'u2',
+      name: 'Bob',
+    });
     expect(prisma.shortlistEntry.findFirst).toHaveBeenCalledWith({
       where: { id: 'e1', projectId: 'p1' },
     });
@@ -430,11 +516,58 @@ describe('ProcurementService.clearShortlistDecision — tenant scoping', () => {
     });
   });
 
+  it('writes an AuditLog entry preserving the prior approval before clearing', async () => {
+    // Before Phase 3 audit coverage, this sequence silently destroyed
+    // the prior approval's reviewer + rationale. Now the AuditLog row
+    // carries `previous.*` so the decision history survives the clear.
+    const priorDecidedAt = new Date('2026-03-01T10:00:00Z');
+    vi.mocked(prisma.shortlistEntry.findFirst).mockResolvedValueOnce({
+      id: 'e1',
+      projectId: 'p1',
+      systemId: 's1',
+      decisionStatus: 'approved',
+      rationale: 'Best fit',
+      decidedBy: 'Alice',
+      decidedAt: priorDecidedAt,
+    } as never);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prisma.shortlistEntry.update as any).mockImplementationOnce((args: { data: object }) =>
+      Promise.resolve({ ...args.data }),
+    );
+    vi.mocked(prisma.auditLog.create).mockResolvedValueOnce({} as never);
+
+    await service.clearShortlistDecision('p1', 'e1', {
+      userId: 'u2',
+      name: 'Bob',
+    });
+
+    expect(prisma.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'procurement.shortlist.decision.clear',
+        entityType: 'ShortlistEntry',
+        entityId: 'e1',
+        userId: 'u2',
+        changes: expect.objectContaining({
+          projectId: 'p1',
+          systemId: 's1',
+          previous: expect.objectContaining({
+            decisionStatus: 'approved',
+            rationale: 'Best fit',
+            decidedBy: 'Alice',
+            decidedAt: priorDecidedAt.toISOString(),
+          }),
+          actorName: 'Bob',
+        }),
+      }),
+    });
+  });
+
   it('rejects the clear if the entry belongs to a different project', async () => {
     vi.mocked(prisma.shortlistEntry.findFirst).mockResolvedValueOnce(null);
     await expect(
       service.clearShortlistDecision('wrong-project', 'e1'),
     ).rejects.toThrow(/Shortlist entry not found/);
     expect(prisma.shortlistEntry.update).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
   });
 });

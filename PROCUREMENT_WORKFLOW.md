@@ -144,7 +144,28 @@ justification. `decidedBy` is resolved from the caller's JWT `name` →
 (clients cannot forge it).
 
 Resetting a decision back to pending nulls `rationale`, `decidedBy`, and
-`decidedAt` so a stale rationale never implies fresh approval.
+`decidedAt` on the row so a stale rationale never implies fresh approval.
+The **prior** decision survives in `AuditLog` — every approve, reject,
+and clear writes an entry capturing:
+
+```json
+{
+  "action": "procurement.shortlist.decision" | "procurement.shortlist.decision.clear",
+  "entityType": "ShortlistEntry",
+  "entityId": "<entry-id>",
+  "userId": "<jwt userId or null>",
+  "changes": {
+    "projectId": "<…>",
+    "systemId": "<…>",
+    "previous": { "decisionStatus", "rationale", "decidedBy", "decidedAt" },
+    "next":     { … }   // omitted on clear
+  }
+}
+```
+
+That means a sequence of approve → clear → reject is fully reconstructable
+from AuditLog even though the row state at any point shows only the most
+recent decision.
 
 ### PII scrubbing on public reads
 

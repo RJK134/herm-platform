@@ -310,16 +310,20 @@ export class ProcurementService {
         data: { status: to },
       });
       if (res.count !== 1) {
-        // Someone else transitioned us in the meantime. Re-read and
-        // surface the authoritative current state as an
-        // InvalidTransitionError so the client retries against the new
-        // state rather than silently succeeding.
+        // Someone else transitioned (or deleted) us in the meantime.
+        // Re-read the authoritative current state. If the project is
+        // gone, surface a NotFoundError — reporting a misleading
+        // "cannot transition from 'draft' to …" against a deleted row
+        // would send the client retrying forever.
         const latest = await tx.procurementProject.findUnique({
           where: { id: projectId },
           select: { status: true },
         });
+        if (!latest) {
+          throw new NotFoundError(`Project not found: ${projectId}`);
+        }
         throw new InvalidTransitionError(
-          normaliseStatus(latest?.status),
+          normaliseStatus(latest.status),
           data.to,
         );
       }
@@ -459,27 +463,69 @@ export class ProcurementService {
       (actor?.name && actor.name.trim().length > 0 ? actor.name.trim() : null) ??
       actor?.userId ??
       null;
+    const decidedAt = new Date();
 
-    return prisma.shortlistEntry.update({
-      where: { id: entryId },
-      data: {
-        decisionStatus: data.decisionStatus,
-        rationale: data.rationale,
-        decidedBy,
-        decidedAt: new Date(),
-      },
-      include: {
-        system: { select: { id: true, name: true, vendor: true, category: true } },
-      },
-    });
+    // Atomic update + audit-log write. The AuditLog row captures the
+    // PRIOR state so clearing or re-deciding an entry never destroys
+    // the history of who approved/rejected it and why.
+    const [updated] = await prisma.$transaction([
+      prisma.shortlistEntry.update({
+        where: { id: entryId },
+        data: {
+          decisionStatus: data.decisionStatus,
+          rationale: data.rationale,
+          decidedBy,
+          decidedAt,
+        },
+        include: {
+          system: { select: { id: true, name: true, vendor: true, category: true } },
+        },
+      }),
+      prisma.auditLog.create({
+        data: {
+          userId: actor?.userId ?? null,
+          action: 'procurement.shortlist.decision',
+          entityType: 'ShortlistEntry',
+          entityId: entryId,
+          changes: {
+            projectId,
+            systemId: entry.systemId,
+            previous: {
+              decisionStatus: entry.decisionStatus,
+              rationale: entry.rationale,
+              decidedBy: entry.decidedBy,
+              decidedAt: entry.decidedAt ? entry.decidedAt.toISOString() : null,
+            },
+            next: {
+              decisionStatus: data.decisionStatus,
+              rationale: data.rationale,
+              decidedBy,
+              decidedAt: decidedAt.toISOString(),
+            },
+            actorName: decidedBy,
+          },
+        },
+      }),
+    ]);
+
+    return updated;
   }
 
   /**
    * Reset a decision back to `pending`. Used when shortlist is revised.
    * Scoped by `(projectId, entryId)` for the same tenant-isolation
    * reason as `decideShortlistEntry`.
+   *
+   * Writes an AuditLog row before clearing so the prior reviewer,
+   * rationale, and decision timestamp survive even though the
+   * corresponding columns on `ShortlistEntry` are now `null`. This is
+   * the exact "unrecoverable governance gap" Phase 3 exists to close.
    */
-  async clearShortlistDecision(projectId: string, entryId: string) {
+  async clearShortlistDecision(
+    projectId: string,
+    entryId: string,
+    actor?: { userId?: string; name?: string },
+  ) {
     const entry = await prisma.shortlistEntry.findFirst({
       where: { id: entryId, projectId },
     });
@@ -489,17 +535,45 @@ export class ProcurementService {
       );
     }
 
-    return prisma.shortlistEntry.update({
-      where: { id: entryId },
-      data: {
-        decisionStatus: 'pending',
-        rationale: null,
-        decidedBy: null,
-        decidedAt: null,
-      },
-      include: {
-        system: { select: { id: true, name: true, vendor: true, category: true } },
-      },
-    });
+    const actorName =
+      (actor?.name && actor.name.trim().length > 0 ? actor.name.trim() : null) ??
+      actor?.userId ??
+      null;
+
+    const [updated] = await prisma.$transaction([
+      prisma.shortlistEntry.update({
+        where: { id: entryId },
+        data: {
+          decisionStatus: 'pending',
+          rationale: null,
+          decidedBy: null,
+          decidedAt: null,
+        },
+        include: {
+          system: { select: { id: true, name: true, vendor: true, category: true } },
+        },
+      }),
+      prisma.auditLog.create({
+        data: {
+          userId: actor?.userId ?? null,
+          action: 'procurement.shortlist.decision.clear',
+          entityType: 'ShortlistEntry',
+          entityId: entryId,
+          changes: {
+            projectId,
+            systemId: entry.systemId,
+            previous: {
+              decisionStatus: entry.decisionStatus,
+              rationale: entry.rationale,
+              decidedBy: entry.decidedBy,
+              decidedAt: entry.decidedAt ? entry.decidedAt.toISOString() : null,
+            },
+            actorName,
+          },
+        },
+      }),
+    ]);
+
+    return updated;
   }
 }
