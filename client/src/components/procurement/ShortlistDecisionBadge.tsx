@@ -45,9 +45,11 @@ export function ShortlistDecisionBadge({
         ? 'Awaiting decision'
         : `${label} — no rationale recorded`;
 
+  // No `role="status"` — ARIA live regions are for dynamic updates and
+  // cause noisy announcements on every re-render of a long shortlist.
+  // The visible text plus `aria-label` carry the accessible name.
   return (
     <span
-      role="status"
       aria-label={`Shortlist decision: ${label}`}
       title={tooltip}
       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${pillClass}`}

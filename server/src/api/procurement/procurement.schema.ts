@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PROJECT_STATUSES } from '../../services/domain/procurement/project-status';
 
 export const createProjectSchema = z.object({
   name: z.string().min(1).max(200),
@@ -34,8 +35,7 @@ export const updateShortlistEntrySchema = z.object({
 });
 
 // ── Phase 3: workflow state transitions + shortlist governance ──────────────
-
-import { PROJECT_STATUSES } from '../../services/domain/procurement/project-status';
+// `PROJECT_STATUSES` is imported at the top of the file.
 
 export const transitionProjectSchema = z.object({
   to: z.enum(PROJECT_STATUSES),

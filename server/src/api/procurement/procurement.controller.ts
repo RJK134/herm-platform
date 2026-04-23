@@ -252,6 +252,7 @@ export const decideShortlistEntry = async (
   try {
     const data = decideShortlistSchema.parse(req.body);
     const entry = await service.decideShortlistEntry(
+      req.params['id'] as string,
       req.params['entryId'] as string,
       data,
       actorFromReq(req),
@@ -269,6 +270,7 @@ export const clearShortlistDecision = async (
 ): Promise<void> => {
   try {
     const entry = await service.clearShortlistDecision(
+      req.params['id'] as string,
       req.params['entryId'] as string,
     );
     res.json({ success: true, data: entry });

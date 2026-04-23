@@ -25,9 +25,12 @@ export function ProjectStatusPill({ status, compact, title }: ProjectStatusPillP
   const normalised: ProjectStatus = toProjectStatus(status);
   const meta = PROJECT_STATUS_META[normalised];
 
+  // Intentionally no `role="status"` — ARIA live regions are reserved for
+  // dynamic updates (e.g. form-submit feedback). This is a static pill;
+  // the label text itself is the accessible name, `aria-label` makes it
+  // explicit for screen readers without announcing on re-renders.
   return (
     <span
-      role="status"
       aria-label={`Project status: ${meta.label}`}
       title={title ?? meta.description}
       className={`inline-flex items-center rounded-full font-medium ${

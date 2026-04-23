@@ -9,6 +9,7 @@ vi.mock('../../../utils/prisma', () => {
   };
   const shortlistEntry = {
     findUnique: vi.fn(),
+    findFirst: vi.fn(),
     update: vi.fn(),
   };
   const auditLog = {
@@ -127,7 +128,7 @@ describe('ProcurementService.transitionStatus', () => {
 describe('ProcurementService.getStatusContext', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('returns current + next + history normalised', async () => {
+  it('returns current + next + history with actorId AND actorName', async () => {
     vi.mocked(prisma.procurementProject.findUnique).mockResolvedValueOnce({
       status: 'shortlist_proposed',
     } as never);
@@ -135,12 +136,22 @@ describe('ProcurementService.getStatusContext', () => {
       {
         userId: 'u1',
         createdAt: new Date('2026-01-01'),
-        changes: { from: 'draft', to: 'active_review', note: 'start' },
+        changes: {
+          from: 'draft',
+          to: 'active_review',
+          note: 'start',
+          actorName: 'Alice',
+        },
       },
       {
         userId: 'u2',
         createdAt: new Date('2026-01-02'),
-        changes: { from: 'active_review', to: 'shortlist_proposed', note: null },
+        changes: {
+          from: 'active_review',
+          to: 'shortlist_proposed',
+          note: null,
+          actorName: 'Bob',
+        },
       },
     ] as never);
 
@@ -154,15 +165,35 @@ describe('ProcurementService.getStatusContext', () => {
       to: 'active_review',
       note: 'start',
       actorId: 'u1',
+      actorName: 'Alice',
     });
+    expect(ctx.history[1]).toMatchObject({
+      actorId: 'u2',
+      actorName: 'Bob',
+    });
+  });
+
+  it('tolerates legacy audit rows missing actorName', async () => {
+    vi.mocked(prisma.procurementProject.findUnique).mockResolvedValueOnce({
+      status: 'draft',
+    } as never);
+    vi.mocked(prisma.auditLog.findMany).mockResolvedValueOnce([
+      {
+        userId: null,
+        createdAt: new Date('2026-01-01'),
+        changes: { from: 'draft', to: 'active_review' },
+      },
+    ] as never);
+    const ctx = await service.getStatusContext('p1');
+    expect(ctx.history[0]).toMatchObject({ actorId: null, actorName: null });
   });
 });
 
-describe('ProcurementService.decideShortlistEntry', () => {
+describe('ProcurementService.decideShortlistEntry — tenant scoping', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('stamps decisionStatus, rationale, decidedBy, decidedAt', async () => {
-    vi.mocked(prisma.shortlistEntry.findUnique).mockResolvedValueOnce({
+    vi.mocked(prisma.shortlistEntry.findFirst).mockResolvedValueOnce({
       id: 'e1',
       projectId: 'p1',
       systemId: 's1',
@@ -173,74 +204,87 @@ describe('ProcurementService.decideShortlistEntry', () => {
     );
 
     const result = await service.decideShortlistEntry(
+      'p1',
       'e1',
       { decisionStatus: 'approved', rationale: 'Best HERM coverage' },
       { userId: 'u1', name: 'Alice' },
     );
+
+    // findFirst must filter on BOTH id AND projectId — this is the
+    // tenant-isolation contract.
+    expect(prisma.shortlistEntry.findFirst).toHaveBeenCalledWith({
+      where: { id: 'e1', projectId: 'p1' },
+    });
 
     expect(result).toMatchObject({
       decisionStatus: 'approved',
       rationale: 'Best HERM coverage',
       decidedBy: 'Alice',
     });
-    // decidedAt must be a Date near-now (server-stamped, not client-provided).
     const ts = (result as unknown as { decidedAt: Date }).decidedAt;
     expect(ts).toBeInstanceOf(Date);
     expect(Date.now() - ts.getTime()).toBeLessThan(1000);
   });
 
+  it('rejects the decision if the entry belongs to a different project', async () => {
+    // Entry exists but not under the provided projectId → findFirst returns null.
+    vi.mocked(prisma.shortlistEntry.findFirst).mockResolvedValueOnce(null);
+
+    await expect(
+      service.decideShortlistEntry('wrong-project', 'e1', {
+        decisionStatus: 'approved',
+        rationale: 'x',
+      }),
+    ).rejects.toThrow(/Shortlist entry not found/);
+
+    expect(prisma.shortlistEntry.update).not.toHaveBeenCalled();
+  });
+
   it('rejects invalid decisionStatus at the service boundary', async () => {
-    vi.mocked(prisma.shortlistEntry.findUnique).mockResolvedValueOnce({
+    vi.mocked(prisma.shortlistEntry.findFirst).mockResolvedValueOnce({
       id: 'e1',
     } as never);
 
     await expect(
-      service.decideShortlistEntry(
-        'e1',
-        { decisionStatus: 'weird' as never, rationale: 'x' },
-      ),
+      service.decideShortlistEntry('p1', 'e1', {
+        decisionStatus: 'weird' as never,
+        rationale: 'x',
+      }),
     ).rejects.toThrow(/decisionStatus must be/);
     expect(prisma.shortlistEntry.update).not.toHaveBeenCalled();
   });
 
   it('falls back to userId then provided decidedBy when name is absent', async () => {
-    vi.mocked(prisma.shortlistEntry.findUnique).mockResolvedValueOnce({ id: 'e1' } as never);
+    vi.mocked(prisma.shortlistEntry.findFirst).mockResolvedValueOnce({ id: 'e1' } as never);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (prisma.shortlistEntry.update as any).mockImplementationOnce((args: { data: object }) =>
       Promise.resolve({ ...args.data }),
     );
 
     const result = await service.decideShortlistEntry(
+      'p1',
       'e1',
-      { decisionStatus: 'rejected', rationale: 'Missing SSO', decidedBy: 'External reviewer' },
+      { decisionStatus: 'rejected', rationale: 'Missing SSO', decidedBy: 'External' },
       { userId: 'u9' },
     );
-    // `name` absent, `userId` present → decidedBy becomes 'u9'
     expect((result as unknown as { decidedBy: string }).decidedBy).toBe('u9');
-  });
-
-  it('throws when the entry does not exist', async () => {
-    vi.mocked(prisma.shortlistEntry.findUnique).mockResolvedValueOnce(null);
-    await expect(
-      service.decideShortlistEntry('missing', {
-        decisionStatus: 'approved',
-        rationale: 'x',
-      }),
-    ).rejects.toThrow(/Shortlist entry not found/);
   });
 });
 
-describe('ProcurementService.clearShortlistDecision', () => {
+describe('ProcurementService.clearShortlistDecision — tenant scoping', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('resets the decision back to pending and nulls reviewer fields', async () => {
-    vi.mocked(prisma.shortlistEntry.findUnique).mockResolvedValueOnce({ id: 'e1' } as never);
+    vi.mocked(prisma.shortlistEntry.findFirst).mockResolvedValueOnce({ id: 'e1' } as never);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (prisma.shortlistEntry.update as any).mockImplementationOnce((args: { data: object }) =>
       Promise.resolve({ ...args.data }),
     );
 
-    const result = await service.clearShortlistDecision('e1');
+    const result = await service.clearShortlistDecision('p1', 'e1');
+    expect(prisma.shortlistEntry.findFirst).toHaveBeenCalledWith({
+      where: { id: 'e1', projectId: 'p1' },
+    });
     expect(result).toMatchObject({
       decisionStatus: 'pending',
       rationale: null,
@@ -249,10 +293,11 @@ describe('ProcurementService.clearShortlistDecision', () => {
     });
   });
 
-  it('throws when the entry does not exist', async () => {
-    vi.mocked(prisma.shortlistEntry.findUnique).mockResolvedValueOnce(null);
-    await expect(service.clearShortlistDecision('missing')).rejects.toThrow(
-      /Shortlist entry not found/,
-    );
+  it('rejects the clear if the entry belongs to a different project', async () => {
+    vi.mocked(prisma.shortlistEntry.findFirst).mockResolvedValueOnce(null);
+    await expect(
+      service.clearShortlistDecision('wrong-project', 'e1'),
+    ).rejects.toThrow(/Shortlist entry not found/);
+    expect(prisma.shortlistEntry.update).not.toHaveBeenCalled();
   });
 });

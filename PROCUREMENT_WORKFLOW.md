@@ -94,7 +94,10 @@ Every successful transition writes to `AuditLog`:
 }
 ```
 
-History is surfaced at `GET /api/procurement/projects/:id/status`.
+History is surfaced at `GET /api/procurement/projects/:id/status`, where
+each row is `{ at, actorId, actorName, from, to, note }` — `actorId` from
+the AuditLog row itself, `actorName` parsed out of `changes` so operators
+can display who performed a transition without an extra lookup.
 
 ## Shortlist decision governance
 

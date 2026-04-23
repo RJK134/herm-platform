@@ -5,10 +5,9 @@ import { ProjectStatusPill } from '../ProjectStatusPill';
 describe('<ProjectStatusPill />', () => {
   it('renders the published label for a canonical state', () => {
     render(<ProjectStatusPill status="shortlist_proposed" />);
-    expect(screen.getByRole('status')).toHaveAttribute(
-      'aria-label',
-      'Project status: Shortlist proposed',
-    );
+    expect(
+      screen.getByLabelText('Project status: Shortlist proposed'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Shortlist proposed')).toBeInTheDocument();
   });
 
@@ -27,7 +26,9 @@ describe('<ProjectStatusPill />', () => {
 
   it('uses the state description as the default tooltip', () => {
     render(<ProjectStatusPill status="archived" />);
-    expect(screen.getByRole('status')).toHaveAttribute(
+    expect(
+      screen.getByLabelText('Project status: Archived'),
+    ).toHaveAttribute(
       'title',
       'Project closed; no further actions expected.',
     );
@@ -35,6 +36,14 @@ describe('<ProjectStatusPill />', () => {
 
   it('accepts a custom tooltip', () => {
     render(<ProjectStatusPill status="draft" title="Your custom tooltip" />);
-    expect(screen.getByRole('status')).toHaveAttribute('title', 'Your custom tooltip');
+    expect(screen.getByLabelText('Project status: Draft')).toHaveAttribute(
+      'title',
+      'Your custom tooltip',
+    );
+  });
+
+  it('does not declare role="status" (avoids noisy live-region announcements)', () => {
+    render(<ProjectStatusPill status="draft" />);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 });

@@ -6,7 +6,10 @@ describe('<ShortlistDecisionBadge />', () => {
   it('shows Pending for missing/null/unknown decisionStatus', () => {
     render(<ShortlistDecisionBadge decisionStatus={null} />);
     expect(screen.getByText('Pending')).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveAttribute('title', 'Awaiting decision');
+    expect(screen.getByLabelText('Shortlist decision: Pending')).toHaveAttribute(
+      'title',
+      'Awaiting decision',
+    );
   });
 
   it('shows Approved with rationale, reviewer, and date in the tooltip', () => {
@@ -19,7 +22,8 @@ describe('<ShortlistDecisionBadge />', () => {
       />,
     );
     expect(screen.getByText('Approved')).toBeInTheDocument();
-    const title = screen.getByRole('status').getAttribute('title') ?? '';
+    const title =
+      screen.getByLabelText('Shortlist decision: Approved').getAttribute('title') ?? '';
     expect(title).toContain('Best HERM coverage overall');
     expect(title).toContain('Alice');
     // en-GB locale → DD/MM/YYYY; just check the date digits appear.
@@ -27,21 +31,24 @@ describe('<ShortlistDecisionBadge />', () => {
   });
 
   it('shows Rejected with rationale', () => {
-    render(
-      <ShortlistDecisionBadge
-        decisionStatus="rejected"
-        rationale="Missing SSO"
-      />,
-    );
+    render(<ShortlistDecisionBadge decisionStatus="rejected" rationale="Missing SSO" />);
     expect(screen.getByText('Rejected')).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveAttribute('title', 'Missing SSO');
+    expect(screen.getByLabelText('Shortlist decision: Rejected')).toHaveAttribute(
+      'title',
+      'Missing SSO',
+    );
   });
 
   it('flags a decided-but-unrationale entry distinctly', () => {
     render(<ShortlistDecisionBadge decisionStatus="approved" />);
-    expect(screen.getByRole('status')).toHaveAttribute(
+    expect(screen.getByLabelText('Shortlist decision: Approved')).toHaveAttribute(
       'title',
       'Approved — no rationale recorded',
     );
+  });
+
+  it('does not declare role="status" (avoids noisy live-region announcements)', () => {
+    render(<ShortlistDecisionBadge decisionStatus="approved" rationale="x" />);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 });

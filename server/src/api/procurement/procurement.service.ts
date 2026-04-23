@@ -246,9 +246,9 @@ export class ProcurementService {
 
   /**
    * Apply a governance-controlled status transition. Records an AuditLog
-   * entry capturing `{from, to, note, actorId}` so reviewers can see the
-   * history even though the `status` column itself is a point-in-time
-   * scalar.
+   * entry with `userId` on the row itself and `changes` carrying
+   * `{from, to, note, actorName}` so reviewers can see the history even
+   * though the `status` column itself is a point-in-time scalar.
    */
   async transitionStatus(
     projectId: string,
@@ -300,6 +300,7 @@ export class ProcurementService {
     history: Array<{
       at: Date;
       actorId: string | null;
+      actorName: string | null;
       from: ProjectStatus;
       to: ProjectStatus;
       note: string | null;
@@ -325,14 +326,18 @@ export class ProcurementService {
       current,
       next: nextStates(current),
       history: logs.map((l) => {
+        // `changes` carries {from, to, note, actorName} — parse defensively
+        // in case older rows are missing fields.
         const c = (l.changes ?? {}) as {
           from?: string;
           to?: string;
           note?: string | null;
+          actorName?: string | null;
         };
         return {
           at: l.createdAt,
           actorId: l.userId ?? null,
+          actorName: c.actorName ?? null,
           from: normaliseStatus(c.from),
           to: normaliseStatus(c.to),
           note: c.note ?? null,
@@ -348,14 +353,25 @@ export class ProcurementService {
    * `updateShortlistEntry`, this is the canonical governance surface —
    * rationale is mandatory, and both actor attribution and `decidedAt`
    * are stamped server-side.
+   *
+   * Scoped by BOTH `projectId` and `entryId` so an entry belonging to a
+   * different project can't be decided on via a mis-routed URL. Returns
+   * 404 if the entry doesn't belong to the named project.
    */
   async decideShortlistEntry(
+    projectId: string,
     entryId: string,
     data: DecideShortlistInput,
     actor?: { userId?: string; name?: string },
   ) {
-    const entry = await prisma.shortlistEntry.findUnique({ where: { id: entryId } });
-    if (!entry) throw new NotFoundError(`Shortlist entry not found: ${entryId}`);
+    const entry = await prisma.shortlistEntry.findFirst({
+      where: { id: entryId, projectId },
+    });
+    if (!entry) {
+      throw new NotFoundError(
+        `Shortlist entry not found: ${entryId} (project ${projectId})`,
+      );
+    }
 
     // Guard against weird inputs — the Zod schema already restricts
     // `decisionStatus`, but we belt-and-brace here so callers that wire
@@ -381,10 +397,20 @@ export class ProcurementService {
     });
   }
 
-  /** Reset a decision back to `pending`. Used when shortlist is revised. */
-  async clearShortlistDecision(entryId: string) {
-    const entry = await prisma.shortlistEntry.findUnique({ where: { id: entryId } });
-    if (!entry) throw new NotFoundError(`Shortlist entry not found: ${entryId}`);
+  /**
+   * Reset a decision back to `pending`. Used when shortlist is revised.
+   * Scoped by `(projectId, entryId)` for the same tenant-isolation
+   * reason as `decideShortlistEntry`.
+   */
+  async clearShortlistDecision(projectId: string, entryId: string) {
+    const entry = await prisma.shortlistEntry.findFirst({
+      where: { id: entryId, projectId },
+    });
+    if (!entry) {
+      throw new NotFoundError(
+        `Shortlist entry not found: ${entryId} (project ${projectId})`,
+      );
+    }
 
     return prisma.shortlistEntry.update({
       where: { id: entryId },
