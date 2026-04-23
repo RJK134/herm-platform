@@ -3,6 +3,13 @@
 This document tracks what is in place to run HERM Platform in production and
 what is explicitly deferred. Update it as gaps close or new ones surface.
 
+## HERM licence compliance
+
+- **Attribution carried with the data.** Framework-scoped API responses include a `meta.provenance.framework{…}` block (`server/src/lib/provenance.ts`). Export CSVs carry `x-framework-*` response headers. The client renders `<LicenceAttribution />` on the main HERM pages and a persistent `<LicenceFooter />` in the app shell for every other page.
+- **HERM stays free.** `frameworkContext` middleware falls back to the first **public** active framework; `tierGate` passes all public frameworks through regardless of user tier. Subscription copy lists no HERM-specific paid gate.
+- **Commercial gates are typed.** `requirePaidTier` middleware (in `server/src/middleware/require-paid-tier.ts`) returns `403 SUBSCRIPTION_REQUIRED` with `details.requiredTiers` for targeted upgrade CTAs; currently applied enterprise-only to `/api/framework-mappings/*` and `/api/keys/*`.
+- Authoritative route-tier mapping + release-time audit checklist: [HERM_COMPLIANCE.md](./HERM_COMPLIANCE.md).
+
 ## Quality gates
 
 - **Lint** — ESLint 9 flat config; `@typescript-eslint/no-explicit-any: error`.

@@ -83,6 +83,20 @@ Anything marked "public" reads only cached reference data and has no tenant
 context. When any of these gain mutation endpoints or tenant-specific reads,
 flip them behind `authenticateJWT`.
 
+### Commercial tier gates
+
+The route-auth matrix above covers *authentication*. **Subscription tier**
+gating is separate — the authoritative mapping is [HERM_COMPLIANCE.md](./HERM_COMPLIANCE.md):
+
+- `tierGate` (in `middleware/tier-gate.ts`) gates framework **data**. Free tier
+  can only read public (CC-licensed) frameworks; paid tiers can also read
+  proprietary ones. Protects HERM + FHE co-existence.
+- `requirePaidTier` (in `middleware/require-paid-tier.ts`) gates commercial
+  **features** regardless of which framework is being read. Currently
+  applied enterprise-only to `/api/framework-mappings/*` and `/api/keys/*`.
+
+`SUPER_ADMIN` bypasses `requirePaidTier` platform-wide.
+
 ## Service layering (target)
 
 Current services are flat under `server/src/services/` and per-feature under
