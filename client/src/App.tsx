@@ -9,6 +9,7 @@ import { FrameworkProvider } from './contexts/FrameworkContext';
 import { SidebarProvider, useSidebar } from './contexts/SidebarContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { RequireTier } from './components/auth/RequireTier';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Leaderboard } from './pages/Leaderboard';
@@ -186,16 +187,42 @@ export default function App() {
                             </ProtectedRoute>
                           }
                         />
-                        <Route path="/sector" element={<SectorAnalytics />} />
+                        <Route
+                          path="/sector"
+                          element={
+                            <RequireTier
+                              tiers={['professional', 'enterprise']}
+                              featureName="Sector Intelligence"
+                              description="Cross-institution sector analytics: adoption trends, capability coverage aggregates, and peer benchmarking. HERM capability data remains free — this view adds Future Horizons Education's comparative intelligence layer."
+                            >
+                              <SectorAnalytics />
+                            </RequireTier>
+                          }
+                        />
                         <Route
                           path="/api-keys"
                           element={
-                            <ProtectedRoute>
+                            <RequireTier
+                              tiers={['enterprise']}
+                              featureName="API Integration"
+                              description="Issue and manage API keys for programmatic access to the platform. Included on the Enterprise plan; read-only HERM data remains available through the public API without a key."
+                            >
                               <ApiIntegration />
-                            </ProtectedRoute>
+                            </RequireTier>
                           }
                         />
-                        <Route path="/framework-mapping" element={<FrameworkMapping />} />
+                        <Route
+                          path="/framework-mapping"
+                          element={
+                            <RequireTier
+                              tiers={['enterprise']}
+                              featureName="Framework Mapping"
+                              description="Cross-framework migration tooling — map HERM capabilities to the FHE Capability Framework (or any future enterprise framework). Included on the Enterprise plan."
+                            >
+                              <FrameworkMapping />
+                            </RequireTier>
+                          }
+                        />
                         <Route path="*" element={<NotFound />} />
                       </Routes>
                     </AppShell>

@@ -1,11 +1,15 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  BarChart3, Radar, Grid3X3, Building2, Search, ShoppingBasket,
-  Download, Settings, Sun, Moon, Store, HelpCircle, BookOpen, Bot,
-  LogIn, LogOut, User, Crown,
-  Layers, TrendingUp, FileText, FolderKanban, Map,
-  Users, CreditCard, Shield, PieChart, Key,
-  ChevronLeft, ChevronRight,
+  BarChart3,
+  Sun,
+  Moon,
+  LogIn,
+  LogOut,
+  User,
+  Crown,
+  Lock,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../hooks/useTheme';
@@ -14,97 +18,125 @@ import { useSidebar } from '../../contexts/SidebarContext';
 import { useFramework } from '../../contexts/FrameworkContext';
 import { NotificationBell } from '../NotificationBell';
 import { LanguageSelector } from '../LanguageSelector';
-
-const analyticsItems = [
-  { to: '/', icon: BarChart3, label: 'Leaderboard' },
-  { to: '/radar', icon: Radar, label: 'Radar Comparison' },
-  { to: '/heatmap', icon: Grid3X3, label: 'Capability Heatmap' },
-  { to: '/system', icon: Building2, label: 'System Detail' },
-  { to: '/capability', icon: Search, label: 'Capability View' },
-  { to: '/basket', icon: ShoppingBasket, label: 'Capability Basket' },
-];
-
-const intelligenceItems = [
-  { to: '/vendor', icon: Store, label: 'Vendor Showcase' },
-  { to: '/how-it-works', icon: HelpCircle, label: 'How It Works' },
-  { to: '/architecture', icon: Layers, label: 'Architecture Assessment' },
-  { to: '/value', icon: TrendingUp, label: 'Cost & Value Analysis' },
-  { to: '/research', icon: BookOpen, label: 'Research & Evidence' },
-  { to: '/assistant', icon: Bot, label: 'AI Assistant' },
-];
-
-const procurementItems = [
-  { to: '/projects', icon: FolderKanban, label: 'Procurement Projects' },
-  { to: '/guide', icon: Map, label: 'Procurement Guide' },
-  { to: '/workspaces', icon: Users, label: 'Team Workspaces' },
-  { to: '/documents', icon: FileText, label: 'Documents' },
-];
-
-const insightsItems = [
-  { to: '/sector', icon: PieChart, label: 'Sector Analytics' },
-  { to: '/framework-mapping', icon: Map, label: 'Framework Mapping' },
-];
-
-const adminItems = [
-  { to: '/admin', icon: Settings, label: 'Systems Management' },
-  { to: '/admin/vendors', icon: Shield, label: 'Vendor Management' },
-  { to: '/subscription', icon: CreditCard, label: 'Subscriptions' },
-  { to: '/api-keys', icon: Key, label: 'API Integration' },
-  { to: '/export', icon: Download, label: 'Reports & Export' },
-];
-
-function NavSection({
-  title,
-  items,
-  isCollapsed,
-  onNavClick,
-}: {
-  title: string;
-  items: { to: string; icon: React.ComponentType<{ className?: string }>; label: string }[];
-  isCollapsed: boolean;
-  onNavClick?: () => void;
-}) {
-  return (
-    <div>
-      {!isCollapsed && (
-        <div className="px-6 py-2 text-xs font-semibold text-white/30 uppercase tracking-wider">
-          {title}
-        </div>
-      )}
-      {items.map(({ to, icon: Icon, label }) => (
-        <NavLink
-          key={to}
-          to={to}
-          end={to === '/'}
-          onClick={onNavClick}
-          className={({ isActive }) =>
-            `flex items-center gap-3 text-sm transition-colors relative group ${
-              isCollapsed ? 'justify-center px-2 py-2.5' : 'px-6 py-2.5'
-            } ${
-              isActive
-                ? 'bg-teal/20 text-teal border-r-2 border-teal font-medium'
-                : 'text-white/70 hover:text-white hover:bg-white/5'
-            }`
-          }
-        >
-          <Icon className="w-4 h-4 flex-shrink-0" />
-          {!isCollapsed && label}
-          {isCollapsed && (
-            <span className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity">
-              {label}
-            </span>
-          )}
-        </NavLink>
-      ))}
-    </div>
-  );
-}
+import { NAV_SECTIONS } from '../../lib/navigation';
+import type { NavItem, NavSection as NavSectionType } from '../../lib/navigation';
+import { isPaidTier } from '../../lib/branding';
 
 const TIER_COLOURS: Record<string, string> = {
   enterprise: 'bg-amber-500/20 text-amber-300',
   professional: 'bg-teal/20 text-teal',
   free: 'bg-white/10 text-white/50',
 };
+
+/**
+ * Computes the visual state of a nav item for the current user:
+ *   - 'available'  → user passes the tier gate (or it's public)
+ *   - 'locked'     → user is on a lower tier; show a lock icon
+ *   - 'hidden'     → section is authed-only and user is anonymous
+ */
+function itemState(
+  item: NavItem,
+  isAuthenticated: boolean,
+  userTier: string,
+  userRole: string,
+): 'available' | 'locked' | 'hidden' {
+  if (item.tier === 'public') return 'available';
+  if (item.tier === 'authenticated') return isAuthenticated ? 'available' : 'hidden';
+  // Paid tier list
+  if (userRole === 'SUPER_ADMIN') return 'available';
+  if (!isAuthenticated) return 'locked';
+  if (!isPaidTier(userTier)) return 'locked';
+  return (item.tier as readonly string[]).includes(userTier) ? 'available' : 'locked';
+}
+
+interface SectionProps {
+  section: NavSectionType;
+  isCollapsed: boolean;
+  isAuthenticated: boolean;
+  userTier: string;
+  userRole: string;
+  onNavClick?: () => void;
+}
+
+function NavSection({
+  section,
+  isCollapsed,
+  isAuthenticated,
+  userTier,
+  userRole,
+  onNavClick,
+}: SectionProps) {
+  const { t } = useTranslation();
+  if (!section.visibleAnonymous && !isAuthenticated) return null;
+
+  // Hide the whole section if every item is hidden for this caller.
+  const visibleItems = section.items.filter(
+    (i) => itemState(i, isAuthenticated, userTier, userRole) !== 'hidden',
+  );
+  if (visibleItems.length === 0) return null;
+
+  return (
+    <div>
+      {!isCollapsed && (
+        <div className="px-6 py-2 text-xs font-semibold text-white/30 uppercase tracking-wider">
+          {t(section.titleKey, section.titleDefault)}
+        </div>
+      )}
+      {visibleItems.map((item) => {
+        const state = itemState(item, isAuthenticated, userTier, userRole);
+        const locked = state === 'locked';
+        const Icon = item.icon;
+
+        return (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.to === '/'}
+            onClick={onNavClick}
+            aria-disabled={locked || undefined}
+            title={
+              locked
+                ? `${item.label} — requires a paid subscription`
+                : item.freeUsageHint && !isPaidTier(userTier)
+                  ? `${item.label} (${item.freeUsageHint})`
+                  : item.label
+            }
+            className={({ isActive }) =>
+              `flex items-center gap-3 text-sm transition-colors relative group ${
+                isCollapsed ? 'justify-center px-2 py-2.5' : 'px-6 py-2.5'
+              } ${
+                isActive
+                  ? 'bg-teal/20 text-teal border-r-2 border-teal font-medium'
+                  : locked
+                    ? 'text-white/30 hover:text-white/50'
+                    : 'text-white/70 hover:text-white hover:bg-white/5'
+              }`
+            }
+          >
+            <Icon className="w-4 h-4 flex-shrink-0" />
+            {!isCollapsed && (
+              <>
+                <span className="flex-1 truncate">{item.label}</span>
+                {locked && (
+                  <Lock
+                    className="w-3 h-3 text-amber-300/60 flex-shrink-0"
+                    aria-label="Requires upgrade"
+                  />
+                )}
+              </>
+            )}
+            {isCollapsed && (
+              <span className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity">
+                {item.label}
+                {locked ? ' — upgrade required' : ''}
+              </span>
+            )}
+          </NavLink>
+        );
+      })}
+    </div>
+  );
+}
 
 export function Sidebar() {
   const { theme, toggleTheme } = useTheme();
@@ -114,19 +146,18 @@ export function Sidebar() {
   const { isCollapsed, isMobileOpen, toggleCollapse, closeMobile } = useSidebar();
   const { frameworks, activeFramework, setActiveFramework } = useFramework();
 
+  const userTier = user?.tier ?? '';
+  const userRole = user?.role ?? '';
+
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
-  const handleNavClick = () => {
-    // Close mobile sidebar when a link is clicked
-    closeMobile();
-  };
+  const handleNavClick = () => closeMobile();
 
   return (
     <>
-      {/* Mobile backdrop overlay */}
       {isMobileOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 md:hidden"
@@ -167,13 +198,13 @@ export function Sidebar() {
               {frameworks.length > 1 && (
                 <select
                   value={activeFramework?.id ?? ''}
-                  onChange={e => {
-                    const fw = frameworks.find(f => f.id === e.target.value);
+                  onChange={(e) => {
+                    const fw = frameworks.find((f) => f.id === e.target.value);
                     if (fw) setActiveFramework(fw);
                   }}
                   className="mt-2 w-full px-2 py-1 text-xs bg-white/10 border border-white/20 rounded text-white/80"
                 >
-                  {frameworks.map(fw => (
+                  {frameworks.map((fw) => (
                     <option key={fw.id} value={fw.id} className="text-gray-900">
                       {fw.name}
                     </option>
@@ -197,22 +228,25 @@ export function Sidebar() {
           )}
         </div>
 
-        {/* Navigation */}
+        {/* Navigation — driven from lib/navigation.ts for single-source-of-truth IA */}
         <nav className="flex-1 py-3 overflow-y-auto space-y-2">
-          <NavSection title={t('nav.analytics', 'Analytics')} items={analyticsItems} isCollapsed={isCollapsed} onNavClick={handleNavClick} />
-          <div className="mx-4 border-t border-white/10" />
-          <NavSection title={t('nav.procurement', 'Procurement')} items={procurementItems} isCollapsed={isCollapsed} onNavClick={handleNavClick} />
-          <div className="mx-4 border-t border-white/10" />
-          <NavSection title={t('nav.intelligence', 'Intelligence')} items={intelligenceItems} isCollapsed={isCollapsed} onNavClick={handleNavClick} />
-          <div className="mx-4 border-t border-white/10" />
-          <NavSection title={t('nav.insights', 'Insights')} items={insightsItems} isCollapsed={isCollapsed} onNavClick={handleNavClick} />
-          <div className="mx-4 border-t border-white/10" />
-          <NavSection title={t('nav.admin', 'Admin')} items={adminItems} isCollapsed={isCollapsed} onNavClick={handleNavClick} />
+          {NAV_SECTIONS.map((section, idx) => (
+            <div key={section.id}>
+              <NavSection
+                section={section}
+                isCollapsed={isCollapsed}
+                isAuthenticated={isAuthenticated}
+                userTier={userTier}
+                userRole={userRole}
+                onNavClick={handleNavClick}
+              />
+              {idx < NAV_SECTIONS.length - 1 && <div className="mx-4 border-t border-white/10 my-2" />}
+            </div>
+          ))}
         </nav>
 
         {/* Footer */}
         <div className={`border-t border-white/10 space-y-3 ${isCollapsed ? 'p-2' : 'p-4'}`}>
-          {/* User info / login */}
           {isAuthenticated ? (
             <div className="space-y-2">
               {!isCollapsed ? (
@@ -261,7 +295,10 @@ export function Sidebar() {
             </div>
           ) : (
             <button
-              onClick={() => { navigate('/login'); closeMobile(); }}
+              onClick={() => {
+                navigate('/login');
+                closeMobile();
+              }}
               className={`flex items-center gap-2 text-white/60 hover:text-white text-sm w-full transition-colors ${isCollapsed ? 'justify-center' : ''}`}
             >
               <LogIn className="w-4 h-4" />
@@ -269,7 +306,6 @@ export function Sidebar() {
             </button>
           )}
 
-          {/* Notification + Language */}
           {!isCollapsed && (
             <div className="flex items-center justify-between mb-2">
               <NotificationBell />
@@ -277,7 +313,6 @@ export function Sidebar() {
             </div>
           )}
 
-          {/* Theme toggle */}
           <button
             onClick={toggleTheme}
             className={`flex items-center gap-2 text-white/60 hover:text-white text-sm w-full transition-colors ${isCollapsed ? 'justify-center' : ''}`}
@@ -295,13 +330,19 @@ export function Sidebar() {
                   : 'Capability Platform'}
               </div>
               <div className="text-white/20 text-[10px] mt-2 space-y-0.5">
-                <a href="https://futurehorizonseducation.com" target="_blank" rel="noopener" className="text-teal/60 hover:text-teal transition-colors block">futurehorizonseducation.com</a>
+                <a
+                  href="https://futurehorizonseducation.com"
+                  target="_blank"
+                  rel="noopener"
+                  className="text-teal/60 hover:text-teal transition-colors block"
+                >
+                  futurehorizonseducation.com
+                </a>
                 <span>info@futurehorizonseducation.com</span>
               </div>
             </>
           )}
 
-          {/* Collapse toggle button */}
           <button
             onClick={toggleCollapse}
             className="hidden md:flex items-center justify-center w-full py-1.5 text-white/40 hover:text-white hover:bg-white/5 rounded transition-colors"
