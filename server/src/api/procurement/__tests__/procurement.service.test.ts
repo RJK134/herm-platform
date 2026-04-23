@@ -167,10 +167,10 @@ describe('ProcurementService.decideShortlistEntry', () => {
       projectId: 'p1',
       systemId: 's1',
     } as never);
-    vi.mocked(prisma.shortlistEntry.update).mockImplementationOnce(async (args: unknown) => {
-      // Echo the update data so we can assert on what the service sent.
-      return { id: 'e1', ...(args as { data: object }).data } as never;
-    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prisma.shortlistEntry.update as any).mockImplementationOnce((args: { data: object }) =>
+      Promise.resolve({ id: 'e1', ...args.data }),
+    );
 
     const result = await service.decideShortlistEntry(
       'e1',
@@ -205,8 +205,9 @@ describe('ProcurementService.decideShortlistEntry', () => {
 
   it('falls back to userId then provided decidedBy when name is absent', async () => {
     vi.mocked(prisma.shortlistEntry.findUnique).mockResolvedValueOnce({ id: 'e1' } as never);
-    vi.mocked(prisma.shortlistEntry.update).mockImplementationOnce(
-      async (args: unknown) => ({ ...(args as { data: object }).data }) as never,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prisma.shortlistEntry.update as any).mockImplementationOnce((args: { data: object }) =>
+      Promise.resolve({ ...args.data }),
     );
 
     const result = await service.decideShortlistEntry(
@@ -234,8 +235,9 @@ describe('ProcurementService.clearShortlistDecision', () => {
 
   it('resets the decision back to pending and nulls reviewer fields', async () => {
     vi.mocked(prisma.shortlistEntry.findUnique).mockResolvedValueOnce({ id: 'e1' } as never);
-    vi.mocked(prisma.shortlistEntry.update).mockImplementationOnce(
-      async (args: unknown) => ({ ...(args as { data: object }).data }) as never,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prisma.shortlistEntry.update as any).mockImplementationOnce((args: { data: object }) =>
+      Promise.resolve({ ...args.data }),
     );
 
     const result = await service.clearShortlistDecision('e1');
