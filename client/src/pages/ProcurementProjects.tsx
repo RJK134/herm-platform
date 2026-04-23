@@ -12,6 +12,7 @@ import { Header } from '../components/layout/Header';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
+import { ProjectStatusPill } from '../components/procurement/ProjectStatusPill';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -200,15 +201,6 @@ function stageStatusColour(status: StageStatus): string {
   }
 }
 
-function projectStatusBadge(status: ProjectStatus): string {
-  switch (status) {
-    case 'active': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
-    case 'awarded': return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300';
-    case 'cancelled': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
-    default: return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
-  }
-}
-
 function recommendationBadge(rec: Recommendation): string {
   switch (rec) {
     case 'Award': return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300';
@@ -336,9 +328,8 @@ function PipelineView({
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">{project.name}</h2>
           <div className="flex items-center gap-2 mt-1">
             <span className="text-sm">{jConfig.flag} {jConfig.label}</span>
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${projectStatusBadge(project.status)}`}>
-              {project.status.charAt(0).toUpperCase() + project.status.slice(1)}
-            </span>
+            <ProjectStatusPill status={project.status} compact />
+
             {project.estimatedValue && project.currency && (
               <span className="text-sm text-gray-500">
                 {formatValue(project.estimatedValue, project.currency)}
@@ -1307,9 +1298,9 @@ export function ProcurementProjects() {
                 <Card key={project.id} className="hover:shadow-md transition-shadow">
                   <div className="flex items-start justify-between mb-2">
                     <h3 className="font-semibold text-gray-900 dark:text-white leading-tight pr-2">{project.name}</h3>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${projectStatusBadge(project.status)}`}>
-                      {project.status.charAt(0).toUpperCase() + project.status.slice(1)}
-                    </span>
+                    <div className="flex-shrink-0">
+                      <ProjectStatusPill status={project.status} compact />
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-2 mb-3">

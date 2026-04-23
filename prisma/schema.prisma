@@ -421,6 +421,16 @@ model ShortlistEntry {
   score     Float?
   notes     String?
   addedAt   DateTime           @default(now())
+
+  // ── Governance (Phase 3 additive) ────────────────────────────────────────
+  // Decision workflow for an entry: 'pending' → 'approved' | 'rejected'.
+  // `rationale` captures why the entry is included/excluded; `decidedBy` +
+  // `decidedAt` are reviewer attribution when a decision is recorded.
+  decisionStatus String        @default("pending")
+  rationale      String?
+  decidedBy      String?
+  decidedAt      DateTime?
+
   @@unique([projectId, systemId])
   @@index([projectId])
 }

@@ -31,6 +31,7 @@
 | Errors            | `server/src/middleware/errorHandler.ts`  | Maps Zod / AppError / Prisma errors to the `{success,error}` envelope   |
 | Observability     | `server/src/middleware/requestId.ts`, `httpLogger.ts` + `lib/logger.ts` | pino + pino-http + nanoid correlation                 |
 | Provenance        | `server/src/lib/provenance.ts` + `lib/branding.ts` | HERM attribution block attached to every framework-scoped response. See [HERM_COMPLIANCE](../HERM_COMPLIANCE.md) |
+| Procurement state | `server/src/services/domain/procurement/project-status.ts` | Project-status state machine + transition validation. See [PROCUREMENT_WORKFLOW](../PROCUREMENT_WORKFLOW.md) |
 | Domain services   | `server/src/services/domain/`            | Procurement engine, workflow rules                                      |
 | Integration       | `server/src/services/integration/`       | Stripe (external integrations live here)                                |
 | AI (governed)     | `server/src/services/ai/`                | **Only** place allowed to import `@anthropic-ai/sdk`. See AI_GOVERNANCE.|

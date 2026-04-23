@@ -4,8 +4,51 @@ import type {
   UpdateStageInput,
   AddShortlistEntryInput,
   UpdateShortlistEntryInput,
+  TransitionProjectInput,
+  DecideShortlistInput,
 } from './procurement.schema';
 import prisma from '../../utils/prisma';
+import {
+  assertTransition,
+  InvalidTransitionError,
+  normaliseStatus,
+  nextStates,
+} from '../../services/domain/procurement/project-status';
+import type { ProjectStatus } from '../../services/domain/procurement/project-status';
+import { NotFoundError, ValidationError } from '../../utils/errors';
+
+/**
+ * Strip reviewer PII from a shortlist entry. The columns removed are
+ * `decidedBy` (CUID or display name) and `rationale` (free-text
+ * justification that may contain a reviewer's professional opinion or
+ * vendor-critical language). `decisionStatus` and `decidedAt` are
+ * workflow state + timestamp, not PII, and stay.
+ *
+ * Callers pass `includeGovernance: !!req.user` to the read methods;
+ * anonymous callers get the scrubbed shape, authenticated callers get
+ * the full record.
+ */
+function stripShortlistGovernance<T extends { decidedBy?: string | null; rationale?: string | null }>(
+  entry: T,
+): T {
+  // Explicitly null out — don't strip the keys, so downstream
+  // consumers and TypeScript narrow the shape consistently.
+  return { ...entry, decidedBy: null, rationale: null };
+}
+
+/**
+ * Canonical reviewer-attribution normalisation: trim whitespace,
+ * reject empty-string names, fall back to `userId`, then null. Used by
+ * every governance surface (status transitions, shortlist decisions,
+ * decision clears) so the audit log and the on-row `decidedBy` column
+ * agree on what a reviewer's name looks like — no trailing-space
+ * "Alice " here, "Alice" there.
+ */
+function normaliseActorName(actor?: { userId?: string; name?: string }): string | null {
+  const trimmed = actor?.name?.trim();
+  if (trimmed && trimmed.length > 0) return trimmed;
+  return actor?.userId ?? null;
+}
 
 const WORKFLOW_STAGES = [
   { stageNumber: 1, title: 'Requirements Definition', status: 'active' },
@@ -46,7 +89,10 @@ export class ProcurementService {
           institutionId,
           jurisdiction: data.jurisdiction ?? 'UK',
           basketId: data.basketId ?? null,
-          status: 'active',
+          // Phase 3 state machine: new projects start in `draft`. The
+          // previous default of `active` is mapped to `active_review`
+          // for historical rows by `normaliseStatus()`.
+          status: 'draft',
         },
       });
 
@@ -78,8 +124,8 @@ export class ProcurementService {
     });
   }
 
-  async getProject(id: string) {
-    return prisma.procurementProject.findUnique({
+  async getProject(id: string, opts: { includeGovernance?: boolean } = {}) {
+    const project = await prisma.procurementProject.findUnique({
       where: { id },
       include: {
         workflow: {
@@ -95,6 +141,15 @@ export class ProcurementService {
         },
       },
     });
+    if (!project) return null;
+    if (opts.includeGovernance) return project;
+    // Strip reviewer PII (decidedBy) and free-text rationale on the
+    // anonymous / public read surface. decisionStatus + decidedAt stay:
+    // the workflow state and timestamp are not sensitive.
+    return {
+      ...project,
+      shortlist: project.shortlist.map(stripShortlistGovernance),
+    };
   }
 
   async updateProject(id: string, data: UpdateProjectInput) {
@@ -206,14 +261,16 @@ export class ProcurementService {
     });
   }
 
-  async getShortlist(projectId: string) {
-    return prisma.shortlistEntry.findMany({
+  async getShortlist(projectId: string, opts: { includeGovernance?: boolean } = {}) {
+    const entries = await prisma.shortlistEntry.findMany({
       where: { projectId },
       include: {
         system: { select: { id: true, name: true, vendor: true, category: true } },
       },
       orderBy: { addedAt: 'asc' },
     });
+    if (opts.includeGovernance) return entries;
+    return entries.map(stripShortlistGovernance);
   }
 
   async updateShortlistEntry(entryId: string, data: UpdateShortlistEntryInput) {
@@ -228,5 +285,302 @@ export class ProcurementService {
 
   async removeShortlistEntry(entryId: string) {
     return prisma.shortlistEntry.delete({ where: { id: entryId } });
+  }
+
+  // ── Phase 3: status state machine ─────────────────────────────────────────
+
+  /**
+   * Apply a governance-controlled status transition. Records an AuditLog
+   * entry with `userId` on the row itself and `changes` carrying
+   * `{from, to, note, actorName}` so reviewers can see the history even
+   * though the `status` column itself is a point-in-time scalar.
+   */
+  async transitionStatus(
+    projectId: string,
+    data: TransitionProjectInput,
+    actor?: { userId?: string; name?: string },
+  ) {
+    // Use a callback transaction so the read, validation, and write all
+    // share one snapshot — a concurrent request that flips the status
+    // between our read and write can no longer overwrite the transition
+    // (the conditional `updateMany` will see a stale `from` and return
+    // `count: 0`, and we retry the read once to synthesise a fresh
+    // InvalidTransitionError against the now-current state).
+    return prisma.$transaction(async (tx) => {
+      const project = await tx.procurementProject.findUnique({
+        where: { id: projectId },
+        select: { id: true, status: true },
+      });
+      if (!project) throw new NotFoundError(`Project not found: ${projectId}`);
+
+      const rawFrom = project.status;
+      const { from, to } = assertTransition(rawFrom, data.to);
+
+      // Conditional update: only flip the row if its status is still the
+      // value we read. Guards against TOCTOU races where a concurrent
+      // transition landed between our read and write.
+      const res = await tx.procurementProject.updateMany({
+        where: { id: projectId, status: rawFrom },
+        data: { status: to },
+      });
+      if (res.count !== 1) {
+        // Someone else transitioned (or deleted) us in the meantime.
+        // Re-read the authoritative current state. If the project is
+        // gone, surface a NotFoundError — reporting a misleading
+        // "cannot transition from 'draft' to …" against a deleted row
+        // would send the client retrying forever.
+        const latest = await tx.procurementProject.findUnique({
+          where: { id: projectId },
+          select: { status: true },
+        });
+        if (!latest) {
+          throw new NotFoundError(`Project not found: ${projectId}`);
+        }
+        throw new InvalidTransitionError(
+          normaliseStatus(latest.status),
+          data.to,
+        );
+      }
+
+      await tx.auditLog.create({
+        data: {
+          userId: actor?.userId ?? null,
+          action: 'procurement.project.transition',
+          entityType: 'ProcurementProject',
+          entityId: projectId,
+          changes: {
+            from,
+            to,
+            note: data.note ?? null,
+            actorName: normaliseActorName(actor),
+          },
+        },
+      });
+
+      const updated = await tx.procurementProject.findUnique({
+        where: { id: projectId },
+      });
+
+      return {
+        project: updated,
+        transition: { from, to, note: data.note ?? null },
+        nextStates: nextStates(to),
+      };
+    });
+  }
+
+  /**
+   * Expose the workflow metadata the client needs to render a state pill.
+   *
+   * `includeActor` controls whether each history row carries `actorId`
+   * and `actorName`. Unauthenticated callers get `null` for both so a
+   * public dashboard can still render the sequence of transitions
+   * without leaking reviewer identity.
+   */
+  async getStatusContext(
+    projectId: string,
+    opts: { includeActor?: boolean } = {},
+  ): Promise<{
+    current: ProjectStatus;
+    next: readonly ProjectStatus[];
+    history: Array<{
+      at: Date;
+      actorId: string | null;
+      actorName: string | null;
+      from: ProjectStatus;
+      to: ProjectStatus;
+      note: string | null;
+    }>;
+  }> {
+    const project = await prisma.procurementProject.findUnique({
+      where: { id: projectId },
+      select: { status: true },
+    });
+    if (!project) throw new NotFoundError(`Project not found: ${projectId}`);
+
+    const logs = await prisma.auditLog.findMany({
+      where: {
+        entityType: 'ProcurementProject',
+        entityId: projectId,
+        action: 'procurement.project.transition',
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const current = normaliseStatus(project.status);
+    return {
+      current,
+      next: nextStates(current),
+      history: logs.map((l) => {
+        // `changes` carries {from, to, note, actorName} — parse defensively
+        // in case older rows are missing fields.
+        const c = (l.changes ?? {}) as {
+          from?: string;
+          to?: string;
+          note?: string | null;
+          actorName?: string | null;
+        };
+        return {
+          at: l.createdAt,
+          actorId: opts.includeActor ? (l.userId ?? null) : null,
+          actorName: opts.includeActor ? (c.actorName ?? null) : null,
+          from: normaliseStatus(c.from),
+          to: normaliseStatus(c.to),
+          note: c.note ?? null,
+        };
+      }),
+    };
+  }
+
+  // ── Phase 3: shortlist decisions ─────────────────────────────────────────
+
+  /**
+   * Record an approve/reject decision against a shortlist entry. Unlike
+   * `updateShortlistEntry`, this is the canonical governance surface —
+   * rationale is mandatory, and both actor attribution and `decidedAt`
+   * are stamped server-side.
+   *
+   * Scoped by BOTH `projectId` and `entryId` so an entry belonging to a
+   * different project can't be decided on via a mis-routed URL. Returns
+   * 404 if the entry doesn't belong to the named project.
+   */
+  async decideShortlistEntry(
+    projectId: string,
+    entryId: string,
+    data: DecideShortlistInput,
+    actor?: { userId?: string; name?: string },
+  ) {
+    // Guard against weird inputs — the Zod schema already restricts
+    // `decisionStatus`, but we belt-and-brace here so callers that wire
+    // the service directly (tests, other servers) can't smuggle in
+    // arbitrary statuses.
+    if (data.decisionStatus !== 'approved' && data.decisionStatus !== 'rejected') {
+      throw new ValidationError(
+        `decisionStatus must be 'approved' or 'rejected', got '${data.decisionStatus}'`,
+      );
+    }
+
+    const decidedBy = normaliseActorName(actor);
+    const decidedAt = new Date();
+
+    // Callback transaction so the read of the PRIOR state, the update,
+    // and the audit-log row share one snapshot. Without this, a
+    // concurrent decision landing between our read and our write would
+    // cause the audit log to record a stale `previous` block.
+    return prisma.$transaction(async (tx) => {
+      const entry = await tx.shortlistEntry.findFirst({
+        where: { id: entryId, projectId },
+      });
+      if (!entry) {
+        throw new NotFoundError(
+          `Shortlist entry not found: ${entryId} (project ${projectId})`,
+        );
+      }
+
+      const updated = await tx.shortlistEntry.update({
+        where: { id: entryId },
+        data: {
+          decisionStatus: data.decisionStatus,
+          rationale: data.rationale,
+          decidedBy,
+          decidedAt,
+        },
+        include: {
+          system: { select: { id: true, name: true, vendor: true, category: true } },
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          userId: actor?.userId ?? null,
+          action: 'procurement.shortlist.decision',
+          entityType: 'ShortlistEntry',
+          entityId: entryId,
+          changes: {
+            projectId,
+            systemId: entry.systemId,
+            previous: {
+              decisionStatus: entry.decisionStatus,
+              rationale: entry.rationale,
+              decidedBy: entry.decidedBy,
+              decidedAt: entry.decidedAt ? entry.decidedAt.toISOString() : null,
+            },
+            next: {
+              decisionStatus: data.decisionStatus,
+              rationale: data.rationale,
+              decidedBy,
+              decidedAt: decidedAt.toISOString(),
+            },
+            actorName: decidedBy,
+          },
+        },
+      });
+
+      return updated;
+    });
+  }
+
+  /**
+   * Reset a decision back to `pending`. Used when shortlist is revised.
+   * Scoped by `(projectId, entryId)` for the same tenant-isolation
+   * reason as `decideShortlistEntry`.
+   *
+   * Writes an AuditLog row before clearing so the prior reviewer,
+   * rationale, and decision timestamp survive even though the
+   * corresponding columns on `ShortlistEntry` are now `null`. This is
+   * the exact "unrecoverable governance gap" Phase 3 exists to close.
+   */
+  async clearShortlistDecision(
+    projectId: string,
+    entryId: string,
+    actor?: { userId?: string; name?: string },
+  ) {
+    const actorName = normaliseActorName(actor);
+
+    return prisma.$transaction(async (tx) => {
+      const entry = await tx.shortlistEntry.findFirst({
+        where: { id: entryId, projectId },
+      });
+      if (!entry) {
+        throw new NotFoundError(
+          `Shortlist entry not found: ${entryId} (project ${projectId})`,
+        );
+      }
+
+      const updated = await tx.shortlistEntry.update({
+        where: { id: entryId },
+        data: {
+          decisionStatus: 'pending',
+          rationale: null,
+          decidedBy: null,
+          decidedAt: null,
+        },
+        include: {
+          system: { select: { id: true, name: true, vendor: true, category: true } },
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          userId: actor?.userId ?? null,
+          action: 'procurement.shortlist.decision.clear',
+          entityType: 'ShortlistEntry',
+          entityId: entryId,
+          changes: {
+            projectId,
+            systemId: entry.systemId,
+            previous: {
+              decisionStatus: entry.decisionStatus,
+              rationale: entry.rationale,
+              decidedBy: entry.decidedBy,
+              decidedAt: entry.decidedAt ? entry.decidedAt.toISOString() : null,
+            },
+            actorName,
+          },
+        },
+      });
+
+      return updated;
+    });
   }
 }

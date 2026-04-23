@@ -1,9 +1,11 @@
 import { Router } from 'express';
-import { optionalJWT } from '../../middleware/auth';
+import { authenticateJWT, optionalJWT } from '../../middleware/auth';
 import {
   createProject, listProjects, getProject, updateProject, deleteProject,
   getWorkflow, updateStage, advanceWorkflow,
   addShortlistEntry, getShortlist, updateShortlistEntry, removeShortlistEntry,
+  transitionProjectStatus, getProjectStatus,
+  decideShortlistEntry, clearShortlistDecision,
 } from './procurement.controller';
 import {
   createProjectV2, listProjectsV2, getProjectV2, advanceStage,
@@ -52,7 +54,32 @@ router.patch('/projects/:id/workflow/stages/:stageNum', updateStage);
 router.post('/projects/:id/workflow/advance', advanceWorkflow);
 router.post('/projects/:id/shortlist', addShortlistEntry);
 router.get('/projects/:id/shortlist', getShortlist);
-router.patch('/projects/:id/shortlist/:entryId', updateShortlistEntry);
+// PATCH echoes the full row (including governance columns) on success,
+// so it must require an authenticated caller — otherwise an anonymous
+// empty-body PATCH becomes an unauthenticated read of `decidedBy` /
+// `rationale` that the GET endpoints carefully scrub.
+router.patch('/projects/:id/shortlist/:entryId', authenticateJWT, updateShortlistEntry);
 router.delete('/projects/:id/shortlist/:entryId', removeShortlistEntry);
+
+// ── Phase 3: governance ───────────────────────────────────────────────────
+// Mutations require a real JWT so audit-log `userId` + `actorName` are
+// never null. An unauthenticated transition would silently degrade the
+// governance surface that Phase 3 exists to deliver. Reads stay on
+// `optionalJWT` (inherited at the router level) — the status endpoint is
+// useful for dashboards that don't have a logged-in session yet.
+router.get('/projects/:id/status', getProjectStatus);
+router.post('/projects/:id/status/transitions', authenticateJWT, transitionProjectStatus);
+
+// Shortlist decisions — approve/reject with mandatory rationale.
+router.post(
+  '/projects/:id/shortlist/:entryId/decisions',
+  authenticateJWT,
+  decideShortlistEntry,
+);
+router.delete(
+  '/projects/:id/shortlist/:entryId/decisions',
+  authenticateJWT,
+  clearShortlistDecision,
+);
 
 export default router;

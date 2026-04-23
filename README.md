@@ -50,6 +50,7 @@ CI runs the same gates on every push/PR — see `.github/workflows/ci.yml`.
 ## Docs
 
 - [HERM_COMPLIANCE](HERM_COMPLIANCE.md) — how this codebase honours CC-BY-NC-SA-4.0: attribution surfaces, tier classification, release-time audit checklist
+- [PROCUREMENT_WORKFLOW](PROCUREMENT_WORKFLOW.md) — project-status state machine, shortlist decision governance, scoring provenance
 - [PRODUCTION_READINESS](docs/PRODUCTION_READINESS.md) — quality gates, known gaps, go-live checklist
 - [ARCHITECTURE_NOTES](docs/ARCHITECTURE_NOTES.md) — module boundaries, data flow, auth model
 - [RUNBOOK](docs/RUNBOOK.md) — start/stop, migrations, incident responses
