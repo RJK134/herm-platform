@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Request, Response } from 'express';
-import { buildProvenance, okWithProvenance } from './provenance';
+import { buildProvenance, okWithProvenance, frameworkPairProvenance } from './provenance';
 
 function makeReq(overrides: Partial<Request> = {}): Request {
   return { framework: undefined, ...overrides } as unknown as Request;
@@ -141,5 +141,48 @@ describe('okWithProvenance', () => {
     okWithProvenance(res, req, { value: 1 });
 
     expect(res.json).toHaveBeenCalledWith({ success: true, data: { value: 1 } });
+  });
+});
+
+describe('frameworkPairProvenance', () => {
+  const herm = {
+    id: 'fw-herm',
+    slug: 'herm-v3.1',
+    name: 'UCISA HERM v3.1',
+    publisher: 'CAUDIT',
+    licenceType: 'CC-BY-NC-SA-4.0',
+    licenceUrl: 'https://creativecommons.org/licenses/by-nc-sa/4.0/',
+    licenceNotice: 'Attribution required',
+  };
+
+  const fhe = {
+    id: 'fw-fhe',
+    slug: 'fhe-capability-framework',
+    name: 'FHE Capability Framework',
+    publisher: 'Future Horizons Education',
+    licenceType: 'PROPRIETARY',
+    licenceUrl: null,
+    licenceNotice: null,
+  };
+
+  it('emits both source and target as sibling blocks', () => {
+    const pair = frameworkPairProvenance(herm, fhe);
+
+    expect(pair.source.slug).toBe('herm-v3.1');
+    expect(pair.source.licence.requiresAttribution).toBe(true);
+    expect(pair.source.licence.url).toBe('https://creativecommons.org/licenses/by-nc-sa/4.0/');
+
+    expect(pair.target.slug).toBe('fhe-capability-framework');
+    expect(pair.target.licence.requiresAttribution).toBe(false);
+    expect(pair.target.licence.notice).toBeNull();
+  });
+
+  it('handles a missing licenceType by falling back to UNKNOWN and no attribution', () => {
+    const pair = frameworkPairProvenance(
+      { ...herm, licenceType: null },
+      fhe,
+    );
+    expect(pair.source.licence.type).toBe('UNKNOWN');
+    expect(pair.source.licence.requiresAttribution).toBe(false);
   });
 });

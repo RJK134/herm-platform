@@ -41,23 +41,7 @@ export interface FrameworkProvenance {
 export function buildProvenance(req: Request): FrameworkProvenance | null {
   const fw = req.framework;
   if (!fw) return null;
-
-  const licenceType = fw.licenceType ?? 'UNKNOWN';
-
-  return {
-    framework: {
-      id: fw.id,
-      slug: fw.slug,
-      name: fw.name,
-      publisher: fw.publisher,
-      licence: {
-        type: licenceType,
-        url: fw.licenceUrl ?? null,
-        notice: fw.licenceNotice ?? null,
-        requiresAttribution: isCcLicence(licenceType),
-      },
-    },
-  };
+  return { framework: toFrameworkBlock(fw) };
 }
 
 /**
@@ -78,4 +62,54 @@ export function okWithProvenance<T>(
   const meta = { ...(extraMeta ?? {}), ...(provenance ? { provenance } : {}) };
   const hasMeta = Object.keys(meta).length > 0;
   return res.json(hasMeta ? { success: true, data, meta } : { success: true, data });
+}
+
+/**
+ * Framework metadata shape used by `frameworkPairProvenance`. Any
+ * `framework.findUnique`/`findMany` projection that selects these fields
+ * satisfies it.
+ */
+export interface FrameworkLike {
+  id: string;
+  slug: string;
+  name: string;
+  publisher: string;
+  licenceType: string | null;
+  licenceUrl: string | null;
+  licenceNotice: string | null;
+}
+
+/**
+ * Cross-framework provenance for endpoints that return both sides of a
+ * mapping (e.g. `/api/framework-mappings`). Emits both source and target
+ * as first-class siblings so attribution for HERM (source) is visible
+ * even when the caller is inspecting proprietary target data.
+ */
+export function frameworkPairProvenance(
+  source: FrameworkLike,
+  target: FrameworkLike,
+): {
+  source: FrameworkProvenance['framework'];
+  target: FrameworkProvenance['framework'];
+} {
+  return {
+    source: toFrameworkBlock(source),
+    target: toFrameworkBlock(target),
+  };
+}
+
+function toFrameworkBlock(fw: FrameworkLike): FrameworkProvenance['framework'] {
+  const licenceType = fw.licenceType ?? 'UNKNOWN';
+  return {
+    id: fw.id,
+    slug: fw.slug,
+    name: fw.name,
+    publisher: fw.publisher,
+    licence: {
+      type: licenceType,
+      url: fw.licenceUrl ?? null,
+      notice: fw.licenceNotice ?? null,
+      requiresAttribution: isCcLicence(licenceType),
+    },
+  };
 }

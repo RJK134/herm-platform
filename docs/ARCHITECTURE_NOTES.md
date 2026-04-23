@@ -127,9 +127,13 @@ All config is environment-driven (`.env.example` lists every variable). Producti
 HERM content (CC-BY-NC-SA-4.0) and the proprietary FHE Capability Framework coexist in the same schema but must never be blurred for commercial or legal purposes. The authoritative mapping between route, auth, tier, and provenance requirements lives in [HERM_COMPLIANCE.md](../HERM_COMPLIANCE.md). The two bright-line rules:
 
 1. **HERM capability access is free.** Every route scoped to the HERM framework must be reachable by anonymous / free-tier callers.
-2. **HERM attribution travels with the data.** `lib/provenance.ts::okWithProvenance` attaches a `meta.provenance.framework{…}` block to every framework-scoped response; `/api/export/*` additionally sets `x-framework-*` response headers; the UI renders `<LicenceAttribution />` on the main HERM pages and `<LicenceFooter />` globally.
+2. **HERM attribution travels with the data.** `lib/provenance.ts::okWithProvenance` attaches a `meta.provenance.framework{…}` block to every framework-scoped response; `frameworkPairProvenance(source, target)` emits both sides for `/api/framework-mappings/*`; `/api/export/*` additionally sets `x-framework-*` response headers; the UI renders `<LicenceAttribution />` on the main HERM pages and `<LicenceFooter />` globally.
 
 The `tierGate` middleware gates framework **data** (HERM vs FHE); the separate `requirePaidTier` middleware gates proprietary **features** (framework-mappings API, API keys). They are independent — a free-tier caller can still reach HERM data via `tierGate`, and a paid-tier caller can still be refused by `requirePaidTier` if the feature is enterprise-only.
+
+## Client IA and tier UX
+
+The four-section ASPT IA (HERM Explorer, Procurement Workspace, Sector Intelligence, Account & Billing) is declared once in `client/src/lib/navigation.ts` and consumed by `components/layout/Sidebar.tsx` for navigation and by `App.tsx` for route-level tier gating. The `<RequireTier>` wrapper (in `components/auth/RequireTier.tsx`) mirrors the server's `requirePaidTier` contract — anonymous bounces to `/login?returnTo=…`, `SUPER_ADMIN` bypasses, and non-qualifying tiers render `<UpgradeCard />` (which explicitly notes HERM remains free). Paid-only nav items render a lock icon; usage-capped free-tier items show their cap in the hover title.
 
 ## Future-facing notes
 
