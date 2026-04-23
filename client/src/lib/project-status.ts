@@ -93,15 +93,8 @@ export function toProjectStatus(raw: string | null | undefined): ProjectStatus {
 }
 
 /** Mirror of the server's transition table — keep aligned. */
-const TRANSITIONS: Record<ProjectStatus, readonly ProjectStatus[]> = {
-  draft: ['active_review', 'archived'],
-  active_review: ['shortlist_proposed', 'archived'],
-  shortlist_proposed: ['shortlist_approved', 'active_review', 'archived'],
-  shortlist_approved: ['recommendation_issued', 'shortlist_proposed', 'archived'],
-  recommendation_issued: ['archived'],
-  archived: [],
-};
-
-export function nextStatesFor(status: ProjectStatus): readonly ProjectStatus[] {
-  return TRANSITIONS[status];
-}
+// Allowed forward transitions live on the server (see
+// `server/src/services/domain/procurement/project-status.ts`). The
+// client learns them lazily from `GET /api/procurement/projects/:id/status`,
+// whose `next` field is the authoritative list. No client-side mirror is
+// kept here to avoid two-way drift.

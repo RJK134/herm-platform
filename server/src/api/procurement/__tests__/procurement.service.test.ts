@@ -286,7 +286,7 @@ describe('ProcurementService.decideShortlistEntry — tenant scoping', () => {
     expect(prisma.shortlistEntry.update).not.toHaveBeenCalled();
   });
 
-  it('falls back to userId then provided decidedBy when name is absent', async () => {
+  it('falls back to userId when the JWT name is absent', async () => {
     vi.mocked(prisma.shortlistEntry.findFirst).mockResolvedValueOnce({ id: 'e1' } as never);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (prisma.shortlistEntry.update as any).mockImplementationOnce((args: { data: object }) =>
@@ -296,10 +296,43 @@ describe('ProcurementService.decideShortlistEntry — tenant scoping', () => {
     const result = await service.decideShortlistEntry(
       'p1',
       'e1',
-      { decisionStatus: 'rejected', rationale: 'Missing SSO', decidedBy: 'External' },
+      { decisionStatus: 'rejected', rationale: 'Missing SSO' },
       { userId: 'u9' },
     );
+    // JWT `name` absent → `userId` is the fallback.
     expect((result as unknown as { decidedBy: string }).decidedBy).toBe('u9');
+  });
+
+  it('rejects empty-string JWT names and falls through to userId', async () => {
+    // A malformed JWT with `name: ''` must NOT produce an empty
+    // `decidedBy` — that would silently store unattributed decisions.
+    vi.mocked(prisma.shortlistEntry.findFirst).mockResolvedValueOnce({ id: 'e1' } as never);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prisma.shortlistEntry.update as any).mockImplementationOnce((args: { data: object }) =>
+      Promise.resolve({ ...args.data }),
+    );
+    const result = await service.decideShortlistEntry(
+      'p1',
+      'e1',
+      { decisionStatus: 'approved', rationale: 'Meets requirements' },
+      { userId: 'u9', name: '   ' },
+    );
+    expect((result as unknown as { decidedBy: string }).decidedBy).toBe('u9');
+  });
+
+  it('trims whitespace from JWT names before storing', async () => {
+    vi.mocked(prisma.shortlistEntry.findFirst).mockResolvedValueOnce({ id: 'e1' } as never);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prisma.shortlistEntry.update as any).mockImplementationOnce((args: { data: object }) =>
+      Promise.resolve({ ...args.data }),
+    );
+    const result = await service.decideShortlistEntry(
+      'p1',
+      'e1',
+      { decisionStatus: 'approved', rationale: 'Best fit' },
+      { userId: 'u9', name: '  Alice  ' },
+    );
+    expect((result as unknown as { decidedBy: string }).decidedBy).toBe('Alice');
   });
 });
 

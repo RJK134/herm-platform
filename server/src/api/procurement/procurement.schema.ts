@@ -51,11 +51,15 @@ export const transitionProjectSchema = z.object({
  * Decision payload for a shortlist entry. `rationale` is required — a
  * procurement decision without a written rationale is the very thing
  * Phase 3 is trying to prevent.
+ *
+ * Reviewer attribution (`decidedBy`) is intentionally NOT accepted from
+ * the body. `authenticateJWT` guarantees a valid caller, and the server
+ * stamps `decidedBy` from the JWT `name`/`userId` so the audit trail
+ * can't be spoofed by a request body claiming someone else decided.
  */
 export const decideShortlistSchema = z.object({
   decisionStatus: z.enum(['approved', 'rejected']),
   rationale: z.string().min(1).max(4000),
-  decidedBy: z.string().min(1).max(200).optional(),
 });
 
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;

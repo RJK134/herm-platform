@@ -411,12 +411,21 @@ export class ProcurementService {
       );
     }
 
+    // Reviewer attribution comes from the JWT (authenticateJWT is required
+    // on this route). A non-empty `actor.name` wins; otherwise fall back
+    // to `actor.userId`. We explicitly reject empty-string names so a
+    // malformed JWT can't store `decidedBy: ''`.
+    const decidedBy =
+      (actor?.name && actor.name.trim().length > 0 ? actor.name.trim() : null) ??
+      actor?.userId ??
+      null;
+
     return prisma.shortlistEntry.update({
       where: { id: entryId },
       data: {
         decisionStatus: data.decisionStatus,
         rationale: data.rationale,
-        decidedBy: actor?.name ?? actor?.userId ?? data.decidedBy ?? null,
+        decidedBy,
         decidedAt: new Date(),
       },
       include: {
