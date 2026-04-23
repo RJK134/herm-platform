@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { optionalJWT } from '../../middleware/auth';
+import { authenticateJWT, optionalJWT } from '../../middleware/auth';
 import {
   createProject, listProjects, getProject, updateProject, deleteProject,
   getWorkflow, updateStage, advanceWorkflow,
@@ -58,12 +58,24 @@ router.patch('/projects/:id/shortlist/:entryId', updateShortlistEntry);
 router.delete('/projects/:id/shortlist/:entryId', removeShortlistEntry);
 
 // ── Phase 3: governance ───────────────────────────────────────────────────
-// Project status state machine — see services/domain/procurement/project-status.ts
+// Mutations require a real JWT so audit-log `userId` + `actorName` are
+// never null. An unauthenticated transition would silently degrade the
+// governance surface that Phase 3 exists to deliver. Reads stay on
+// `optionalJWT` (inherited at the router level) — the status endpoint is
+// useful for dashboards that don't have a logged-in session yet.
 router.get('/projects/:id/status', getProjectStatus);
-router.post('/projects/:id/status/transitions', transitionProjectStatus);
+router.post('/projects/:id/status/transitions', authenticateJWT, transitionProjectStatus);
 
-// Shortlist decisions — approve/reject with mandatory rationale
-router.post('/projects/:id/shortlist/:entryId/decisions', decideShortlistEntry);
-router.delete('/projects/:id/shortlist/:entryId/decisions', clearShortlistDecision);
+// Shortlist decisions — approve/reject with mandatory rationale.
+router.post(
+  '/projects/:id/shortlist/:entryId/decisions',
+  authenticateJWT,
+  decideShortlistEntry,
+);
+router.delete(
+  '/projects/:id/shortlist/:entryId/decisions',
+  authenticateJWT,
+  clearShortlistDecision,
+);
 
 export default router;

@@ -10,6 +10,7 @@ import type {
 import prisma from '../../utils/prisma';
 import {
   assertTransition,
+  InvalidTransitionError,
   normaliseStatus,
   nextStates,
 } from '../../services/domain/procurement/project-status';
@@ -255,22 +256,45 @@ export class ProcurementService {
     data: TransitionProjectInput,
     actor?: { userId?: string; name?: string },
   ) {
-    const project = await prisma.procurementProject.findUnique({
-      where: { id: projectId },
-      select: { id: true, status: true },
-    });
-    if (!project) throw new NotFoundError(`Project not found: ${projectId}`);
-
-    const { from, to } = assertTransition(project.status, data.to);
-
-    // Persist transition + audit log atomically so readers never see a
-    // new status without its corresponding audit entry.
-    const [updated] = await prisma.$transaction([
-      prisma.procurementProject.update({
+    // Use a callback transaction so the read, validation, and write all
+    // share one snapshot — a concurrent request that flips the status
+    // between our read and write can no longer overwrite the transition
+    // (the conditional `updateMany` will see a stale `from` and return
+    // `count: 0`, and we retry the read once to synthesise a fresh
+    // InvalidTransitionError against the now-current state).
+    return prisma.$transaction(async (tx) => {
+      const project = await tx.procurementProject.findUnique({
         where: { id: projectId },
+        select: { id: true, status: true },
+      });
+      if (!project) throw new NotFoundError(`Project not found: ${projectId}`);
+
+      const rawFrom = project.status;
+      const { from, to } = assertTransition(rawFrom, data.to);
+
+      // Conditional update: only flip the row if its status is still the
+      // value we read. Guards against TOCTOU races where a concurrent
+      // transition landed between our read and write.
+      const res = await tx.procurementProject.updateMany({
+        where: { id: projectId, status: rawFrom },
         data: { status: to },
-      }),
-      prisma.auditLog.create({
+      });
+      if (res.count !== 1) {
+        // Someone else transitioned us in the meantime. Re-read and
+        // surface the authoritative current state as an
+        // InvalidTransitionError so the client retries against the new
+        // state rather than silently succeeding.
+        const latest = await tx.procurementProject.findUnique({
+          where: { id: projectId },
+          select: { status: true },
+        });
+        throw new InvalidTransitionError(
+          normaliseStatus(latest?.status),
+          data.to,
+        );
+      }
+
+      await tx.auditLog.create({
         data: {
           userId: actor?.userId ?? null,
           action: 'procurement.project.transition',
@@ -283,14 +307,18 @@ export class ProcurementService {
             actorName: actor?.name ?? null,
           },
         },
-      }),
-    ]);
+      });
 
-    return {
-      project: updated,
-      transition: { from, to, note: data.note ?? null },
-      nextStates: nextStates(to),
-    };
+      const updated = await tx.procurementProject.findUnique({
+        where: { id: projectId },
+      });
+
+      return {
+        project: updated,
+        transition: { from, to, note: data.note ?? null },
+        nextStates: nextStates(to),
+      };
+    });
   }
 
   /** Expose the workflow metadata the client needs to render a state pill. */

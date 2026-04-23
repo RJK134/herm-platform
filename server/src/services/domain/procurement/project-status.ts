@@ -1,3 +1,5 @@
+import { AppError } from '../../../utils/errors';
+
 /**
  * Procurement project workflow state machine.
  *
@@ -85,12 +87,16 @@ export function nextStates(from: ProjectStatus): readonly ProjectStatus[] {
   return TRANSITIONS[from];
 }
 
-export class InvalidTransitionError extends Error {
+export class InvalidTransitionError extends AppError {
   constructor(
     public readonly from: ProjectStatus,
     public readonly to: string,
   ) {
-    super(`Cannot transition procurement project from '${from}' to '${to}'`);
+    super(
+      409,
+      'INVALID_TRANSITION',
+      `Cannot transition procurement project from '${from}' to '${to}'`,
+    );
     this.name = 'InvalidTransitionError';
   }
 }

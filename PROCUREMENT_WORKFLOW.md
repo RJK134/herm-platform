@@ -70,10 +70,22 @@ recommendation_issued` to cover a v2 status that doesn't occur server-side.
 
 ### API
 
-| Method | Path                                                        | Purpose                        |
-|--------|-------------------------------------------------------------|--------------------------------|
-| GET    | `/api/procurement/projects/:id/status`                      | Current state + allowed next + transition history |
-| POST   | `/api/procurement/projects/:id/status/transitions`          | `{ to, note? }` — run transition |
+| Method | Path                                                        | Auth                | Purpose                        |
+|--------|-------------------------------------------------------------|---------------------|--------------------------------|
+| GET    | `/api/procurement/projects/:id/status`                      | optional JWT        | Current state + allowed next + transition history |
+| POST   | `/api/procurement/projects/:id/status/transitions`          | **JWT required**    | `{ to, note? }` — run transition |
+
+`PATCH /api/procurement/projects/:id` does **not** accept `status`. The
+state machine is the only way to change it; a generic PATCH trying to
+set `status` is dropped silently by the Zod schema (strip, not fail) so
+existing clients that send extra fields don't break.
+
+Transitions are race-safe: the service uses a conditional `updateMany`
+inside a transaction, asserting the stored `status` still matches the
+value we read. A concurrent transition that lands between our read and
+write returns `count: 0`, and we surface the authoritative current
+state as a fresh `InvalidTransitionError` so the client retries against
+the new state rather than silently overwriting the winner.
 
 A forbidden transition returns `409 INVALID_TRANSITION` with
 `details: { from, to }` so the client can render a targeted error.
@@ -113,10 +125,17 @@ can display who performed a transition without an extra lookup.
 
 ### API
 
-| Method | Path                                                                       | Purpose          |
-|--------|----------------------------------------------------------------------------|------------------|
-| POST   | `/api/procurement/projects/:id/shortlist/:entryId/decisions`               | Approve / reject |
-| DELETE | `/api/procurement/projects/:id/shortlist/:entryId/decisions`               | Reset to pending |
+| Method | Path                                                                       | Auth             | Purpose          |
+|--------|----------------------------------------------------------------------------|------------------|------------------|
+| POST   | `/api/procurement/projects/:id/shortlist/:entryId/decisions`               | **JWT required** | Approve / reject |
+| DELETE | `/api/procurement/projects/:id/shortlist/:entryId/decisions`               | **JWT required** | Reset to pending |
+
+All three governance mutations (status transition + approve/reject + clear)
+require an authenticated JWT — anonymous mutations would write `null`
+reviewer attribution into the AuditLog / `decidedBy`, defeating the
+governance surface. Both mutations also scope by `(projectId, entryId)`
+so a caller who learns an entry ID cannot decide on an entry that
+belongs to a different project.
 
 The approve/reject payload requires `rationale` (min length 1) — Phase
 3's core policy is that every shortlist decision carries a written

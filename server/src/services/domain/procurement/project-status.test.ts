@@ -135,5 +135,21 @@ describe('project-status state machine', () => {
         expect(e.to).toBe('draft');
       }
     });
+
+    it('InvalidTransitionError extends AppError with 409 / INVALID_TRANSITION', async () => {
+      // Defensive guarantee: even if a caller doesn't catch
+      // InvalidTransitionError explicitly, the central errorHandler will
+      // surface it as 409 INVALID_TRANSITION (not a generic 500).
+      const { AppError } = await import('../../../utils/errors');
+      try {
+        assertTransition('archived', 'draft');
+        throw new Error('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(AppError);
+        const e = err as InvalidTransitionError & { statusCode: number; code: string };
+        expect(e.statusCode).toBe(409);
+        expect(e.code).toBe('INVALID_TRANSITION');
+      }
+    });
   });
 });

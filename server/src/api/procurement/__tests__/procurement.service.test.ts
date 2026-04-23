@@ -6,6 +6,7 @@ vi.mock('../../../utils/prisma', () => {
   const procurementProject = {
     findUnique: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
   };
   const shortlistEntry = {
     findUnique: vi.fn(),
@@ -20,8 +21,8 @@ vi.mock('../../../utils/prisma', () => {
     procurementProject,
     shortlistEntry,
     auditLog,
-    // $transaction accepts a tuple of promises OR a callback — we cover
-    // the tuple form used by `transitionStatus`.
+    // `transitionStatus` uses a callback transaction; other callers use
+    // the tuple form. Handle both.
     $transaction: vi.fn(async (ops: unknown) => {
       if (Array.isArray(ops)) return Promise.all(ops);
       if (typeof ops === 'function') {
@@ -44,13 +45,12 @@ describe('ProcurementService.transitionStatus', () => {
   });
 
   it('advances draft → active_review and records an audit entry', async () => {
-    vi.mocked(prisma.procurementProject.findUnique).mockResolvedValueOnce({
-      id: 'p1',
-      status: 'draft',
-    } as never);
-    vi.mocked(prisma.procurementProject.update).mockResolvedValueOnce({
-      id: 'p1',
-      status: 'active_review',
+    // Inside the transaction: read → conditional updateMany → audit → re-read.
+    vi.mocked(prisma.procurementProject.findUnique)
+      .mockResolvedValueOnce({ id: 'p1', status: 'draft' } as never)
+      .mockResolvedValueOnce({ id: 'p1', status: 'active_review' } as never);
+    vi.mocked(prisma.procurementProject.updateMany).mockResolvedValueOnce({
+      count: 1,
     } as never);
     vi.mocked(prisma.auditLog.create).mockResolvedValueOnce({} as never);
 
@@ -65,9 +65,15 @@ describe('ProcurementService.transitionStatus', () => {
       to: 'active_review',
       note: 'kick-off',
     });
-    // `nextStates(active_review)` advertises the next moves.
     expect(result.nextStates).toContain('shortlist_proposed');
     expect(result.nextStates).toContain('archived');
+
+    // Conditional updateMany must assert the `from` status to guard the
+    // TOCTOU race surfaced in Phase 3 review.
+    expect(prisma.procurementProject.updateMany).toHaveBeenCalledWith({
+      where: { id: 'p1', status: 'draft' },
+      data: { status: 'active_review' },
+    });
 
     expect(prisma.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -85,6 +91,28 @@ describe('ProcurementService.transitionStatus', () => {
     });
   });
 
+  it('throws InvalidTransitionError on a lost race (concurrent transition)', async () => {
+    // First read returns draft; the conditional update loses the race
+    // (count: 0); second read surfaces the winner's state (archived).
+    vi.mocked(prisma.procurementProject.findUnique)
+      .mockResolvedValueOnce({ id: 'p1', status: 'draft' } as never)
+      .mockResolvedValueOnce({ id: 'p1', status: 'archived' } as never);
+    vi.mocked(prisma.procurementProject.updateMany).mockResolvedValueOnce({
+      count: 0,
+    } as never);
+
+    try {
+      await service.transitionStatus('p1', { to: 'active_review' });
+      throw new Error('should have thrown');
+    } catch (err) {
+      expect(err).toBeInstanceOf(InvalidTransitionError);
+      // The error reports the authoritative current state, not the stale read.
+      const e = err as InvalidTransitionError;
+      expect(e.from).toBe('archived');
+    }
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+  });
+
   it('throws InvalidTransitionError on forbidden jump', async () => {
     vi.mocked(prisma.procurementProject.findUnique).mockResolvedValueOnce({
       id: 'p1',
@@ -95,26 +123,30 @@ describe('ProcurementService.transitionStatus', () => {
       service.transitionStatus('p1', { to: 'recommendation_issued' }),
     ).rejects.toBeInstanceOf(InvalidTransitionError);
 
-    expect(prisma.procurementProject.update).not.toHaveBeenCalled();
+    expect(prisma.procurementProject.updateMany).not.toHaveBeenCalled();
     expect(prisma.auditLog.create).not.toHaveBeenCalled();
   });
 
   it('normalises legacy statuses before validating', async () => {
     // Legacy 'active' projects should be able to move to shortlist_proposed
     // because `active` normalises to `active_review`.
-    vi.mocked(prisma.procurementProject.findUnique).mockResolvedValueOnce({
-      id: 'p2',
-      status: 'active',
-    } as never);
-    vi.mocked(prisma.procurementProject.update).mockResolvedValueOnce({
-      id: 'p2',
-      status: 'shortlist_proposed',
+    vi.mocked(prisma.procurementProject.findUnique)
+      .mockResolvedValueOnce({ id: 'p2', status: 'active' } as never)
+      .mockResolvedValueOnce({ id: 'p2', status: 'shortlist_proposed' } as never);
+    vi.mocked(prisma.procurementProject.updateMany).mockResolvedValueOnce({
+      count: 1,
     } as never);
     vi.mocked(prisma.auditLog.create).mockResolvedValueOnce({} as never);
 
     const result = await service.transitionStatus('p2', { to: 'shortlist_proposed' });
     expect(result.transition.from).toBe('active_review');
     expect(result.transition.to).toBe('shortlist_proposed');
+    // The conditional update must assert against the RAW stored value so
+    // the concurrency guard actually matches a row in the DB.
+    expect(prisma.procurementProject.updateMany).toHaveBeenCalledWith({
+      where: { id: 'p2', status: 'active' },
+      data: { status: 'shortlist_proposed' },
+    });
   });
 
   it('throws when the project does not exist', async () => {
