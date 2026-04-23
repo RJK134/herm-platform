@@ -81,6 +81,12 @@ function itemState(
  * outside `NavSection` so the parent can skip rendering both the
  * section and its trailing divider — otherwise a hidden section leaves
  * a stray `<hr>` in the sidebar for anonymous visitors.
+ *
+ * Sections may declare `requiredRoles`. If set, only users whose role
+ * matches (or SUPER_ADMIN) see the section at all — this is what makes
+ * Admin's nav items invisible to regular VIEWERs. The matching routes
+ * are independently protected by `<ProtectedRoute roles={…}>` in
+ * App.tsx; this filter is purely cosmetic UI hide-only.
  */
 function visibleItemsFor(
   section: NavSectionType,
@@ -89,6 +95,10 @@ function visibleItemsFor(
   userRole: string,
 ): readonly NavItem[] {
   if (!section.visibleAnonymous && !isAuthenticated) return [];
+  if (section.requiredRoles && section.requiredRoles.length > 0) {
+    const allowed = userRole === 'SUPER_ADMIN' || section.requiredRoles.includes(userRole);
+    if (!allowed) return [];
+  }
   return section.items.filter(
     (i) => itemState(i, isAuthenticated, userTier, userRole) !== 'hidden',
   );

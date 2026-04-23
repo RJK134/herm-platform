@@ -75,7 +75,19 @@ export interface NavSection {
    * sidebar only shows it once the user is authenticated.
    */
   visibleAnonymous: boolean;
+  /**
+   * If set, the section is only rendered for users whose `role` claim is
+   * in this list (in addition to `visibleAnonymous`/auth checks).
+   * SUPER_ADMIN is always allowed to see role-gated sections.
+   * The matching route must independently enforce the same role gate via
+   * `<ProtectedRoute roles={…}>` in App.tsx — this is UI hide-only, not
+   * an authorization boundary.
+   */
+  requiredRoles?: readonly string[];
 }
+
+/** Role list that grants access to the Admin section in the sidebar. */
+export const ADMIN_NAV_ROLES = ['INSTITUTION_ADMIN', 'SUPER_ADMIN'] as const;
 
 // ── HERM Explorer — free tier HERM content ──────────────────────────────────
 
@@ -164,5 +176,6 @@ export const NAV_SECTIONS: readonly NavSection[] = [
     titleDefault: 'Admin',
     items: adminItems,
     visibleAnonymous: false,
+    requiredRoles: ADMIN_NAV_ROLES,
   },
 ];
