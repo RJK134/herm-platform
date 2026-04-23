@@ -54,7 +54,11 @@ router.patch('/projects/:id/workflow/stages/:stageNum', updateStage);
 router.post('/projects/:id/workflow/advance', advanceWorkflow);
 router.post('/projects/:id/shortlist', addShortlistEntry);
 router.get('/projects/:id/shortlist', getShortlist);
-router.patch('/projects/:id/shortlist/:entryId', updateShortlistEntry);
+// PATCH echoes the full row (including governance columns) on success,
+// so it must require an authenticated caller — otherwise an anonymous
+// empty-body PATCH becomes an unauthenticated read of `decidedBy` /
+// `rationale` that the GET endpoints carefully scrub.
+router.patch('/projects/:id/shortlist/:entryId', authenticateJWT, updateShortlistEntry);
 router.delete('/projects/:id/shortlist/:entryId', removeShortlistEntry);
 
 // ── Phase 3: governance ───────────────────────────────────────────────────

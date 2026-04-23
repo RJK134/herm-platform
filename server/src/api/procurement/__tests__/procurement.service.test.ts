@@ -366,16 +366,16 @@ describe('ProcurementService.decideShortlistEntry — tenant scoping', () => {
   });
 
   it('rejects invalid decisionStatus at the service boundary', async () => {
-    vi.mocked(prisma.shortlistEntry.findFirst).mockResolvedValueOnce({
-      id: 'e1',
-    } as never);
-
+    // Validation happens BEFORE findFirst now (cheap guard before the
+    // transaction) so we don't queue a findFirst return here — doing so
+    // would leak into the next test's mockResolvedValueOnce queue.
     await expect(
       service.decideShortlistEntry('p1', 'e1', {
         decisionStatus: 'weird' as never,
         rationale: 'x',
       }),
     ).rejects.toThrow(/decisionStatus must be/);
+    expect(prisma.shortlistEntry.findFirst).not.toHaveBeenCalled();
     expect(prisma.shortlistEntry.update).not.toHaveBeenCalled();
   });
 

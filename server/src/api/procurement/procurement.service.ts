@@ -36,6 +36,20 @@ function stripShortlistGovernance<T extends { decidedBy?: string | null; rationa
   return { ...entry, decidedBy: null, rationale: null };
 }
 
+/**
+ * Canonical reviewer-attribution normalisation: trim whitespace,
+ * reject empty-string names, fall back to `userId`, then null. Used by
+ * every governance surface (status transitions, shortlist decisions,
+ * decision clears) so the audit log and the on-row `decidedBy` column
+ * agree on what a reviewer's name looks like — no trailing-space
+ * "Alice " here, "Alice" there.
+ */
+function normaliseActorName(actor?: { userId?: string; name?: string }): string | null {
+  const trimmed = actor?.name?.trim();
+  if (trimmed && trimmed.length > 0) return trimmed;
+  return actor?.userId ?? null;
+}
+
 const WORKFLOW_STAGES = [
   { stageNumber: 1, title: 'Requirements Definition', status: 'active' },
   { stageNumber: 2, title: 'Market Engagement', status: 'pending' },
@@ -338,7 +352,7 @@ export class ProcurementService {
             from,
             to,
             note: data.note ?? null,
-            actorName: actor?.name ?? null,
+            actorName: normaliseActorName(actor),
           },
         },
       });
@@ -436,15 +450,6 @@ export class ProcurementService {
     data: DecideShortlistInput,
     actor?: { userId?: string; name?: string },
   ) {
-    const entry = await prisma.shortlistEntry.findFirst({
-      where: { id: entryId, projectId },
-    });
-    if (!entry) {
-      throw new NotFoundError(
-        `Shortlist entry not found: ${entryId} (project ${projectId})`,
-      );
-    }
-
     // Guard against weird inputs — the Zod schema already restricts
     // `decisionStatus`, but we belt-and-brace here so callers that wire
     // the service directly (tests, other servers) can't smuggle in
@@ -455,21 +460,24 @@ export class ProcurementService {
       );
     }
 
-    // Reviewer attribution comes from the JWT (authenticateJWT is required
-    // on this route). A non-empty `actor.name` wins; otherwise fall back
-    // to `actor.userId`. We explicitly reject empty-string names so a
-    // malformed JWT can't store `decidedBy: ''`.
-    const decidedBy =
-      (actor?.name && actor.name.trim().length > 0 ? actor.name.trim() : null) ??
-      actor?.userId ??
-      null;
+    const decidedBy = normaliseActorName(actor);
     const decidedAt = new Date();
 
-    // Atomic update + audit-log write. The AuditLog row captures the
-    // PRIOR state so clearing or re-deciding an entry never destroys
-    // the history of who approved/rejected it and why.
-    const [updated] = await prisma.$transaction([
-      prisma.shortlistEntry.update({
+    // Callback transaction so the read of the PRIOR state, the update,
+    // and the audit-log row share one snapshot. Without this, a
+    // concurrent decision landing between our read and our write would
+    // cause the audit log to record a stale `previous` block.
+    return prisma.$transaction(async (tx) => {
+      const entry = await tx.shortlistEntry.findFirst({
+        where: { id: entryId, projectId },
+      });
+      if (!entry) {
+        throw new NotFoundError(
+          `Shortlist entry not found: ${entryId} (project ${projectId})`,
+        );
+      }
+
+      const updated = await tx.shortlistEntry.update({
         where: { id: entryId },
         data: {
           decisionStatus: data.decisionStatus,
@@ -480,8 +488,9 @@ export class ProcurementService {
         include: {
           system: { select: { id: true, name: true, vendor: true, category: true } },
         },
-      }),
-      prisma.auditLog.create({
+      });
+
+      await tx.auditLog.create({
         data: {
           userId: actor?.userId ?? null,
           action: 'procurement.shortlist.decision',
@@ -505,10 +514,10 @@ export class ProcurementService {
             actorName: decidedBy,
           },
         },
-      }),
-    ]);
+      });
 
-    return updated;
+      return updated;
+    });
   }
 
   /**
@@ -526,22 +535,19 @@ export class ProcurementService {
     entryId: string,
     actor?: { userId?: string; name?: string },
   ) {
-    const entry = await prisma.shortlistEntry.findFirst({
-      where: { id: entryId, projectId },
-    });
-    if (!entry) {
-      throw new NotFoundError(
-        `Shortlist entry not found: ${entryId} (project ${projectId})`,
-      );
-    }
+    const actorName = normaliseActorName(actor);
 
-    const actorName =
-      (actor?.name && actor.name.trim().length > 0 ? actor.name.trim() : null) ??
-      actor?.userId ??
-      null;
+    return prisma.$transaction(async (tx) => {
+      const entry = await tx.shortlistEntry.findFirst({
+        where: { id: entryId, projectId },
+      });
+      if (!entry) {
+        throw new NotFoundError(
+          `Shortlist entry not found: ${entryId} (project ${projectId})`,
+        );
+      }
 
-    const [updated] = await prisma.$transaction([
-      prisma.shortlistEntry.update({
+      const updated = await tx.shortlistEntry.update({
         where: { id: entryId },
         data: {
           decisionStatus: 'pending',
@@ -552,8 +558,9 @@ export class ProcurementService {
         include: {
           system: { select: { id: true, name: true, vendor: true, category: true } },
         },
-      }),
-      prisma.auditLog.create({
+      });
+
+      await tx.auditLog.create({
         data: {
           userId: actor?.userId ?? null,
           action: 'procurement.shortlist.decision.clear',
@@ -571,9 +578,9 @@ export class ProcurementService {
             actorName,
           },
         },
-      }),
-    ]);
+      });
 
-    return updated;
+      return updated;
+    });
   }
 }
