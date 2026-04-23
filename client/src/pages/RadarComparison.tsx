@@ -6,6 +6,7 @@ import { RadarChart } from '../components/charts/RadarChart';
 import { useSystems, useCompare } from '../hooks/useApi';
 import { CATEGORY_COLORS } from '../lib/constants';
 import { formatPercent } from '../lib/utils';
+import { LicenceAttribution } from '../components/LicenceAttribution';
 
 const DEFAULT_IDS_SLUGS = ['sits', 'banner', 'workday_student', 'sjms'];
 
@@ -144,6 +145,8 @@ export function RadarComparison() {
             </div>
           )}
         </Card>
+
+        <LicenceAttribution />
       </div>
     </div>
   );
