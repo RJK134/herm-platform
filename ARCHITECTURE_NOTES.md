@@ -106,6 +106,17 @@ Sector Intelligence, Account & Billing) is declared in
 `client/src/lib/navigation.ts` and consumed by the sidebar, which renders
 lock icons on paid-only items.
 
+### Procurement workflow state
+
+Projects move through a typed state machine (`draft` →
+`active_review` → `shortlist_proposed` → `shortlist_approved` →
+`recommendation_issued` → `archived`) enforced in
+`server/src/services/domain/procurement/project-status.ts`. Shortlist
+entries carry decision governance fields (`decisionStatus`,
+`rationale`, `decidedBy`, `decidedAt`). See
+[PROCUREMENT_WORKFLOW.md](./PROCUREMENT_WORKFLOW.md) for the full state
+table, API surface, and audit-log contract.
+
 ## Service layering (target)
 
 Current services are flat under `server/src/services/` and per-feature under
