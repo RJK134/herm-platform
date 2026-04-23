@@ -66,8 +66,14 @@ function itemState(
   // Paid tier list
   if (userRole === 'SUPER_ADMIN') return 'available';
   if (!isAuthenticated) return 'locked';
-  if (!isPaidTier(userTier)) return 'locked';
-  return (item.tier as readonly string[]).includes(userTier) ? 'available' : 'locked';
+  // Normalise casing on both sides — RequireTier lower-cases its inputs, so
+  // the Sidebar must too, otherwise an oddly-cased JWT tier claim would
+  // show as locked here while RequireTier would let it through at the
+  // route level. `isPaidTier` is already case-insensitive.
+  const tier = userTier.toLowerCase();
+  if (!isPaidTier(tier)) return 'locked';
+  const required = (item.tier as readonly string[]).map((t) => t.toLowerCase());
+  return required.includes(tier) ? 'available' : 'locked';
 }
 
 /**

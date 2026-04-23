@@ -41,23 +41,7 @@ export interface FrameworkProvenance {
 export function buildProvenance(req: Request): FrameworkProvenance | null {
   const fw = req.framework;
   if (!fw) return null;
-
-  const licenceType = fw.licenceType ?? 'UNKNOWN';
-
-  return {
-    framework: {
-      id: fw.id,
-      slug: fw.slug,
-      name: fw.name,
-      publisher: fw.publisher,
-      licence: {
-        type: licenceType,
-        url: fw.licenceUrl ?? null,
-        notice: fw.licenceNotice ?? null,
-        requiresAttribution: isCcLicence(licenceType),
-      },
-    },
-  };
+  return { framework: toFrameworkBlock(fw) };
 }
 
 /**
