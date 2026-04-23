@@ -145,7 +145,16 @@ function NavSection({
             key={item.to}
             to={item.to}
             end={item.to === '/'}
-            onClick={onNavClick}
+            onClick={(event) => {
+              if (locked) {
+                event.preventDefault();
+                event.stopPropagation();
+                return;
+              }
+              onNavClick?.();
+            }}
+            aria-disabled={locked || undefined}
+            tabIndex={locked ? -1 : undefined}
             title={
               lockedTooltip ??
               (item.freeUsageHint && !isPaidTier(userTier)
