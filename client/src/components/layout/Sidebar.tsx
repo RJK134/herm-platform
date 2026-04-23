@@ -70,6 +70,24 @@ function itemState(
   return (item.tier as readonly string[]).includes(userTier) ? 'available' : 'locked';
 }
 
+/**
+ * Does this section have anything to show for the current user? Kept
+ * outside `NavSection` so the parent can skip rendering both the
+ * section and its trailing divider — otherwise a hidden section leaves
+ * a stray `<hr>` in the sidebar for anonymous visitors.
+ */
+function visibleItemsFor(
+  section: NavSectionType,
+  isAuthenticated: boolean,
+  userTier: string,
+  userRole: string,
+): readonly NavItem[] {
+  if (!section.visibleAnonymous && !isAuthenticated) return [];
+  return section.items.filter(
+    (i) => itemState(i, isAuthenticated, userTier, userRole) !== 'hidden',
+  );
+}
+
 interface SectionProps {
   section: NavSectionType;
   isCollapsed: boolean;
@@ -88,12 +106,9 @@ function NavSection({
   onNavClick,
 }: SectionProps) {
   const { t } = useTranslation();
-  if (!section.visibleAnonymous && !isAuthenticated) return null;
-
-  // Hide the whole section if every item is hidden for this caller.
-  const visibleItems = section.items.filter(
-    (i) => itemState(i, isAuthenticated, userTier, userRole) !== 'hidden',
-  );
+  // Parent is responsible for skipping hidden sections (so dividers
+  // don't orphan). Defensive re-check for direct consumers.
+  const visibleItems = visibleItemsFor(section, isAuthenticated, userTier, userRole);
   if (visibleItems.length === 0) return null;
 
   return (
@@ -249,19 +264,21 @@ export function Sidebar() {
 
         {/* Navigation — driven from lib/navigation.ts for single-source-of-truth IA */}
         <nav className="flex-1 py-3 overflow-y-auto space-y-2">
-          {NAV_SECTIONS.map((section, idx) => (
-            <div key={section.id}>
-              <NavSection
-                section={section}
-                isCollapsed={isCollapsed}
-                isAuthenticated={isAuthenticated}
-                userTier={userTier}
-                userRole={userRole}
-                onNavClick={handleNavClick}
-              />
-              {idx < NAV_SECTIONS.length - 1 && <div className="mx-4 border-t border-white/10 my-2" />}
-            </div>
-          ))}
+          {NAV_SECTIONS
+            .filter((s) => visibleItemsFor(s, isAuthenticated, userTier, userRole).length > 0)
+            .map((section, idx, arr) => (
+              <div key={section.id}>
+                <NavSection
+                  section={section}
+                  isCollapsed={isCollapsed}
+                  isAuthenticated={isAuthenticated}
+                  userTier={userTier}
+                  userRole={userRole}
+                  onNavClick={handleNavClick}
+                />
+                {idx < arr.length - 1 && <div className="mx-4 border-t border-white/10 my-2" />}
+              </div>
+            ))}
         </nav>
 
         {/* Footer */}

@@ -24,7 +24,6 @@ import {
   Key,
   Calculator,
   Workflow,
-  Bell,
 } from 'lucide-react';
 import type { PaidTier } from './branding';
 
@@ -167,20 +166,3 @@ export const NAV_SECTIONS: readonly NavSection[] = [
     visibleAnonymous: false,
   },
 ];
-
-/** Look up a nav entry by pathname. Returns `undefined` for unknown routes. */
-export function findNavItem(pathname: string): NavItem | undefined {
-  for (const section of NAV_SECTIONS) {
-    const hit = section.items.find((i) => i.to === pathname);
-    if (hit) return hit;
-  }
-  return undefined;
-}
-
-/** Shortcut notifications nav item (lives with account actions in the header). */
-export const NOTIFICATIONS_ITEM: NavItem = {
-  to: '/notifications',
-  label: 'Notifications',
-  icon: Bell,
-  tier: 'authenticated',
-};
