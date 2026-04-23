@@ -98,7 +98,13 @@ gating is separate — the authoritative mapping is [HERM_COMPLIANCE.md](./HERM_
   **features** regardless of which framework is being read. Currently
   applied enterprise-only to `/api/framework-mappings/*` and `/api/keys/*`.
 
-`SUPER_ADMIN` bypasses `requirePaidTier` platform-wide.
+`SUPER_ADMIN` bypasses `requirePaidTier` platform-wide. The client mirrors
+both gates via `<RequireTier>` in `components/auth/RequireTier.tsx`, which
+renders an upgrade card instead of the gated content when the tier check
+fails. The ASPT four-section IA (HERM Explorer, Procurement Workspace,
+Sector Intelligence, Account & Billing) is declared in
+`client/src/lib/navigation.ts` and consumed by the sidebar, which renders
+lock icons on paid-only items.
 
 ## Service layering (target)
 

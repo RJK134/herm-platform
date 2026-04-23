@@ -76,6 +76,8 @@ compliance action that needs a matching entry here.
 | `/api/vendors`, `/api/research`, `/api/scoring`, `/api/frameworks` | Reference data, no tenant context        |
 | `/api/tco`, `/api/integration`                        | Calculators available on the free tier              |
 
+All framework-scoped responses in this bucket now emit `meta.provenance.framework{…}`, and framework-mappings (enterprise-gated, below) emits a `{source, target}` pair so HERM attribution travels even on the cross-framework surface.
+
 ### Authenticated (any tier)
 
 | Prefix                                         | Why auth required                         |
@@ -92,8 +94,10 @@ compliance action that needs a matching entry here.
 
 | Prefix                        | Gate                                     |
 |-------------------------------|------------------------------------------|
-| `/api/framework-mappings/*`   | `requirePaidTier(['enterprise'])`        |
+| `/api/framework-mappings/*`   | `requirePaidTier(['enterprise'])` + `meta.provenance` on every response (HERM source + proprietary target) |
 | `/api/keys/*`                 | `requirePaidTier(['enterprise'])`        |
+
+Each gated route is mirrored by a `<RequireTier>` wrapper in the client (see `client/src/components/auth/RequireTier.tsx`) so the paid/free boundary is enforced in the UI as well — anonymous callers bounce to `/login?returnTo=…`, free/professional callers see `<UpgradeCard />`.
 
 ### Admin-only
 
@@ -145,23 +149,54 @@ client axios interceptor then clears any stale token and redirects to
   not yet carry a provenance block. Follow-up once that becomes a
   data-export surface (today it's a lookup API).
 
+## Navigation and IA
+
+The client navigation is organised around four top-level sections,
+defined in `client/src/lib/navigation.ts` (single source of truth for
+sidebar, route gating, and this doc):
+
+| Section              | Scope                                                           | Tier visibility                           |
+|----------------------|-----------------------------------------------------------------|--------------------------------------------|
+| HERM Explorer        | HERM reference data (leaderboard, heatmap, radar, systems, etc.)| Anonymous + all tiers                      |
+| Procurement Workspace| Tools, calculators, team workspace, AI                          | Authenticated; free-tier hits usage caps    |
+| Sector Intelligence  | Cross-institution analytics + cross-framework mapping            | Professional/Enterprise (per item)          |
+| Account & Billing    | Subscription, API keys, vendor portal                            | Authenticated; API keys are Enterprise-only |
+
+Each nav item declares its tier in `navigation.ts`; the sidebar renders a
+lock icon and disables routing for items the caller can't reach. Usage
+caps for free-tier users (e.g. "up to 3 Procurement Projects") appear in
+the hover title on the free tier and disappear on paid tiers.
+
 ## Auditing compliance
 
 Before cutting a release:
 
-1. Open the app as an **anonymous** / **free-tier** user. Confirm:
+1. Open the app as an **anonymous** user. Confirm:
    - the Leaderboard, CapabilityView, CapabilityHeatmap, SystemDetail,
-     RadarComparison, VendorProfile, ExportDownload surfaces all render,
-   - each carries either the `<LicenceAttribution />` banner or the
-     `<LicenceFooter />` is visible at the bottom of the app shell,
+     RadarComparison, VendorProfile, ExportDownload surfaces all render
+     (HERM Explorer section), each carrying the `<LicenceAttribution />`
+     banner or `<LicenceFooter />`,
+   - the Account & Billing section is hidden,
+   - the Sector Intelligence items show a lock icon and bounce to
+     `/login?returnTo=…` when clicked.
+2. Open the app as a **free-tier** user. Confirm:
+   - the same HERM surfaces remain reachable,
+   - clicking Sector Analytics / Framework Mapping / API Integration
+     renders the `<UpgradeCard />` rather than the gated page, and the
+     upgrade card explicitly notes HERM is unaffected.
+3. Open as a **professional-tier** user. Confirm Sector Analytics is
+   reachable; Framework Mapping and API Integration still show the card.
+4. Open as an **enterprise-tier** user. All four sections are reachable.
+5. API-side spot checks:
    - `GET /api/capabilities` returns `meta.provenance.framework.publisher
      = "CAUDIT"` and `licence.type = "CC-BY-NC-SA-4.0"`,
    - `GET /api/export/leaderboard.csv` includes an `x-framework-publisher:
-     CAUDIT` response header.
-2. Confirm the proprietary framework is unreachable: request
-   `GET /api/systems?frameworkId=<fhe-id>` as anonymous returns 403
-   `AUTHORIZATION_ERROR`.
-3. Confirm the enterprise-gated routes: `GET /api/framework-mappings` as
-   a free-tier user returns 403 `SUBSCRIPTION_REQUIRED`.
-4. Spot-check the pricing copy: the Subscriptions page must not
+     CAUDIT` response header,
+   - `GET /api/framework-mappings/<id>` returns
+     `meta.provenance.{source,target}` with source publisher `CAUDIT`,
+   - `GET /api/systems?frameworkId=<fhe-id>` as anonymous returns 403
+     `AUTHORIZATION_ERROR`,
+   - `GET /api/framework-mappings` as a free-tier user returns 403
+     `SUBSCRIPTION_REQUIRED` (with `details.requiredTiers: ["enterprise"]`).
+6. Spot-check the pricing copy: the Subscriptions page must not
    advertise "HERM" as a paid-only feature.
