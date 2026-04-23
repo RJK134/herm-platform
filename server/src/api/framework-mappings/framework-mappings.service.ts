@@ -12,11 +12,23 @@ import { NotFoundError } from '../../utils/errors';
 export class FrameworkMappingsService {
   /** List all active framework mappings with framework metadata and item counts. */
   async list() {
+    // Include licence fields so the controller can project a provenance
+    // block for both source and target frameworks in the response.
     return prisma.frameworkMapping.findMany({
       where: { isActive: true },
       include: {
-        sourceFramework: { select: { id: true, slug: true, name: true, version: true } },
-        targetFramework: { select: { id: true, slug: true, name: true, version: true } },
+        sourceFramework: {
+          select: {
+            id: true, slug: true, name: true, version: true, publisher: true,
+            licenceType: true, licenceUrl: true, licenceNotice: true,
+          },
+        },
+        targetFramework: {
+          select: {
+            id: true, slug: true, name: true, version: true, publisher: true,
+            licenceType: true, licenceUrl: true, licenceNotice: true,
+          },
+        },
         _count: { select: { items: true } },
       },
     });
@@ -65,13 +77,31 @@ export class FrameworkMappingsService {
    * code has no mappings.
    */
   async lookup(mappingId: string, sourceCode: string) {
-    const mapping = await prisma.frameworkMapping.findUnique({ where: { id: mappingId } });
+    const mapping = await prisma.frameworkMapping.findUnique({
+      where: { id: mappingId },
+      include: {
+        sourceFramework: {
+          select: {
+            id: true, slug: true, name: true, publisher: true,
+            licenceType: true, licenceUrl: true, licenceNotice: true,
+          },
+        },
+        targetFramework: {
+          select: {
+            id: true, slug: true, name: true, publisher: true,
+            licenceType: true, licenceUrl: true, licenceNotice: true,
+          },
+        },
+      },
+    });
     if (!mapping) throw new NotFoundError(`Framework mapping not found: ${mappingId}`);
 
     const sourceCapability = await prisma.capability.findFirst({
       where: { frameworkId: mapping.sourceFrameworkId, code: sourceCode },
     });
-    if (!sourceCapability) return { sourceCapability: null, targets: [] };
+    if (!sourceCapability) {
+      return { sourceCapability: null, targets: [], mapping };
+    }
 
     const items = await prisma.capabilityMapping.findMany({
       where: { mappingId, sourceCapabilityId: sourceCapability.id },
@@ -97,6 +127,7 @@ export class FrameworkMappingsService {
         confidence: i.confidence,
         notes: i.notes,
       })),
+      mapping,
     };
   }
 }

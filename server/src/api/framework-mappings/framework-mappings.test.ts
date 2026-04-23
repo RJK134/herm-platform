@@ -27,6 +27,10 @@ const hermFramework = {
   slug: 'herm-v3.1',
   name: 'UCISA HERM v3.1',
   version: '3.1',
+  publisher: 'CAUDIT',
+  licenceType: 'CC-BY-NC-SA-4.0',
+  licenceUrl: 'https://creativecommons.org/licenses/by-nc-sa/4.0/',
+  licenceNotice: 'Attribution required',
 };
 
 const fheFramework = {
@@ -34,6 +38,10 @@ const fheFramework = {
   slug: 'fhe-capability-framework',
   name: 'FHE Capability Framework',
   version: '1.0',
+  publisher: 'Future Horizons Education',
+  licenceType: 'PROPRIETARY',
+  licenceUrl: null,
+  licenceNotice: null,
 };
 
 const mapping = {
@@ -47,6 +55,11 @@ const mapping = {
   isActive: true,
   createdAt: new Date(),
   updatedAt: new Date(),
+  // Router now expects sourceFramework / targetFramework on the lookup
+  // fetch so it can emit `meta.provenance`. Bundle them with the mapping
+  // fixture so the lookup tests don't have to rebuild them each time.
+  sourceFramework: hermFramework,
+  targetFramework: fheFramework,
 };
 
 const mappingWithFrameworks = {

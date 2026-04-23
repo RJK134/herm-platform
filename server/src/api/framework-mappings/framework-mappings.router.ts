@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticateJWT } from '../../middleware/auth';
 import { requirePaidTier } from '../../middleware/require-paid-tier';
+import { frameworkPairProvenance } from '../../lib/provenance';
 import { FrameworkMappingsService } from './framework-mappings.service';
 
 const router = Router();
@@ -19,7 +20,13 @@ const requireEnterprise = requirePaidTier(['enterprise']);
 router.get('/', authenticateJWT, requireEnterprise, async (_req, res, next) => {
   try {
     const mappings = await service.list();
-    res.json({ success: true, data: mappings });
+    // Emit per-mapping provenance so downstream consumers preserve HERM
+    // attribution on the source side and flag the proprietary target.
+    const provenance = mappings.map((m) => ({
+      mappingId: m.id,
+      ...frameworkPairProvenance(m.sourceFramework, m.targetFramework),
+    }));
+    res.json({ success: true, data: mappings, meta: { provenance } });
   } catch (err) {
     next(err);
   }
@@ -32,7 +39,8 @@ router.get('/', authenticateJWT, requireEnterprise, async (_req, res, next) => {
 router.get('/:id', authenticateJWT, requireEnterprise, async (req, res, next) => {
   try {
     const mapping = await service.getById(req.params['id']!);
-    res.json({ success: true, data: mapping });
+    const provenance = frameworkPairProvenance(mapping.sourceFramework, mapping.targetFramework);
+    res.json({ success: true, data: mapping, meta: { provenance } });
   } catch (err) {
     next(err);
   }
@@ -55,7 +63,12 @@ router.get('/:id/lookup', authenticateJWT, requireEnterprise, async (req, res, n
       return;
     }
     const result = await service.lookup(req.params['id']!, sourceCode);
-    res.json({ success: true, data: result });
+    // Strip the mapping envelope off of the response body but keep it
+    // out-of-band as provenance metadata. This ensures HERM attribution
+    // travels with every lookup result even when the mapping has no hits.
+    const { mapping, ...body } = result;
+    const provenance = frameworkPairProvenance(mapping.sourceFramework, mapping.targetFramework);
+    res.json({ success: true, data: body, meta: { provenance } });
   } catch (err) {
     next(err);
   }
