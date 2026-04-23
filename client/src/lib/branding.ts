@@ -14,7 +14,10 @@ export const FRAMEWORK_SLUGS = {
   FHE: 'fhe-capability-framework',
 } as const;
 
-export const PAID_TIERS = ['professional', 'enterprise', 'admin'] as const;
+// Must stay in lockstep with server/src/lib/branding.ts — the JWT `tier`
+// claim is derived from `Subscription.tier` (FREE | PROFESSIONAL | ENTERPRISE).
+// SUPER_ADMIN bypasses are handled server-side via the role claim.
+export const PAID_TIERS = ['professional', 'enterprise'] as const;
 export type PaidTier = (typeof PAID_TIERS)[number];
 
 export function isPaidTier(tier: string | undefined | null): boolean {

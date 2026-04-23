@@ -37,9 +37,13 @@ export const FRAMEWORK_SLUGS = {
  * frameworks and paid-only features. Lowercased to match the JWT `tier`
  * claim emitted by `/api/auth/login` and `/api/auth/register`.
  *
- * `admin` covers super-admins who bypass commercial gates.
+ * The values here must stay in lockstep with the `Subscription.tier`
+ * enum in `prisma/schema.prisma` (`FREE | PROFESSIONAL | ENTERPRISE`).
+ * SUPER_ADMIN is intentionally not a tier — platform-wide bypasses go
+ * through an explicit `user.role === 'SUPER_ADMIN'` check in
+ * `requirePaidTier`, not by polluting this list with a synthetic value.
  */
-export const PAID_TIERS = ['professional', 'enterprise', 'admin'] as const;
+export const PAID_TIERS = ['professional', 'enterprise'] as const;
 export type PaidTier = (typeof PAID_TIERS)[number];
 
 export function isPaidTier(tier: string | undefined | null): boolean {

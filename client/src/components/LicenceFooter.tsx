@@ -1,5 +1,5 @@
 import { useFramework } from '../contexts/FrameworkContext';
-import { isCcLicence } from '../lib/branding';
+import { CC_BY_NC_SA_URL, isCcLicence } from '../lib/branding';
 
 /**
  * Persistent one-line attribution footer, rendered globally in the app
@@ -17,8 +17,7 @@ export function LicenceFooter() {
     return null;
   }
 
-  const ccUrl =
-    activeFramework.licenceUrl ?? 'https://creativecommons.org/licenses/by-nc-sa/4.0/';
+  const ccUrl = activeFramework.licenceUrl ?? CC_BY_NC_SA_URL;
   const licenceLabel = activeFramework.licenceType.replace(/^CC-/, 'CC ');
 
   return (

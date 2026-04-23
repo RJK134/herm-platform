@@ -87,7 +87,7 @@ router.delete('/:id', async (req: Request, res: Response, next: NextFunction) =>
     if (result.count === 0) {
       res.status(404).json({
         success: false,
-        error: { code: 'NOT_FOUND', message: 'API key not found' },
+        error: { code: 'NOT_FOUND', message: 'API key not found', requestId: req.id },
       });
       return;
     }

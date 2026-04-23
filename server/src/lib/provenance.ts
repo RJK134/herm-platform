@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import type { ApiMeta } from './respond';
+import { isCcLicence } from './branding';
 
 /**
  * Standard provenance block attached to framework-scoped API responses.
@@ -42,7 +43,6 @@ export function buildProvenance(req: Request): FrameworkProvenance | null {
   if (!fw) return null;
 
   const licenceType = fw.licenceType ?? 'UNKNOWN';
-  const requiresAttribution = licenceType.toUpperCase().startsWith('CC-');
 
   return {
     framework: {
@@ -54,7 +54,7 @@ export function buildProvenance(req: Request): FrameworkProvenance | null {
         type: licenceType,
         url: fw.licenceUrl ?? null,
         notice: fw.licenceNotice ?? null,
-        requiresAttribution,
+        requiresAttribution: isCcLicence(licenceType),
       },
     },
   };
