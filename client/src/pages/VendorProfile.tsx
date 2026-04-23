@@ -7,6 +7,7 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { CATEGORY_COLORS } from '../lib/constants';
 import { ArrowLeft, Globe, CheckCircle, XCircle, Building2, DollarSign, Cpu } from 'lucide-react';
+import { LicenceAttribution } from '../components/LicenceAttribution';
 
 export function VendorProfile() {
   const { t } = useTranslation('vendor');
@@ -223,6 +224,8 @@ export function VendorProfile() {
           </Card>
         </div>
       </div>
+
+      <LicenceAttribution />
     </div>
   );
 }

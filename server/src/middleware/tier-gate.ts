@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-
-const PAID_TIERS = ['professional', 'enterprise', 'admin'];
+import { isPaidTier } from '../lib/branding';
 
 /**
  * Checks if the user's subscription tier allows access to the requested framework.
@@ -31,9 +30,7 @@ export function tierGate(req: Request, res: Response, next: NextFunction): void 
   }
 
   // Determine the user's tier — anonymous users are treated as free tier
-  const tier = req.user?.tier ?? 'free';
-
-  if (PAID_TIERS.includes(tier)) {
+  if (isPaidTier(req.user?.tier)) {
     next();
     return;
   }

@@ -137,15 +137,15 @@ describe('GET /api/framework-mappings (Enterprise gate)', () => {
     vi.mocked(prisma.capabilityMapping.findMany).mockReset();
   });
 
-  it('returns 403 for anonymous users', async () => {
+  it('returns 401 for anonymous users', async () => {
     const res = await request(app).get('/api/framework-mappings');
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
     expect(res.body.success).toBe(false);
-    expect(res.body.error.code).toBe('AUTHORIZATION_ERROR');
+    expect(res.body.error.code).toBe('AUTHENTICATION_ERROR');
   });
 
-  it('returns 403 for free-tier users', async () => {
+  it('returns 403 SUBSCRIPTION_REQUIRED for free-tier users', async () => {
     const token = makeToken('free');
     const res = await request(app)
       .get('/api/framework-mappings')
@@ -153,11 +153,12 @@ describe('GET /api/framework-mappings (Enterprise gate)', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.success).toBe(false);
-    expect(res.body.error.code).toBe('AUTHORIZATION_ERROR');
-    expect(res.body.error.message).toContain('Enterprise');
+    expect(res.body.error.code).toBe('SUBSCRIPTION_REQUIRED');
+    expect(res.body.error.message).toContain('enterprise');
+    expect(res.body.error.details.requiredTiers).toContain('enterprise');
   });
 
-  it('returns 403 for professional-tier users', async () => {
+  it('returns 403 SUBSCRIPTION_REQUIRED for professional-tier users', async () => {
     const token = makeToken('professional');
     const res = await request(app)
       .get('/api/framework-mappings')
@@ -165,7 +166,8 @@ describe('GET /api/framework-mappings (Enterprise gate)', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.success).toBe(false);
-    expect(res.body.error.code).toBe('AUTHORIZATION_ERROR');
+    expect(res.body.error.code).toBe('SUBSCRIPTION_REQUIRED');
+    expect(res.body.error.details.currentTier).toBe('professional');
   });
 
   it('returns 200 with data for enterprise-tier users', async () => {
@@ -243,12 +245,12 @@ describe('GET /api/framework-mappings/:id', () => {
     expect(res.body.error.code).toBe('NOT_FOUND');
   });
 
-  it('returns 403 for anonymous users', async () => {
+  it('returns 401 for anonymous users', async () => {
     const res = await request(app).get('/api/framework-mappings/map-1');
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
     expect(res.body.success).toBe(false);
-    expect(res.body.error.code).toBe('AUTHORIZATION_ERROR');
+    expect(res.body.error.code).toBe('AUTHENTICATION_ERROR');
   });
 });
 
@@ -338,7 +340,7 @@ describe('GET /api/framework-mappings/:id/lookup', () => {
     expect(res.body.error.code).toBe('NOT_FOUND');
   });
 
-  it('returns 403 for non-enterprise users', async () => {
+  it('returns 403 SUBSCRIPTION_REQUIRED for non-enterprise users', async () => {
     const token = makeToken('professional');
     const res = await request(app)
       .get('/api/framework-mappings/map-1/lookup?sourceCode=BC008')
@@ -346,6 +348,6 @@ describe('GET /api/framework-mappings/:id/lookup', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.success).toBe(false);
-    expect(res.body.error.code).toBe('AUTHORIZATION_ERROR');
+    expect(res.body.error.code).toBe('SUBSCRIPTION_REQUIRED');
   });
 });

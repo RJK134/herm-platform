@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Header } from '../components/layout/Header';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { LicenceAttribution } from '../components/LicenceAttribution';
 
 export function ExportDownload() {
   const { t } = useTranslation('admin');
@@ -95,6 +96,8 @@ export function ExportDownload() {
           ))}
         </div>
       </Card>
+
+      <LicenceAttribution />
     </div>
   );
 }

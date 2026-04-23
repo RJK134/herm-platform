@@ -9,6 +9,7 @@ import { Skeleton } from '../components/ui/Skeleton';
 import { useFramework } from '../contexts/FrameworkContext';
 import { useSystems, useSystemScores } from '../hooks/useApi';
 import { formatPercent, scoreColor, scoreLabel } from '../lib/utils';
+import { LicenceAttribution } from '../components/LicenceAttribution';
 
 export function SystemDetail() {
   const { t } = useTranslation('systems');
@@ -208,6 +209,8 @@ export function SystemDetail() {
           )}
         </>
       )}
+
+      <LicenceAttribution />
     </div>
   );
 }

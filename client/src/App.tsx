@@ -41,6 +41,7 @@ import { ApiIntegration } from './pages/ApiIntegration';
 import { FrameworkMapping } from './pages/FrameworkMapping';
 import { NotFound } from './pages/NotFound';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { LicenceFooter } from './components/LicenceFooter';
 
 const ADMIN_ROLES = ['INSTITUTION_ADMIN', 'SUPER_ADMIN'];
 
@@ -70,9 +71,12 @@ function AppShell({ children }: { children: ReactNode }) {
         </a>
         <Sidebar />
         <MobileMenuButton />
-        <main id="main-content" className="flex-1 overflow-auto p-4 md:p-8">
-          {children}
-        </main>
+        <div className="flex min-h-screen flex-1 flex-col">
+          <main id="main-content" className="flex-1 overflow-auto p-4 md:p-8">
+            {children}
+          </main>
+          <LicenceFooter />
+        </div>
       </div>
     </SidebarProvider>
   );

@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { ScoresService } from './scores.service';
+import { buildProvenance } from '../../lib/provenance';
 
 const service = new ScoresService();
 
@@ -13,7 +14,14 @@ const service = new ScoresService();
 export const getLeaderboard = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { entries, licence, framework } = await service.getLeaderboard(req.frameworkId);
-    res.json({ success: true, data: entries, licence, framework });
+    const provenance = buildProvenance(req);
+    res.json({
+      success: true,
+      data: entries,
+      licence,
+      framework,
+      ...(provenance ? { meta: { provenance } } : {}),
+    });
   } catch (err) {
     next(err);
   }
@@ -22,7 +30,12 @@ export const getLeaderboard = async (req: Request, res: Response, next: NextFunc
 export const getHeatmap = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const data = await service.getHeatmap(req.frameworkId);
-    res.json({ success: true, data });
+    const provenance = buildProvenance(req);
+    res.json({
+      success: true,
+      data,
+      ...(provenance ? { meta: { provenance } } : {}),
+    });
   } catch (err) {
     next(err);
   }

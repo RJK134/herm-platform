@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { SystemsService } from './systems.service';
+import { okWithProvenance } from '../../lib/provenance';
 
 const listQuerySchema = z.object({
   category: z.string().min(1).max(100).optional(),
@@ -22,7 +23,7 @@ export const list = async (req: Request, res: Response, next: NextFunction): Pro
       return;
     }
     const data = await service.listSystems({ category: query.data.category, limit: query.data.limit, offset: query.data.offset });
-    res.json({ success: true, data });
+    okWithProvenance(res, req, data);
   } catch (err) {
     next(err);
   }
@@ -31,7 +32,7 @@ export const list = async (req: Request, res: Response, next: NextFunction): Pro
 export const getById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const data = await service.getSystemById(req.params['id'] as string);
-    res.json({ success: true, data });
+    okWithProvenance(res, req, data);
   } catch (err) {
     next(err);
   }
@@ -41,7 +42,7 @@ export const getScores = async (req: Request, res: Response, next: NextFunction)
   try {
     // Forward the active frameworkId so scores are not mixed across frameworks.
     const data = await service.getSystemScores(req.params['id'] as string, req.frameworkId);
-    res.json({ success: true, data });
+    okWithProvenance(res, req, data);
   } catch (err) {
     next(err);
   }
@@ -60,7 +61,7 @@ export const compare = async (req: Request, res: Response, next: NextFunction): 
       return;
     }
     const data = await service.compareSystems(idList, req.frameworkId);
-    res.json({ success: true, data });
+    okWithProvenance(res, req, data);
   } catch (err) {
     next(err);
   }

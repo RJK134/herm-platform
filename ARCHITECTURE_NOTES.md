@@ -65,23 +65,40 @@ Response (with x-request-id header)
 
 | Prefix                     | Auth                | Notes                               |
 |----------------------------|---------------------|-------------------------------------|
-| `/api/health`              | public              | Liveness                            |
-| `/api/readiness`           | public              | DB check, returns 503 on failure    |
+| `/api/health`, `/api/ready` | public             | Liveness / DB readiness             |
 | `/api/auth/*`              | public + rate-limit | 20/15min                            |
 | `/api/institutions/*`      | authenticated       | `requireRole` on admin subpaths     |
 | `/api/admin/*`             | authenticated       | `INSTITUTION_ADMIN` / `SUPER_ADMIN` |
-| `/api/systems,capabilities,scores,vendors,research,scoring,export` | public | read-only reference data |
-| `/api/chat/*`              | **authenticated**   | + per-user 20/min rate limit        |
-| `/api/baskets/*`           | **authenticated**   | institutional data                  |
-| `/api/tco,procurement,integration,architecture,value,documents` | public | calculators; no tenant mutation |
-| `/api/vendor-portal/*`     | authenticated       |                                     |
-| `/api/evaluations/*`       | authenticated       |                                     |
-| `/api/subscriptions/*`     | authenticated       |                                     |
-| `/api/sector/analytics,notifications,keys` | authenticated | |
+| `/api/systems`, `/api/capabilities`, `/api/scores`, `/api/export` | optionalJWT + frameworkContext + tierGate | Framework-scoped reads; free tier sees public frameworks only |
+| `/api/vendors`, `/api/research`, `/api/scoring` | public | Read-only reference data          |
+| `/api/frameworks`, `/api/framework-mappings` | authenticated + enterprise (mappings) | Frameworks public; mappings enterprise-only via `requirePaidTier(['enterprise'])` |
+| `/api/chat/*`              | authenticated       | + per-user 20/min rate limit        |
+| `/api/baskets/*`           | authenticated       | Institutional data                  |
+| `/api/tco`                 | public              | Calculators; no tenant mutation     |
+| `/api/procurement`, `/api/integration`, `/api/architecture`, `/api/value`, `/api/documents`, `/api/evaluations` | optionalJWT | User-scoped when authed; usage caps (free-tier) tracked in `HERM_COMPLIANCE.md` |
+| `/api/vendor-portal/*`     | vendor JWT + framework scoping | Separate token namespace         |
+| `/api/subscriptions/*`     | authenticated       | Stripe webhook is the one public sub-route |
+| `/api/sector/analytics`    | optionalJWT         | k-anonymity min 5 institutions     |
+| `/api/notifications`       | optionalJWT (user-scoped) |                              |
+| `/api/keys/*`              | authenticated + enterprise | `requirePaidTier(['enterprise'])` — API access is enterprise-tier |
 
 Anything marked "public" reads only cached reference data and has no tenant
 context. When any of these gain mutation endpoints or tenant-specific reads,
 flip them behind `authenticateJWT`.
+
+### Commercial tier gates
+
+The route-auth matrix above covers *authentication*. **Subscription tier**
+gating is separate — the authoritative mapping is [HERM_COMPLIANCE.md](./HERM_COMPLIANCE.md):
+
+- `tierGate` (in `middleware/tier-gate.ts`) gates framework **data**. Free tier
+  can only read public (CC-licensed) frameworks; paid tiers can also read
+  proprietary ones. Protects HERM + FHE co-existence.
+- `requirePaidTier` (in `middleware/require-paid-tier.ts`) gates commercial
+  **features** regardless of which framework is being read. Currently
+  applied enterprise-only to `/api/framework-mappings/*` and `/api/keys/*`.
+
+`SUPER_ADMIN` bypasses `requirePaidTier` platform-wide.
 
 ## Service layering (target)
 
@@ -134,6 +151,8 @@ All errors are normalised by `middleware/errorHandler.ts`:
 
 ## AI boundary
 
-All LLM usage lives in `server/src/services/ai-assistant.ts`. Model, token
-cap, timeout, and system prompt are top-level constants. See
-[AI_GOVERNANCE.md](./AI_GOVERNANCE.md).
+All LLM usage flows through `server/src/services/ai/ai-client.ts` — the
+only module allowed to import `@anthropic-ai/sdk` (enforced by ESLint's
+`no-restricted-imports` rule). Model allowlist, input / output / history
+caps, and the prompt-injection sanitiser are declared as top-level
+constants there. See [AI_GOVERNANCE.md](./AI_GOVERNANCE.md).

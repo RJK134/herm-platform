@@ -2,11 +2,17 @@ import type { Request, Response, NextFunction } from 'express';
 import { Router } from 'express';
 import { z } from 'zod';
 import crypto from 'crypto';
-import { optionalJWT } from '../../middleware/auth';
+import { authenticateJWT } from '../../middleware/auth';
+import { requirePaidTier } from '../../middleware/require-paid-tier';
 import prisma from '../../utils/prisma';
 
 const router = Router();
-router.use(optionalJWT);
+
+// API access is an Enterprise-tier feature per the published pricing table.
+// We require a real JWT and gate on tier — previously the routes accepted
+// an anonymous institutionId='anonymous' fallback which both leaked data
+// across anonymous callers and bypassed commercial gating.
+router.use(authenticateJWT, requirePaidTier(['enterprise']));
 
 const createKeySchema = z.object({
   name: z.string().min(1).max(100),
@@ -17,7 +23,7 @@ const createKeySchema = z.object({
 router.post('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const data = createKeySchema.parse(req.body);
-    const institutionId = req.user?.institutionId ?? 'anonymous';
+    const institutionId = req.user!.institutionId;
     const rawKey = `herm_pk_${crypto.randomBytes(32).toString('hex')}`;
     const keyPrefix = rawKey.substring(0, 16);
     const keyHash = crypto.createHash('sha256').update(rawKey).digest('hex');
@@ -50,7 +56,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
 
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const institutionId = req.user?.institutionId ?? 'anonymous';
+    const institutionId = req.user!.institutionId;
     const keys = await prisma.apiKey.findMany({
       where: { institutionId },
       select: {
@@ -71,7 +77,20 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 
 router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    await prisma.apiKey.update({ where: { id: req.params['id'] }, data: { isActive: false } });
+    const institutionId = req.user!.institutionId;
+    // Scope revocation to the caller's institution — otherwise any
+    // enterprise user could revoke a key belonging to another tenant.
+    const result = await prisma.apiKey.updateMany({
+      where: { id: req.params['id'], institutionId },
+      data: { isActive: false },
+    });
+    if (result.count === 0) {
+      res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'API key not found', requestId: req.id },
+      });
+      return;
+    }
     res.json({ success: true, data: { revoked: true } });
   } catch (err) { next(err); }
 });
