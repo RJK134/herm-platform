@@ -33,11 +33,33 @@ export const updateShortlistEntrySchema = z.object({
   score: z.number().optional(),
 });
 
+// ── Phase 3: workflow state transitions + shortlist governance ──────────────
+
+import { PROJECT_STATUSES } from '../../services/domain/procurement/project-status';
+
+export const transitionProjectSchema = z.object({
+  to: z.enum(PROJECT_STATUSES),
+  note: z.string().max(2000).optional(),
+});
+
+/**
+ * Decision payload for a shortlist entry. `rationale` is required — a
+ * procurement decision without a written rationale is the very thing
+ * Phase 3 is trying to prevent.
+ */
+export const decideShortlistSchema = z.object({
+  decisionStatus: z.enum(['approved', 'rejected']),
+  rationale: z.string().min(1).max(4000),
+  decidedBy: z.string().min(1).max(200).optional(),
+});
+
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
 export type UpdateStageInput = z.infer<typeof updateStageSchema>;
 export type AddShortlistEntryInput = z.infer<typeof addShortlistEntrySchema>;
 export type UpdateShortlistEntryInput = z.infer<typeof updateShortlistEntrySchema>;
+export type TransitionProjectInput = z.infer<typeof transitionProjectSchema>;
+export type DecideShortlistInput = z.infer<typeof decideShortlistSchema>;
 
 // Phase 4: Enhanced schemas
 

@@ -4,6 +4,8 @@ import {
   createProject, listProjects, getProject, updateProject, deleteProject,
   getWorkflow, updateStage, advanceWorkflow,
   addShortlistEntry, getShortlist, updateShortlistEntry, removeShortlistEntry,
+  transitionProjectStatus, getProjectStatus,
+  decideShortlistEntry, clearShortlistDecision,
 } from './procurement.controller';
 import {
   createProjectV2, listProjectsV2, getProjectV2, advanceStage,
@@ -54,5 +56,14 @@ router.post('/projects/:id/shortlist', addShortlistEntry);
 router.get('/projects/:id/shortlist', getShortlist);
 router.patch('/projects/:id/shortlist/:entryId', updateShortlistEntry);
 router.delete('/projects/:id/shortlist/:entryId', removeShortlistEntry);
+
+// ── Phase 3: governance ───────────────────────────────────────────────────
+// Project status state machine — see services/domain/procurement/project-status.ts
+router.get('/projects/:id/status', getProjectStatus);
+router.post('/projects/:id/status/transitions', transitionProjectStatus);
+
+// Shortlist decisions — approve/reject with mandatory rationale
+router.post('/projects/:id/shortlist/:entryId/decisions', decideShortlistEntry);
+router.delete('/projects/:id/shortlist/:entryId/decisions', clearShortlistDecision);
 
 export default router;

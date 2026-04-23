@@ -4,8 +4,17 @@ import type {
   UpdateStageInput,
   AddShortlistEntryInput,
   UpdateShortlistEntryInput,
+  TransitionProjectInput,
+  DecideShortlistInput,
 } from './procurement.schema';
 import prisma from '../../utils/prisma';
+import {
+  assertTransition,
+  normaliseStatus,
+  nextStates,
+} from '../../services/domain/procurement/project-status';
+import type { ProjectStatus } from '../../services/domain/procurement/project-status';
+import { NotFoundError, ValidationError } from '../../utils/errors';
 
 const WORKFLOW_STAGES = [
   { stageNumber: 1, title: 'Requirements Definition', status: 'active' },
@@ -46,7 +55,10 @@ export class ProcurementService {
           institutionId,
           jurisdiction: data.jurisdiction ?? 'UK',
           basketId: data.basketId ?? null,
-          status: 'active',
+          // Phase 3 state machine: new projects start in `draft`. The
+          // previous default of `active` is mapped to `active_review`
+          // for historical rows by `normaliseStatus()`.
+          status: 'draft',
         },
       });
 
@@ -228,5 +240,163 @@ export class ProcurementService {
 
   async removeShortlistEntry(entryId: string) {
     return prisma.shortlistEntry.delete({ where: { id: entryId } });
+  }
+
+  // ── Phase 3: status state machine ─────────────────────────────────────────
+
+  /**
+   * Apply a governance-controlled status transition. Records an AuditLog
+   * entry capturing `{from, to, note, actorId}` so reviewers can see the
+   * history even though the `status` column itself is a point-in-time
+   * scalar.
+   */
+  async transitionStatus(
+    projectId: string,
+    data: TransitionProjectInput,
+    actor?: { userId?: string; name?: string },
+  ) {
+    const project = await prisma.procurementProject.findUnique({
+      where: { id: projectId },
+      select: { id: true, status: true },
+    });
+    if (!project) throw new NotFoundError(`Project not found: ${projectId}`);
+
+    const { from, to } = assertTransition(project.status, data.to);
+
+    // Persist transition + audit log atomically so readers never see a
+    // new status without its corresponding audit entry.
+    const [updated] = await prisma.$transaction([
+      prisma.procurementProject.update({
+        where: { id: projectId },
+        data: { status: to },
+      }),
+      prisma.auditLog.create({
+        data: {
+          userId: actor?.userId ?? null,
+          action: 'procurement.project.transition',
+          entityType: 'ProcurementProject',
+          entityId: projectId,
+          changes: {
+            from,
+            to,
+            note: data.note ?? null,
+            actorName: actor?.name ?? null,
+          },
+        },
+      }),
+    ]);
+
+    return {
+      project: updated,
+      transition: { from, to, note: data.note ?? null },
+      nextStates: nextStates(to),
+    };
+  }
+
+  /** Expose the workflow metadata the client needs to render a state pill. */
+  async getStatusContext(projectId: string): Promise<{
+    current: ProjectStatus;
+    next: readonly ProjectStatus[];
+    history: Array<{
+      at: Date;
+      actorId: string | null;
+      from: ProjectStatus;
+      to: ProjectStatus;
+      note: string | null;
+    }>;
+  }> {
+    const project = await prisma.procurementProject.findUnique({
+      where: { id: projectId },
+      select: { status: true },
+    });
+    if (!project) throw new NotFoundError(`Project not found: ${projectId}`);
+
+    const logs = await prisma.auditLog.findMany({
+      where: {
+        entityType: 'ProcurementProject',
+        entityId: projectId,
+        action: 'procurement.project.transition',
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const current = normaliseStatus(project.status);
+    return {
+      current,
+      next: nextStates(current),
+      history: logs.map((l) => {
+        const c = (l.changes ?? {}) as {
+          from?: string;
+          to?: string;
+          note?: string | null;
+        };
+        return {
+          at: l.createdAt,
+          actorId: l.userId ?? null,
+          from: normaliseStatus(c.from),
+          to: normaliseStatus(c.to),
+          note: c.note ?? null,
+        };
+      }),
+    };
+  }
+
+  // ── Phase 3: shortlist decisions ─────────────────────────────────────────
+
+  /**
+   * Record an approve/reject decision against a shortlist entry. Unlike
+   * `updateShortlistEntry`, this is the canonical governance surface —
+   * rationale is mandatory, and both actor attribution and `decidedAt`
+   * are stamped server-side.
+   */
+  async decideShortlistEntry(
+    entryId: string,
+    data: DecideShortlistInput,
+    actor?: { userId?: string; name?: string },
+  ) {
+    const entry = await prisma.shortlistEntry.findUnique({ where: { id: entryId } });
+    if (!entry) throw new NotFoundError(`Shortlist entry not found: ${entryId}`);
+
+    // Guard against weird inputs — the Zod schema already restricts
+    // `decisionStatus`, but we belt-and-brace here so callers that wire
+    // the service directly (tests, other servers) can't smuggle in
+    // arbitrary statuses.
+    if (data.decisionStatus !== 'approved' && data.decisionStatus !== 'rejected') {
+      throw new ValidationError(
+        `decisionStatus must be 'approved' or 'rejected', got '${data.decisionStatus}'`,
+      );
+    }
+
+    return prisma.shortlistEntry.update({
+      where: { id: entryId },
+      data: {
+        decisionStatus: data.decisionStatus,
+        rationale: data.rationale,
+        decidedBy: actor?.name ?? actor?.userId ?? data.decidedBy ?? null,
+        decidedAt: new Date(),
+      },
+      include: {
+        system: { select: { id: true, name: true, vendor: true, category: true } },
+      },
+    });
+  }
+
+  /** Reset a decision back to `pending`. Used when shortlist is revised. */
+  async clearShortlistDecision(entryId: string) {
+    const entry = await prisma.shortlistEntry.findUnique({ where: { id: entryId } });
+    if (!entry) throw new NotFoundError(`Shortlist entry not found: ${entryId}`);
+
+    return prisma.shortlistEntry.update({
+      where: { id: entryId },
+      data: {
+        decisionStatus: 'pending',
+        rationale: null,
+        decidedBy: null,
+        decidedAt: null,
+      },
+      include: {
+        system: { select: { id: true, name: true, vendor: true, category: true } },
+      },
+    });
   }
 }

@@ -6,7 +6,10 @@ import {
   updateStageSchema,
   addShortlistEntrySchema,
   updateShortlistEntrySchema,
+  transitionProjectSchema,
+  decideShortlistSchema,
 } from './procurement.schema';
+import { InvalidTransitionError } from '../../services/domain/procurement/project-status';
 
 const service = new ProcurementService();
 
@@ -184,6 +187,91 @@ export const removeShortlistEntry = async (
   try {
     await service.removeShortlistEntry(req.params['entryId'] as string);
     res.json({ success: true, data: null });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── Phase 3: status transitions + shortlist governance ────────────────────
+
+function actorFromReq(req: Request): { userId?: string; name?: string } {
+  return {
+    userId: req.user?.userId,
+    name: req.user?.name,
+  };
+}
+
+export const transitionProjectStatus = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const data = transitionProjectSchema.parse(req.body);
+    const result = await service.transitionStatus(
+      req.params['id'] as string,
+      data,
+      actorFromReq(req),
+    );
+    res.json({ success: true, data: result });
+  } catch (err) {
+    if (err instanceof InvalidTransitionError) {
+      res.status(409).json({
+        success: false,
+        error: {
+          code: 'INVALID_TRANSITION',
+          message: err.message,
+          details: { from: err.from, to: err.to },
+          requestId: req.id,
+        },
+      });
+      return;
+    }
+    next(err);
+  }
+};
+
+export const getProjectStatus = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const data = await service.getStatusContext(req.params['id'] as string);
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const decideShortlistEntry = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const data = decideShortlistSchema.parse(req.body);
+    const entry = await service.decideShortlistEntry(
+      req.params['entryId'] as string,
+      data,
+      actorFromReq(req),
+    );
+    res.json({ success: true, data: entry });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const clearShortlistDecision = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const entry = await service.clearShortlistDecision(
+      req.params['entryId'] as string,
+    );
+    res.json({ success: true, data: entry });
   } catch (err) {
     next(err);
   }
