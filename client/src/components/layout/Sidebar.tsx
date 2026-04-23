@@ -28,6 +28,27 @@ const TIER_COLOURS: Record<string, string> = {
   free: 'bg-white/10 text-white/50',
 };
 
+const TIER_LABELS: Record<string, string> = {
+  professional: 'Professional',
+  enterprise: 'Enterprise',
+};
+
+/**
+ * Builds a tooltip string that names the specific tier(s) required to
+ * reach a locked item — avoids the misleading "requires a paid
+ * subscription" phrasing for professional users hitting an
+ * Enterprise-only route.
+ */
+function describeRequirement(item: NavItem): string {
+  if (item.tier === 'public' || item.tier === 'authenticated') return item.label;
+  const names = (item.tier as readonly string[]).map((t) => TIER_LABELS[t] ?? t);
+  const joined =
+    names.length <= 1
+      ? names[0] ?? 'paid'
+      : `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}`;
+  return `${item.label} — requires ${joined}`;
+}
+
 /**
  * Computes the visual state of a nav item for the current user:
  *   - 'available'  → user passes the tier gate (or it's public)
@@ -86,6 +107,7 @@ function NavSection({
         const state = itemState(item, isAuthenticated, userTier, userRole);
         const locked = state === 'locked';
         const Icon = item.icon;
+        const lockedTooltip = locked ? describeRequirement(item) : null;
 
         return (
           <NavLink
@@ -93,13 +115,11 @@ function NavSection({
             to={item.to}
             end={item.to === '/'}
             onClick={onNavClick}
-            aria-disabled={locked || undefined}
             title={
-              locked
-                ? `${item.label} — requires a paid subscription`
-                : item.freeUsageHint && !isPaidTier(userTier)
-                  ? `${item.label} (${item.freeUsageHint})`
-                  : item.label
+              lockedTooltip ??
+              (item.freeUsageHint && !isPaidTier(userTier)
+                ? `${item.label} (${item.freeUsageHint})`
+                : item.label)
             }
             className={({ isActive }) =>
               `flex items-center gap-3 text-sm transition-colors relative group ${
@@ -127,8 +147,7 @@ function NavSection({
             )}
             {isCollapsed && (
               <span className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity">
-                {item.label}
-                {locked ? ' — upgrade required' : ''}
+                {lockedTooltip ?? item.label}
               </span>
             )}
           </NavLink>

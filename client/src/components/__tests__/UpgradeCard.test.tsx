@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
+import type { ReactElement } from 'react';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { UpgradeCard } from '../UpgradeCard';
 
-function renderCard(node: React.ReactElement) {
+function renderCard(node: ReactElement) {
   return render(<MemoryRouter>{node}</MemoryRouter>);
 }
 

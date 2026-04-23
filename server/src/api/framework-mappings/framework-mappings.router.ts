@@ -20,13 +20,17 @@ const requireEnterprise = requirePaidTier(['enterprise']);
 router.get('/', authenticateJWT, requireEnterprise, async (_req, res, next) => {
   try {
     const mappings = await service.list();
-    // Emit per-mapping provenance so downstream consumers preserve HERM
-    // attribution on the source side and flag the proprietary target.
-    const provenance = mappings.map((m) => ({
+    // Keep `meta.provenance` reserved for the single `{ source, target }`
+    // shape used by the per-mapping routes. The list endpoint instead
+    // emits `meta.provenancePairs` — an array of
+    // `{ mappingId, source, target }` entries, one per mapping — so a
+    // single consumer doesn't have to handle two different shapes under
+    // the same key.
+    const provenancePairs = mappings.map((m) => ({
       mappingId: m.id,
       ...frameworkPairProvenance(m.sourceFramework, m.targetFramework),
     }));
-    res.json({ success: true, data: mappings, meta: { provenance } });
+    res.json({ success: true, data: mappings, meta: { provenancePairs } });
   } catch (err) {
     next(err);
   }

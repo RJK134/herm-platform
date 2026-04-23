@@ -94,7 +94,7 @@ All framework-scoped responses in this bucket now emit `meta.provenance.framewor
 
 | Prefix                        | Gate                                     |
 |-------------------------------|------------------------------------------|
-| `/api/framework-mappings/*`   | `requirePaidTier(['enterprise'])` + `meta.provenance` on every response (HERM source + proprietary target) |
+| `/api/framework-mappings/*`   | `requirePaidTier(['enterprise'])` + per-mapping provenance (`meta.provenance` on `/:id`, `/:id/lookup`; `meta.provenancePairs` on the list endpoint) |
 | `/api/keys/*`                 | `requirePaidTier(['enterprise'])`        |
 
 Each gated route is mirrored by a `<RequireTier>` wrapper in the client (see `client/src/components/auth/RequireTier.tsx`) so the paid/free boundary is enforced in the UI as well — anonymous callers bounce to `/login?returnTo=…`, free/professional callers see `<UpgradeCard />`.

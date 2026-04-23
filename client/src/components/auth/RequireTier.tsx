@@ -26,8 +26,9 @@ interface RequireTierProps {
  *     card rather than a blank 403 or a false "not found" page.
  *
  * Route-level gating in `App.tsx` wraps paid-only pages with this.
- * Individual components can also use it to gate a single paid feature
- * inside an otherwise free page by rendering `<RequireTier compact>…</>`.
+ * Individual components can also wrap a paid feature inside an otherwise
+ * free page with the same `tiers`, `featureName`, and optional
+ * `description` / `upgradeHref` props.
  */
 export function RequireTier({
   tiers,

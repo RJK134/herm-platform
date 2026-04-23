@@ -29,24 +29,31 @@ import {
 import type { PaidTier } from './branding';
 
 /**
- * The product is organised around four top-level sections aligned to the
- * Future Horizons ASPT redesign brief:
+ * The end-user product IA is organised around four top-level sections
+ * aligned to the Future Horizons ASPT redesign brief:
  *
  *   1. HERM Explorer         — free-tier HERM reference data + attribution
  *   2. Procurement Workspace — authenticated tools, usage-capped on free
  *   3. Sector Intelligence   — paid-tier analytics across institutions
  *   4. Account & Billing     — subscription, API, notifications
  *
+ * This module also exports an additional role-gated Admin section for
+ * platform-admin workflows. Admin is not part of the end-user IA; it is
+ * only rendered for INSTITUTION_ADMIN / SUPER_ADMIN users.
+ *
  * Each entry declares a `tier`:
  *   - 'public'       → visible to everyone, no auth needed
  *   - 'authenticated'→ requires a JWT but any tier passes
- *   - PaidTier[]     → requires a subscription tier. The UI shows a locked
- *                      badge and routes RequireTier to an upgrade card.
+ *   - PaidTier[]     → requires a subscription tier. The sidebar shows a
+ *                      locked icon; the matching route should be wrapped
+ *                      in <RequireTier> (see `components/auth/RequireTier`).
  *
- * The sidebar reads this file; App.tsx reads it to decide whether a route
- * needs a RequireTier wrapper. Single source of truth prevents drift
- * between navigation visibility, route gating, and the HERM_COMPLIANCE
- * route table.
+ * The sidebar is the primary consumer of this file. Route-level tier
+ * gating in `App.tsx` is currently hard-coded with explicit
+ * `<RequireTier>` wrappers that must stay aligned with the tier values
+ * declared here — keep this file and those wrappers (plus the
+ * HERM_COMPLIANCE.md route table) in sync until the wrapping is
+ * auto-generated from this metadata.
  */
 export type NavTier = 'public' | 'authenticated' | readonly PaidTier[];
 
