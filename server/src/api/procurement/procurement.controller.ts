@@ -8,6 +8,7 @@ import {
   updateShortlistEntrySchema,
   transitionProjectSchema,
   decideShortlistSchema,
+  seedShortlistFromBasketSchema,
 } from './procurement.schema';
 import { InvalidTransitionError } from '../../services/domain/procurement/project-status';
 
@@ -287,6 +288,26 @@ export const clearShortlistDecision = async (
       actorFromReq(req),
     );
     res.json({ success: true, data: entry });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── Phase 4: seed shortlist from basket ───────────────────────────────────
+
+export const seedShortlistFromBasket = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const data = seedShortlistFromBasketSchema.parse(req.body ?? {});
+    const result = await service.seedShortlistFromBasket(
+      req.params['id'] as string,
+      data,
+      actorFromReq(req),
+    );
+    res.json({ success: true, data: result });
   } catch (err) {
     next(err);
   }

@@ -62,6 +62,23 @@ export const decideShortlistSchema = z.object({
   rationale: z.string().min(1).max(4000),
 });
 
+/**
+ * Phase 4: seed a project's shortlist from its linked basket.
+ *
+ * - `topN` caps how many systems are added (default: no cap; add every
+ *   system that passes `minPercentage`).
+ * - `minPercentage` filters out systems whose basket-weighted match is
+ *   below the threshold (default 0 — include every system).
+ *
+ * Both are optional; with neither set, every evaluated system becomes a
+ * longlist entry. The service dedupes against the existing shortlist so
+ * this is safe to call repeatedly as the basket evolves.
+ */
+export const seedShortlistFromBasketSchema = z.object({
+  topN: z.number().int().min(1).max(100).optional(),
+  minPercentage: z.number().min(0).max(100).optional(),
+});
+
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
 export type UpdateStageInput = z.infer<typeof updateStageSchema>;
@@ -69,6 +86,7 @@ export type AddShortlistEntryInput = z.infer<typeof addShortlistEntrySchema>;
 export type UpdateShortlistEntryInput = z.infer<typeof updateShortlistEntrySchema>;
 export type TransitionProjectInput = z.infer<typeof transitionProjectSchema>;
 export type DecideShortlistInput = z.infer<typeof decideShortlistSchema>;
+export type SeedShortlistFromBasketInput = z.infer<typeof seedShortlistFromBasketSchema>;
 
 // Phase 4: Enhanced schemas
 
