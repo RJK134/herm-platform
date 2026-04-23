@@ -11,6 +11,7 @@ vi.mock('../../../utils/prisma', () => {
   const shortlistEntry = {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
+    findMany: vi.fn(),
     update: vi.fn(),
   };
   const auditLog = {
@@ -187,7 +188,8 @@ describe('ProcurementService.getStatusContext', () => {
       },
     ] as never);
 
-    const ctx = await service.getStatusContext('p1');
+    // Authenticated callers get the full history including reviewer PII.
+    const ctx = await service.getStatusContext('p1', { includeActor: true });
     expect(ctx.current).toBe('shortlist_proposed');
     expect(ctx.next).toContain('shortlist_approved');
     expect(ctx.next).toContain('active_review'); // revise
@@ -199,9 +201,35 @@ describe('ProcurementService.getStatusContext', () => {
       actorId: 'u1',
       actorName: 'Alice',
     });
-    expect(ctx.history[1]).toMatchObject({
-      actorId: 'u2',
-      actorName: 'Bob',
+    expect(ctx.history[1]).toMatchObject({ actorId: 'u2', actorName: 'Bob' });
+  });
+
+  it('scrubs actorId + actorName for unauthenticated callers', async () => {
+    // BugBot-reported PII leak: the anonymous GET /projects/:id/status
+    // surface must not expose reviewer CUIDs or display names.
+    vi.mocked(prisma.procurementProject.findUnique).mockResolvedValueOnce({
+      status: 'shortlist_proposed',
+    } as never);
+    vi.mocked(prisma.auditLog.findMany).mockResolvedValueOnce([
+      {
+        userId: 'u1',
+        createdAt: new Date('2026-01-01'),
+        changes: {
+          from: 'draft',
+          to: 'active_review',
+          note: 'start',
+          actorName: 'Alice',
+        },
+      },
+    ] as never);
+
+    const ctx = await service.getStatusContext('p1');
+    expect(ctx.history[0]).toMatchObject({
+      from: 'draft',
+      to: 'active_review',
+      note: 'start',
+      actorId: null,
+      actorName: null,
     });
   });
 
@@ -216,8 +244,52 @@ describe('ProcurementService.getStatusContext', () => {
         changes: { from: 'draft', to: 'active_review' },
       },
     ] as never);
-    const ctx = await service.getStatusContext('p1');
+    const ctx = await service.getStatusContext('p1', { includeActor: true });
     expect(ctx.history[0]).toMatchObject({ actorId: null, actorName: null });
+  });
+});
+
+describe('ProcurementService.getShortlist — governance scrub', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const baseEntry = {
+    id: 'e1',
+    projectId: 'p1',
+    systemId: 's1',
+    status: 'shortlist',
+    score: 82,
+    notes: null,
+    addedAt: new Date('2026-02-01'),
+    decisionStatus: 'approved',
+    rationale: 'Best HERM coverage',
+    decidedBy: 'Alice',
+    decidedAt: new Date('2026-02-05'),
+    system: { id: 's1', name: 'Sys', vendor: 'Ven', category: 'SIS' },
+  };
+
+  it('scrubs decidedBy + rationale for unauthenticated callers', async () => {
+    vi.mocked(prisma.shortlistEntry.findMany).mockResolvedValueOnce([
+      baseEntry,
+    ] as never);
+    const [entry] = (await service.getShortlist('p1')) as unknown as Array<
+      typeof baseEntry
+    >;
+    expect(entry.decidedBy).toBeNull();
+    expect(entry.rationale).toBeNull();
+    // State + timestamp stay — they're not PII.
+    expect(entry.decisionStatus).toBe('approved');
+    expect(entry.decidedAt).toBeInstanceOf(Date);
+  });
+
+  it('returns full governance for authenticated callers', async () => {
+    vi.mocked(prisma.shortlistEntry.findMany).mockResolvedValueOnce([
+      baseEntry,
+    ] as never);
+    const [entry] = (await service.getShortlist('p1', {
+      includeGovernance: true,
+    })) as unknown as Array<typeof baseEntry>;
+    expect(entry.decidedBy).toBe('Alice');
+    expect(entry.rationale).toBe('Best HERM coverage');
   });
 });
 

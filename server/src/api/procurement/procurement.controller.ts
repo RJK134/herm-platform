@@ -46,7 +46,12 @@ export const getProject = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const data = await service.getProject(req.params['id'] as string);
+    // Governance-bearing columns (`decidedBy`, `rationale`) are only
+    // surfaced to authenticated callers — anonymous readers of the
+    // public project endpoint see them as `null`. See PROCUREMENT_WORKFLOW.md.
+    const data = await service.getProject(req.params['id'] as string, {
+      includeGovernance: !!req.user,
+    });
     if (!data) {
       res.status(404).json({
         success: false,
@@ -155,7 +160,9 @@ export const getShortlist = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const data = await service.getShortlist(req.params['id'] as string);
+    const data = await service.getShortlist(req.params['id'] as string, {
+      includeGovernance: !!req.user,
+    });
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -237,7 +244,12 @@ export const getProjectStatus = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const data = await service.getStatusContext(req.params['id'] as string);
+    // `actorId` / `actorName` are scrubbed for unauthenticated callers —
+    // public dashboards can still render the workflow history without
+    // leaking reviewer CUIDs or display names.
+    const data = await service.getStatusContext(req.params['id'] as string, {
+      includeActor: !!req.user,
+    });
     res.json({ success: true, data });
   } catch (err) {
     next(err);

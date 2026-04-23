@@ -146,6 +146,26 @@ justification. `decidedBy` is resolved from the caller's JWT `name` →
 Resetting a decision back to pending nulls `rationale`, `decidedBy`, and
 `decidedAt` so a stale rationale never implies fresh approval.
 
+### PII scrubbing on public reads
+
+`GET /api/procurement/projects/:id/shortlist` and
+`GET /api/procurement/projects/:id` both accept `optionalJWT`, so
+unauthenticated callers can hit them. Those responses are scrubbed of
+reviewer PII server-side:
+
+| Field            | Authenticated | Anonymous |
+|------------------|---------------|-----------|
+| `decisionStatus` | ✓             | ✓         |
+| `decidedAt`      | ✓             | ✓         |
+| `decidedBy`      | ✓             | `null`    |
+| `rationale`      | ✓             | `null`    |
+
+Status history (`GET /api/procurement/projects/:id/status`) follows the
+same pattern — anonymous callers see the sequence of transitions with
+`actorId: null` + `actorName: null`; authenticated callers see the full
+attribution. Note text is always visible (it's user-authored workflow
+documentation, not reviewer PII).
+
 ## Scoring provenance
 
 `CapabilityScore` already had the fields needed to make every score

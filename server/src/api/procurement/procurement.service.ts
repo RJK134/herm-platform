@@ -17,6 +17,25 @@ import {
 import type { ProjectStatus } from '../../services/domain/procurement/project-status';
 import { NotFoundError, ValidationError } from '../../utils/errors';
 
+/**
+ * Strip reviewer PII from a shortlist entry. The columns removed are
+ * `decidedBy` (CUID or display name) and `rationale` (free-text
+ * justification that may contain a reviewer's professional opinion or
+ * vendor-critical language). `decisionStatus` and `decidedAt` are
+ * workflow state + timestamp, not PII, and stay.
+ *
+ * Callers pass `includeGovernance: !!req.user` to the read methods;
+ * anonymous callers get the scrubbed shape, authenticated callers get
+ * the full record.
+ */
+function stripShortlistGovernance<T extends { decidedBy?: string | null; rationale?: string | null }>(
+  entry: T,
+): T {
+  // Explicitly null out — don't strip the keys, so downstream
+  // consumers and TypeScript narrow the shape consistently.
+  return { ...entry, decidedBy: null, rationale: null };
+}
+
 const WORKFLOW_STAGES = [
   { stageNumber: 1, title: 'Requirements Definition', status: 'active' },
   { stageNumber: 2, title: 'Market Engagement', status: 'pending' },
@@ -91,8 +110,8 @@ export class ProcurementService {
     });
   }
 
-  async getProject(id: string) {
-    return prisma.procurementProject.findUnique({
+  async getProject(id: string, opts: { includeGovernance?: boolean } = {}) {
+    const project = await prisma.procurementProject.findUnique({
       where: { id },
       include: {
         workflow: {
@@ -108,6 +127,15 @@ export class ProcurementService {
         },
       },
     });
+    if (!project) return null;
+    if (opts.includeGovernance) return project;
+    // Strip reviewer PII (decidedBy) and free-text rationale on the
+    // anonymous / public read surface. decisionStatus + decidedAt stay:
+    // the workflow state and timestamp are not sensitive.
+    return {
+      ...project,
+      shortlist: project.shortlist.map(stripShortlistGovernance),
+    };
   }
 
   async updateProject(id: string, data: UpdateProjectInput) {
@@ -219,14 +247,16 @@ export class ProcurementService {
     });
   }
 
-  async getShortlist(projectId: string) {
-    return prisma.shortlistEntry.findMany({
+  async getShortlist(projectId: string, opts: { includeGovernance?: boolean } = {}) {
+    const entries = await prisma.shortlistEntry.findMany({
       where: { projectId },
       include: {
         system: { select: { id: true, name: true, vendor: true, category: true } },
       },
       orderBy: { addedAt: 'asc' },
     });
+    if (opts.includeGovernance) return entries;
+    return entries.map(stripShortlistGovernance);
   }
 
   async updateShortlistEntry(entryId: string, data: UpdateShortlistEntryInput) {
@@ -321,8 +351,18 @@ export class ProcurementService {
     });
   }
 
-  /** Expose the workflow metadata the client needs to render a state pill. */
-  async getStatusContext(projectId: string): Promise<{
+  /**
+   * Expose the workflow metadata the client needs to render a state pill.
+   *
+   * `includeActor` controls whether each history row carries `actorId`
+   * and `actorName`. Unauthenticated callers get `null` for both so a
+   * public dashboard can still render the sequence of transitions
+   * without leaking reviewer identity.
+   */
+  async getStatusContext(
+    projectId: string,
+    opts: { includeActor?: boolean } = {},
+  ): Promise<{
     current: ProjectStatus;
     next: readonly ProjectStatus[];
     history: Array<{
@@ -364,8 +404,8 @@ export class ProcurementService {
         };
         return {
           at: l.createdAt,
-          actorId: l.userId ?? null,
-          actorName: c.actorName ?? null,
+          actorId: opts.includeActor ? (l.userId ?? null) : null,
+          actorName: opts.includeActor ? (c.actorName ?? null) : null,
           from: normaliseStatus(c.from),
           to: normaliseStatus(c.to),
           note: c.note ?? null,
