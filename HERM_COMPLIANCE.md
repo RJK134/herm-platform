@@ -201,3 +201,11 @@ Before cutting a release:
      `SUBSCRIPTION_REQUIRED` (with `details.requiredTiers: ["enterprise"]`).
 6. Spot-check the pricing copy: the Subscriptions page must not
    advertise "HERM" as a paid-only feature.
+7. Offline-export checks (PDF / CSV / JSON):
+   - Radar Comparison "Export PDF" produces a PDF whose raw stream
+     contains the CC-BY-NC-SA licence notice and the publisher name
+     (CAUDIT) when the active framework is HERM. The same export
+     against a proprietary framework (FHE) omits the CC notice
+     (no attribution owed).
+   - CSV exports on `/api/export/*` carry the `x-framework-publisher`
+     response header as before.
