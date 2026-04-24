@@ -1,6 +1,7 @@
 import prisma from '../../utils/prisma';
 import { NotFoundError } from '../../utils/errors';
 import type { GenerateDocumentInput, UpdateDocumentInput } from './documents.schema';
+import { PRODUCT } from '../../lib/branding';
 
 interface DocumentSection {
   id: string;
@@ -133,7 +134,7 @@ async function generateBusinessCase(input: GenerateDocumentInput, _date: string)
       id: 'appendix-a',
       title: 'Appendix A: HERM Capability Alignment',
       order: 10,
-      content: `The UCISA Higher Education Reference Model (HERM v3.1) provides 165 business capabilities across 11 families. The institution's prioritised requirements basket has been mapped to this framework and evaluated against the market.\n\nCapability basket reference: ${input.basketId ?? 'Not linked'}\n\nRefer to the HERM Platform for full capability scoring and vendor comparison tables.`,
+      content: `The UCISA Higher Education Reference Model (HERM v3.1) provides 165 business capabilities across 11 families. The institution's prioritised requirements basket has been mapped to this framework and evaluated against the market.\n\nCapability basket reference: ${input.basketId ?? 'Not linked'}\n\nRefer to ${PRODUCT.name} for full capability scoring and vendor comparison tables.`,
     },
   ];
 }
@@ -258,7 +259,7 @@ async function generateShortlistReport(input: GenerateDocumentInput): Promise<Do
       id: 'evaluation-summary',
       title: '3. Evaluation Summary',
       order: 3,
-      content: `### 3.1 Evaluation Process\n\n- Written response evaluation against ITT criteria\n- Product demonstration (4 hours per vendor)\n- Reference site visits (2 per vendor)\n- BAFO (Best and Final Offer) round\n\n### 3.2 HERM Capability Scores\n\nAll vendors were scored against the institution's prioritised HERM capability basket. Scores represent percentage coverage of must-have and should-have requirements.\n\n_[Refer to HERM Platform export for detailed capability matrix]_\n\n### 3.3 Financial Comparison\n\n${tcoComparison}`,
+      content: `### 3.1 Evaluation Process\n\n- Written response evaluation against ITT criteria\n- Product demonstration (4 hours per vendor)\n- Reference site visits (2 per vendor)\n- BAFO (Best and Final Offer) round\n\n### 3.2 HERM Capability Scores\n\nAll vendors were scored against the institution's prioritised HERM capability basket. Scores represent percentage coverage of must-have and should-have requirements.\n\n_[Refer to ${PRODUCT.name} export for detailed capability matrix]_\n\n### 3.3 Financial Comparison\n\n${tcoComparison}`,
     },
     {
       id: 'recommendation',

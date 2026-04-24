@@ -1,5 +1,6 @@
 import prisma from './utils/prisma';
 import { createApp } from './app';
+import { PRODUCT } from './lib/branding';
 import { logger } from './lib/logger';
 
 const app = createApp();
@@ -41,7 +42,7 @@ prisma
   });
 
 const server = app.listen(PORT, () => {
-  logger.info({ port: PORT }, `HERM Platform API running on http://localhost:${PORT}`);
+  logger.info({ port: PORT }, `${PRODUCT.name} API running on http://localhost:${PORT}`);
 });
 
 function shutdown(signal: string): void {

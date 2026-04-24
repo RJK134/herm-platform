@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { Login } from '../pages/Login';
+import { PRODUCT } from '../lib/branding';
 
 const mockLogin = vi.hoisted(() => vi.fn());
 const mockAuth = vi.hoisted(() => ({
@@ -44,6 +45,12 @@ describe('Login — post-login redirect safety', () => {
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
 
     await waitFor(() => expect(mockLogin).toHaveBeenCalledWith('a@b.co', 'pw'));
+  });
+
+  it('renders the current product name', () => {
+    renderLoginAt('/login');
+
+    expect(screen.getByRole('heading', { name: PRODUCT.name })).toBeInTheDocument();
   });
 
   it('rejects protocol-relative returnTo (//evil.com)', async () => {
