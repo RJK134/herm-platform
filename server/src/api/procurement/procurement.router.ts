@@ -23,23 +23,27 @@ router.get('/jurisdictions', listJurisdictions);
 router.get('/jurisdictions/:code', getJurisdiction);
 
 // ── Phase 4 — v2 Project API (enhanced with stages) ──────────────────────────
-router.post('/v2/projects', createProjectV2);
+// State-changing endpoints require a real JWT: creating a project stamps
+// institutionId from the token, and stage / task / approval / evaluation
+// mutations record governance state that audit logs key off. Reads stay
+// on the router-level `optionalJWT` so anonymous dashboards still work.
+router.post('/v2/projects', authenticateJWT, createProjectV2);
 router.get('/v2/projects', listProjectsV2);
 router.get('/v2/projects/:id', getProjectV2);
 
-// Stage management
-router.post('/v2/projects/:id/advance', advanceStage);
-router.patch('/v2/projects/:id/stages/:stageId/tasks/:taskId', updateTask);
-router.patch('/v2/projects/:id/stages/:stageId/approvals/:approvalId', updateApproval);
+// Stage management — JWT required (state transitions feed audit trail)
+router.post('/v2/projects/:id/advance', authenticateJWT, advanceStage);
+router.patch('/v2/projects/:id/stages/:stageId/tasks/:taskId', authenticateJWT, updateTask);
+router.patch('/v2/projects/:id/stages/:stageId/approvals/:approvalId', authenticateJWT, updateApproval);
 
 // Compliance & timeline
 router.get('/v2/projects/:id/compliance', getCompliance);
 router.get('/v2/projects/:id/timeline', getTimeline);
 
-// Evaluation
-router.post('/v2/projects/:id/evaluations', addEvaluation);
+// Evaluation — mutations need a real evaluator identity, not 'anonymous'
+router.post('/v2/projects/:id/evaluations', authenticateJWT, addEvaluation);
 router.get('/v2/projects/:id/evaluations', getEvaluations);
-router.patch('/v2/projects/:id/evaluations/:evalId', updateEvaluation);
+router.patch('/v2/projects/:id/evaluations/:evalId', authenticateJWT, updateEvaluation);
 router.get('/v2/projects/:id/shortlist', getShortlistV2);
 router.post('/v2/projects/:id/shortlist/import-basket', authenticateJWT, importBasketShortlistV2);
 

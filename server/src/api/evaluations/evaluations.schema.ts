@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+// `institutionId` is DELIBERATELY absent. The controller stamps it from
+// `req.user.institutionId` — a body override is silently stripped by
+// zod so cross-tenant writes are impossible via this surface.
 export const createEvaluationProjectSchema = z.object({
   name: z.string().min(2).max(200),
   description: z.string().optional(),
@@ -7,7 +10,6 @@ export const createEvaluationProjectSchema = z.object({
   deadline: z.string().optional(),
   systemIds: z.array(z.string()).min(1).max(21),
   memberEmails: z.array(z.string().email()).optional(),
-  institutionId: z.string().optional(),
 });
 
 export const updateEvaluationProjectSchema = z.object({

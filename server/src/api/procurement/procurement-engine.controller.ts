@@ -18,16 +18,24 @@ const procurementService = new ProcurementService();
 export const createProjectV2 = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const data = createProjectV2Schema.parse(req.body);
-    const institutionId = req.user?.institutionId ?? data.institutionId ?? 'anonymous';
+    // `authenticateJWT` has already populated `req.user`; the body has no
+    // `institutionId` field and anything sent is dropped by zod strip.
+    // Cross-tenant writes via this route are structurally impossible.
+    const institutionId = req.user!.institutionId;
 
-    // Ensure institution exists
-    let institution = await prisma.institution.findUnique({ where: { id: institutionId } });
+    // Ensure institution exists (defensive: JWT could reference a row
+    // that has since been deleted — extremely rare, but better to fail
+    // fast than orphan the project).
+    const institution = await prisma.institution.findUnique({ where: { id: institutionId } });
     if (!institution) {
-      institution = await prisma.institution.upsert({
-        where: { slug: 'default' },
-        update: {},
-        create: { id: institutionId, name: 'Default Institution', slug: 'default', country: 'UK' },
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Caller institution no longer exists',
+        },
       });
+      return;
     }
 
     const project = await procurementEngine.createProjectWithStages({
