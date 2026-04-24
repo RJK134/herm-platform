@@ -63,6 +63,25 @@ const WORKFLOW_STAGES = [
   { stageNumber: 8, title: 'Contract Award', status: 'pending' },
 ] as const;
 
+const MIN_BASKET_IMPORT_LIMIT = 1;
+const DEFAULT_BASKET_IMPORT_LIMIT = 5;
+const MAX_BASKET_IMPORT_LIMIT = 10;
+const BASKET_IMPORT_NOTE = 'Imported from linked capability basket evaluation';
+const SCORE_PRECISION_MULTIPLIER = 10;
+
+function priorityMultiplier(priority: string): number {
+  switch (priority) {
+    case 'must':
+      return 3;
+    case 'should':
+      return 2;
+    case 'could':
+      return 1;
+    default:
+      return 0;
+  }
+}
+
 async function ensureDefaultInstitution(): Promise<string> {
   const existing = await prisma.institution.findFirst({
     where: { slug: 'default' },
@@ -273,6 +292,140 @@ export class ProcurementService {
     });
     if (opts.includeGovernance) return entries;
     return entries.map(stripShortlistGovernance);
+  }
+
+  async getShortlistSystems(projectId: string) {
+    const entries = await prisma.shortlistEntry.findMany({
+      where: {
+        projectId,
+        status: { in: ['shortlist', 'preferred'] },
+      },
+      include: {
+        system: { select: { id: true, name: true, vendor: true, category: true } },
+      },
+      orderBy: [{ score: 'desc' }, { addedAt: 'asc' }],
+    });
+
+    return entries.map((entry) => ({
+      id: entry.system.id,
+      name: entry.system.name,
+      vendor: entry.system.vendor,
+      category: entry.system.category,
+      status: entry.status,
+      score: entry.score,
+      shortlistEntryId: entry.id,
+    }));
+  }
+
+  async importBasketToShortlist(projectId: string, opts: { limit?: number } = {}) {
+    const limit = Math.max(
+      MIN_BASKET_IMPORT_LIMIT,
+      Math.min(opts.limit ?? DEFAULT_BASKET_IMPORT_LIMIT, MAX_BASKET_IMPORT_LIMIT),
+    );
+
+    const project = await prisma.procurementProject.findUnique({
+      where: { id: projectId },
+      select: { id: true, basketId: true },
+    });
+    if (!project) throw new NotFoundError(`Project not found: ${projectId}`);
+    if (!project.basketId) {
+      throw new ValidationError('Project does not have a linked capability basket');
+    }
+
+    const basket = await prisma.capabilityBasket.findUnique({
+      where: { id: project.basketId },
+      include: { items: true },
+    });
+    if (!basket) throw new NotFoundError(`Basket not found: ${project.basketId}`);
+    if (basket.items.length === 0) {
+      return { importedCount: 0, entries: await this.getShortlistSystems(projectId) };
+    }
+
+    const capabilityIds = basket.items.map((item) => item.capabilityId);
+    const [systems, allScores, existingEntries] = await Promise.all([
+      prisma.vendorSystem.findMany(),
+      prisma.capabilityScore.findMany({
+        where: {
+          capabilityId: { in: capabilityIds },
+          version: 1,
+          ...(basket.frameworkId ? { frameworkId: basket.frameworkId } : {}),
+        },
+      }),
+      prisma.shortlistEntry.findMany({
+        where: { projectId },
+        select: { id: true, systemId: true, status: true, score: true },
+      }),
+    ]);
+
+    const scoreIndex = new Map<string, Map<string, number>>();
+    for (const score of allScores) {
+      if (!scoreIndex.has(score.systemId)) scoreIndex.set(score.systemId, new Map());
+      scoreIndex.get(score.systemId)!.set(score.capabilityId, score.value);
+    }
+
+    const ranked = systems
+      .map((system) => {
+        const systemScores = scoreIndex.get(system.id) ?? new Map<string, number>();
+        let weightedScore = 0;
+        let weightedMax = 0;
+
+        for (const item of basket.items) {
+          const score = systemScores.get(item.capabilityId) ?? 0;
+          const effectiveWeight = item.weight * priorityMultiplier(item.priority);
+          weightedScore += (score / 100) * effectiveWeight;
+          weightedMax += effectiveWeight;
+        }
+
+        const percentage = weightedMax > 0 ? (weightedScore / weightedMax) * 100 : 0;
+
+        return {
+          systemId: system.id,
+          score: Math.round(percentage * SCORE_PRECISION_MULTIPLIER) / SCORE_PRECISION_MULTIPLIER,
+        };
+      })
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+
+    const existingBySystemId = new Map(
+      existingEntries.map((entry) => [entry.systemId, entry]),
+    );
+
+    let importedCount = 0;
+    await prisma.$transaction(async (tx) => {
+      for (const candidate of ranked) {
+        const existing = existingBySystemId.get(candidate.systemId);
+        if (!existing) {
+          importedCount += 1;
+          await tx.shortlistEntry.create({
+            data: {
+              projectId,
+              systemId: candidate.systemId,
+              status: 'shortlist',
+              score: candidate.score,
+              notes: BASKET_IMPORT_NOTE,
+            },
+          });
+          continue;
+        }
+
+        const nextStatus = existing.status === 'longlist' ? 'shortlist' : existing.status;
+        if (nextStatus !== existing.status || existing.score !== candidate.score) {
+          await tx.shortlistEntry.update({
+            where: { id: existing.id },
+            data: {
+              status: nextStatus,
+              score: candidate.score,
+            },
+          });
+        }
+      }
+    });
+
+    return {
+      importedCount,
+      entries: await this.getShortlistSystems(projectId),
+    };
   }
 
   async updateShortlistEntry(entryId: string, data: UpdateShortlistEntryInput) {

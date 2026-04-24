@@ -13,6 +13,7 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { ProjectStatusPill } from '../components/procurement/ProjectStatusPill';
+import { api } from '../lib/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -112,6 +113,11 @@ interface CapabilityBasketItem {
 interface ShortlistedSystem {
   id: string;
   name: string;
+  vendor?: string;
+  category?: string;
+  status?: string;
+  score?: number | null;
+  shortlistEntryId?: string;
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -184,6 +190,9 @@ const ROUTE_CONFIG: Record<ProcurementRoute, { label: string; description: strin
 const CURRENCY_SYMBOLS: Record<Currency, string> = {
   GBP: '£', EUR: '€', USD: '$', AUD: 'A$',
 };
+
+const DEFAULT_BASKET_IMPORT_LIMIT = 5;
+const SCORE_DISPLAY_DECIMALS = 1;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -661,40 +670,60 @@ function TimelineView({ projectId }: { projectId: string }) {
   );
 }
 
-function EvaluationView({ projectId }: { projectId: string }) {
+function EvaluationView({
+  projectId,
+  basketId,
+}: {
+  projectId: string;
+  basketId?: string;
+}) {
   const { t } = useTranslation("procurement");
   const qc = useQueryClient();
   const [weights, setWeights] = useState<WeightingProfile>({
     framework: 40, technical: 25, commercial: 20, implementation: 10, references: 5,
   });
   const [addSystemId, setAddSystemId] = useState('');
+  const [importMessage, setImportMessage] = useState<string | null>(null);
 
   const { data: evaluations, isLoading } = useQuery({
     queryKey: ['procurement-v2-evaluations', projectId],
     queryFn: () =>
-      axios.get<ApiResponse<EvaluationEntry[]>>(`/api/procurement/v2/projects/${projectId}/evaluations`)
-        .then((r) => r.data.data),
+      api.getEvaluations(projectId).then((r) => r.data.data as EvaluationEntry[]),
   });
 
   const { data: shortlistData } = useQuery({
     queryKey: ['procurement-v2-shortlist', projectId],
     queryFn: () =>
-      axios.get<ApiResponse<ShortlistedSystem[]>>(`/api/procurement/v2/projects/${projectId}/shortlist`)
-        .then((r) => r.data.data),
+      api.getProjectShortlistV2(projectId).then((r) => r.data.data as ShortlistedSystem[]),
   });
 
   const addSystemMutation = useMutation({
     mutationFn: (systemId: string) =>
-      axios.post<ApiResponse<unknown>>(`/api/procurement/v2/projects/${projectId}/evaluations`, { systemId }),
+      api.addEvaluation(projectId, { systemId }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['procurement-v2-evaluations', projectId] });
       setAddSystemId('');
     },
   });
 
+  const importBasketMutation = useMutation({
+    mutationFn: () =>
+      api
+        .importBasketShortlistV2(projectId, { limit: DEFAULT_BASKET_IMPORT_LIMIT })
+        .then((r) => r.data.data),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['procurement-v2-shortlist', projectId] });
+      setImportMessage(
+        data.importedCount > 0
+          ? `Imported ${data.importedCount} basket-ranked systems into the shortlist.`
+          : 'Shortlist already reflects the linked basket recommendations.',
+      );
+    },
+  });
+
   const updateScoreMutation = useMutation({
     mutationFn: ({ entryId, field, value }: { entryId: string; field: string; value: number }) =>
-      axios.patch<ApiResponse<unknown>>(`/api/procurement/v2/projects/${projectId}/evaluations/${entryId}`, { [field]: value }),
+      api.updateEvaluation(projectId, entryId, { [field]: value }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['procurement-v2-evaluations', projectId] });
     },
@@ -761,6 +790,56 @@ function EvaluationView({ projectId }: { projectId: string }) {
 
       {/* Add system */}
       <Card>
+        <div className="flex items-start justify-between gap-4 mb-3">
+          <div>
+            <h3 className="font-semibold text-gray-900 dark:text-white">
+              Linked Basket Shortlist
+            </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              {basketId
+                ? 'Import the top basket-ranked systems into the shortlist, then add them to evaluation.'
+                : 'Link a capability basket to this project to generate a shortlist from HERM basket scoring.'}
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => importBasketMutation.mutate()}
+            disabled={!basketId || importBasketMutation.isPending}
+          >
+            {importBasketMutation.isPending ? (
+              <><RefreshCw className="w-4 h-4 mr-1 animate-spin" /> Importing…</>
+            ) : (
+              'Import top basket matches'
+            )}
+          </Button>
+        </div>
+        {importMessage && (
+          <p className="text-sm text-emerald-600 dark:text-emerald-400 mb-3">
+            {importMessage}
+          </p>
+        )}
+        {shortlist.length > 0 ? (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {shortlist.map((system) => (
+              <span
+                key={`${system.id}-${system.shortlistEntryId ?? 'no-entry'}`}
+                className="inline-flex items-center gap-2 rounded-full bg-gray-100 dark:bg-gray-700 px-3 py-1 text-xs text-gray-700 dark:text-gray-200"
+              >
+                <span>{system.name}</span>
+                {system.score != null && (
+                  <span className="font-semibold text-teal-700 dark:text-teal-300">
+                    {system.score.toFixed(SCORE_DISPLAY_DECIMALS)}%
+                  </span>
+                )}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            No shortlist entries yet.
+          </p>
+        )}
         <h3 className="font-semibold text-gray-900 dark:text-white mb-3">{t("evaluation.addSystemToEvaluation", "Add System to Evaluation")}</h3>
         <div className="flex items-center gap-2">
           <select
@@ -904,13 +983,18 @@ function CreateProjectWizard({
   const { data: baskets } = useQuery({
     queryKey: ['baskets'],
     queryFn: () =>
-      axios.get<ApiResponse<CapabilityBasketItem[]>>('/api/baskets').then((r) => r.data.data),
+      api.listBaskets().then((r) =>
+        r.data.data.map((basket) => ({
+          id: basket.id,
+          name: basket.name,
+          itemCount: basket.items.length,
+        })),
+      ),
   });
 
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
-      axios.post<ApiResponse<{ id: string }>>('/api/procurement/v2/projects', data)
-        .then((r) => r.data.data),
+      api.createProjectV2(data).then((r) => r.data.data as { id: string }),
     onSuccess: (data) => onCreated(data.id),
   });
 
@@ -1356,7 +1440,11 @@ export function ProcurementProjects() {
 
       {/* Tab 4 — Evaluation */}
       {activeTab === 'evaluation' && selectedProjectId && (
-        <EvaluationView projectId={selectedProjectId} />
+        <EvaluationView
+          key={selectedProjectId}
+          projectId={selectedProjectId}
+          basketId={selectedProject?.basketId}
+        />
       )}
 
       {/* Create wizard modal */}

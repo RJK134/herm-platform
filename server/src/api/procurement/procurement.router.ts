@@ -11,7 +11,7 @@ import {
 import {
   createProjectV2, listProjectsV2, getProjectV2, advanceStage,
   updateTask, updateApproval, getCompliance, getTimeline,
-  addEvaluation, getEvaluations, updateEvaluation,
+  addEvaluation, getEvaluations, updateEvaluation, getShortlistV2, importBasketShortlistV2,
   listJurisdictions, getJurisdiction, getSpecification,
 } from './procurement-engine.controller';
 
@@ -40,6 +40,8 @@ router.get('/v2/projects/:id/timeline', getTimeline);
 router.post('/v2/projects/:id/evaluations', addEvaluation);
 router.get('/v2/projects/:id/evaluations', getEvaluations);
 router.patch('/v2/projects/:id/evaluations/:evalId', updateEvaluation);
+router.get('/v2/projects/:id/shortlist', getShortlistV2);
+router.post('/v2/projects/:id/shortlist/import-basket', authenticateJWT, importBasketShortlistV2);
 
 // Specification from basket
 router.get('/v2/projects/:id/specification', getSpecification);

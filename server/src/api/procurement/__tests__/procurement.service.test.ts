@@ -8,12 +8,22 @@ vi.mock('../../../utils/prisma', () => {
     update: vi.fn(),
     updateMany: vi.fn(),
   };
+  const capabilityBasket = {
+    findUnique: vi.fn(),
+  };
+  const vendorSystem = {
+    findMany: vi.fn(),
+  };
+  const capabilityScore = {
+    findMany: vi.fn(),
+  };
   const shortlistEntry = {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
     findMany: vi.fn(),
     createMany: vi.fn(),
     update: vi.fn(),
+    create: vi.fn(),
   };
   const auditLog = {
     create: vi.fn(),
@@ -21,6 +31,9 @@ vi.mock('../../../utils/prisma', () => {
   };
   const prismaMock = {
     procurementProject,
+    capabilityBasket,
+    vendorSystem,
+    capabilityScore,
     shortlistEntry,
     auditLog,
     // `transitionStatus` uses a callback transaction; other callers use
@@ -322,6 +335,119 @@ describe('ProcurementService.getShortlist — governance scrub', () => {
     })) as unknown as Array<typeof baseEntry>;
     expect(entry.decidedBy).toBe('Alice');
     expect(entry.rationale).toBe('Best HERM coverage');
+  });
+});
+
+describe('ProcurementService basket shortlist integration', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns shortlist systems for evaluation dropdowns', async () => {
+    vi.mocked(prisma.shortlistEntry.findMany).mockResolvedValueOnce([
+      {
+        id: 'entry-1',
+        status: 'shortlist',
+        score: 91.2,
+        addedAt: new Date('2026-02-01'),
+        system: { id: 'sys-1', name: 'Alpha SIS', vendor: 'Alpha', category: 'SIS' },
+      },
+    ] as never);
+
+    await expect(service.getShortlistSystems('p1')).resolves.toEqual([
+      {
+        id: 'sys-1',
+        name: 'Alpha SIS',
+        vendor: 'Alpha',
+        category: 'SIS',
+        status: 'shortlist',
+        score: 91.2,
+        shortlistEntryId: 'entry-1',
+      },
+    ]);
+  });
+
+  it('imports the top basket-ranked systems into the shortlist and promotes longlist entries', async () => {
+    vi.mocked(prisma.procurementProject.findUnique).mockResolvedValueOnce({
+      id: 'p1',
+      basketId: 'basket-1',
+    } as never);
+    vi.mocked(prisma.capabilityBasket.findUnique).mockResolvedValueOnce({
+      id: 'basket-1',
+      frameworkId: null,
+      items: [
+        { capabilityId: 'cap-1', priority: 'must', weight: 2 },
+        { capabilityId: 'cap-2', priority: 'should', weight: 1 },
+      ],
+    } as never);
+    vi.mocked(prisma.vendorSystem.findMany).mockResolvedValueOnce([
+      { id: 'sys-1' },
+      { id: 'sys-2' },
+      { id: 'sys-3' },
+    ] as never);
+    vi.mocked(prisma.capabilityScore.findMany).mockResolvedValueOnce([
+      { systemId: 'sys-1', capabilityId: 'cap-1', value: 95 },
+      { systemId: 'sys-1', capabilityId: 'cap-2', value: 90 },
+      { systemId: 'sys-2', capabilityId: 'cap-1', value: 88 },
+      { systemId: 'sys-2', capabilityId: 'cap-2', value: 72 },
+      { systemId: 'sys-3', capabilityId: 'cap-1', value: 20 },
+      { systemId: 'sys-3', capabilityId: 'cap-2', value: 10 },
+    ] as never);
+    vi.mocked(prisma.shortlistEntry.findMany)
+      .mockResolvedValueOnce([
+        { id: 'existing-1', systemId: 'sys-2', status: 'longlist', score: null },
+      ] as never)
+      .mockResolvedValueOnce([
+        {
+          id: 'entry-1',
+          projectId: 'p1',
+          systemId: 'sys-1',
+          status: 'shortlist',
+          score: 93.8,
+          addedAt: new Date('2026-02-01'),
+          system: { id: 'sys-1', name: 'Alpha SIS', vendor: 'Alpha', category: 'SIS' },
+        },
+        {
+          id: 'entry-2',
+          projectId: 'p1',
+          systemId: 'sys-2',
+          status: 'shortlist',
+          score: 82.7,
+          addedAt: new Date('2026-02-01'),
+          system: { id: 'sys-2', name: 'Beta LMS', vendor: 'Beta', category: 'LMS' },
+        },
+      ] as never);
+    vi.mocked(prisma.shortlistEntry.create).mockResolvedValueOnce({ id: 'entry-1' } as never);
+    vi.mocked(prisma.shortlistEntry.update).mockResolvedValueOnce({ id: 'existing-1' } as never);
+
+    const result = await service.importBasketToShortlist('p1', { limit: 2 });
+
+    expect(prisma.shortlistEntry.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        projectId: 'p1',
+        systemId: 'sys-1',
+        status: 'shortlist',
+      }),
+    });
+    expect(prisma.shortlistEntry.update).toHaveBeenCalledWith({
+      where: { id: 'existing-1' },
+      data: { status: 'shortlist', score: expect.any(Number) },
+    });
+    expect(result.importedCount).toBe(1);
+    expect(result.entries).toHaveLength(2);
+    expect(result.entries[0]).toMatchObject({ id: 'sys-1', name: 'Alpha SIS' });
+  });
+
+  it('rejects imports when the project has no linked basket', async () => {
+    vi.mocked(prisma.procurementProject.findUnique).mockResolvedValueOnce({
+      id: 'p1',
+      basketId: null,
+    } as never);
+
+    await expect(service.importBasketToShortlist('p1')).rejects.toThrow(
+      /linked capability basket/,
+    );
+
+    expect(prisma.capabilityBasket.findUnique).not.toHaveBeenCalled();
+    expect(prisma.shortlistEntry.create).not.toHaveBeenCalled();
   });
 });
 

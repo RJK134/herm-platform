@@ -352,6 +352,13 @@ export const api = {
     client.get<ApiResponse<unknown[]>>(`/procurement/v2/projects/${projectId}/evaluations`),
   updateEvaluation: (projectId: string, evalId: string, data: Record<string, unknown>) =>
     client.patch<ApiResponse<unknown>>(`/procurement/v2/projects/${projectId}/evaluations/${evalId}`, data),
+  getProjectShortlistV2: (projectId: string) =>
+    client.get<ApiResponse<unknown[]>>(`/procurement/v2/projects/${projectId}/shortlist`),
+  importBasketShortlistV2: (projectId: string, data?: { limit?: number }) =>
+    client.post<ApiResponse<{ importedCount: number; entries: unknown[] }>>(
+      `/procurement/v2/projects/${projectId}/shortlist/import-basket`,
+      data ?? {},
+    ),
   getProjectSpecification: (id: string) =>
     client.get<ApiResponse<unknown>>(`/procurement/v2/projects/${id}/specification`),
 

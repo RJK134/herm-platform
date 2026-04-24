@@ -8,7 +8,11 @@ import {
   updateApprovalSchema,
   updateEvaluationSchema,
   addEvaluationSchema,
+  importBasketShortlistSchema,
 } from './procurement.schema';
+import { ProcurementService } from './procurement.service';
+
+const procurementService = new ProcurementService();
 
 // POST /api/procurement/v2/projects — create with stage generation
 export const createProjectV2 = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -169,6 +173,26 @@ export const getEvaluations = async (req: Request, res: Response, next: NextFunc
       orderBy: { overallScore: 'desc' },
     });
     res.json({ success: true, data: evaluations });
+  } catch (err) { next(err); }
+};
+
+// GET /api/procurement/v2/projects/:id/shortlist
+export const getShortlistV2 = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const entries = await procurementService.getShortlistSystems(req.params.id);
+    res.json({ success: true, data: entries });
+  } catch (err) { next(err); }
+};
+
+// POST /api/procurement/v2/projects/:id/shortlist/import-basket
+export const importBasketShortlistV2 = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const data = importBasketShortlistSchema.parse(req.body);
+    const result = await procurementService.importBasketToShortlist(
+      req.params.id,
+      data,
+    );
+    res.json({ success: true, data: result });
   } catch (err) { next(err); }
 };
 
