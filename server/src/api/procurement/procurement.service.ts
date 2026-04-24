@@ -61,6 +61,21 @@ const WORKFLOW_STAGES = [
   { stageNumber: 8, title: 'Contract Award', status: 'pending' },
 ] as const;
 
+const BASKET_IMPORT_NOTE = 'Imported from linked capability basket evaluation';
+
+function priorityMultiplier(priority: string): number {
+  switch (priority) {
+    case 'must':
+      return 3;
+    case 'should':
+      return 2;
+    case 'could':
+      return 1;
+    default:
+      return 0;
+  }
+}
+
 async function ensureDefaultInstitution(): Promise<string> {
   const existing = await prisma.institution.findFirst({
     where: { slug: 'default' },
@@ -347,9 +362,7 @@ export class ProcurementService {
 
         for (const item of basket.items) {
           const score = systemScores.get(item.capabilityId) ?? 0;
-          const priorityMult =
-            item.priority === 'must' ? 3 : item.priority === 'should' ? 2 : item.priority === 'could' ? 1 : 0;
-          const effectiveWeight = item.weight * priorityMult;
+          const effectiveWeight = item.weight * priorityMultiplier(item.priority);
           weightedScore += (score / 100) * effectiveWeight;
           weightedMax += effectiveWeight;
         }
@@ -381,7 +394,7 @@ export class ProcurementService {
               systemId: candidate.systemId,
               status: 'shortlist',
               score: candidate.score,
-              notes: 'Imported from linked capability basket evaluation',
+              notes: BASKET_IMPORT_NOTE,
             },
           });
           continue;

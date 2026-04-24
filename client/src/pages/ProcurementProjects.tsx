@@ -828,7 +828,7 @@ function EvaluationView({
                 <span>{system.name}</span>
                 {system.score != null && (
                   <span className="font-semibold text-teal-700 dark:text-teal-300">
-                    {system.score.toFixed(1)}%
+                    {system.score?.toFixed(1)}%
                   </span>
                 )}
               </span>
