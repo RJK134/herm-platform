@@ -633,20 +633,26 @@ export class ProcurementService {
     const capped =
       opts.topN !== undefined ? filtered.slice(0, opts.topN) : filtered;
 
-    // Fetch the current shortlist in one query so we can compute
-    // how many entries actually land vs collide with existing rows
-    // (createMany + skipDuplicates silently drops collisions).
-    const existing = await prisma.shortlistEntry.findMany({
-      where: { projectId },
-      select: { systemId: true },
-    });
-    const existingSystemIds = new Set(existing.map((e) => e.systemId));
-
-    const toAdd = capped.filter((r) => !existingSystemIds.has(r.system.id));
-
     return prisma.$transaction(async (tx) => {
+      // Read the existing shortlist INSIDE the transaction and compute
+      // the "add" set from that snapshot. Doing the read outside would
+      // let a concurrent seed land between read and createMany; the
+      // `skipDuplicates: true` call would silently drop the dup but
+      // the audit counts below would overstate `added`.
+      const existing = await tx.shortlistEntry.findMany({
+        where: { projectId },
+        select: { systemId: true },
+      });
+      const existingSystemIds = new Set(existing.map((e) => e.systemId));
+
+      const toAdd = capped.filter((r) => !existingSystemIds.has(r.system.id));
+
+      // Authoritative `added` count comes from createMany's result so
+      // a sibling transaction that snuck an overlapping row in before
+      // our createMany is still reflected correctly in the audit log.
+      let added = 0;
       if (toAdd.length > 0) {
-        await tx.shortlistEntry.createMany({
+        const created = await tx.shortlistEntry.createMany({
           data: toAdd.map((r) => ({
             projectId,
             systemId: r.system.id,
@@ -658,7 +664,9 @@ export class ProcurementService {
           // throw P2002. skipDuplicates keeps the seed idempotent.
           skipDuplicates: true,
         });
+        added = created.count;
       }
+      const skippedAlreadyOnShortlist = capped.length - added;
 
       await tx.auditLog.create({
         data: {
@@ -672,8 +680,8 @@ export class ProcurementService {
               topN: opts.topN ?? null,
               minPercentage: opts.minPercentage ?? null,
             },
-            added: toAdd.length,
-            skippedAlreadyOnShortlist: capped.length - toAdd.length,
+            added,
+            skippedAlreadyOnShortlist,
             // Persist the ranking so someone auditing the seed later can
             // see exactly which scores the decision was based on, even
             // if the basket is edited afterwards.
@@ -697,8 +705,8 @@ export class ProcurementService {
       });
 
       return {
-        added: toAdd.length,
-        skipped: capped.length - toAdd.length,
+        added,
+        skipped: skippedAlreadyOnShortlist,
         ranking,
         entries: entries.map(stripShortlistGovernance),
       };

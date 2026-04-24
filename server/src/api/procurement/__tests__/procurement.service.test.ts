@@ -728,6 +728,44 @@ describe('ProcurementService.seedShortlistFromBasket', () => {
     });
   });
 
+  it('audit counts reflect createMany.count, not the pre-flight computation (TOCTOU)', async () => {
+    // Scenario: pre-flight read sees no existing entries → all 3 systems
+    // are candidates to add. Between that read and our createMany, a
+    // concurrent seed landed sys-1, so skipDuplicates drops it and
+    // createMany returns count=2. The audit log + response must report
+    // `added=2` / `skipped=1`, NOT `added=3` / `skipped=0`.
+    vi.mocked(prisma.procurementProject.findUnique).mockResolvedValueOnce({
+      id: 'p1',
+      basketId: 'bk1',
+    } as never);
+    mockEvaluateBasket.mockResolvedValueOnce(baseRanking);
+    vi.mocked(prisma.shortlistEntry.findMany)
+      .mockResolvedValueOnce([]) // in-tx pre-check: empty at snapshot
+      .mockResolvedValueOnce([]); // post-seed re-read
+    // createMany's count reflects the actual racing outcome.
+    vi.mocked(prisma.shortlistEntry.createMany).mockResolvedValueOnce({
+      count: 2,
+    } as never);
+    vi.mocked(prisma.auditLog.create).mockResolvedValueOnce({} as never);
+
+    const result = await service.seedShortlistFromBasket(
+      'p1',
+      {},
+      { userId: 'u1', name: 'Alice' },
+    );
+
+    expect(result.added).toBe(2);
+    expect(result.skipped).toBe(1);
+    expect(prisma.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        changes: expect.objectContaining({
+          added: 2,
+          skippedAlreadyOnShortlist: 1,
+        }),
+      }),
+    });
+  });
+
   it('throws ValidationError when the project has no linked basket', async () => {
     vi.mocked(prisma.procurementProject.findUnique).mockResolvedValueOnce({
       id: 'p1',
