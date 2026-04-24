@@ -378,7 +378,7 @@ describe('ProcurementService basket shortlist integration', () => {
     ] as never);
     vi.mocked(prisma.shortlistEntry.findMany)
       .mockResolvedValueOnce([
-        { id: 'existing-1', systemId: 'sys-2', status: 'longlist' },
+        { id: 'existing-1', systemId: 'sys-2', status: 'longlist', score: null },
       ] as never)
       .mockResolvedValueOnce([
         {

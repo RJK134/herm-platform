@@ -329,7 +329,7 @@ export class ProcurementService {
       }),
       prisma.shortlistEntry.findMany({
         where: { projectId },
-        select: { id: true, systemId: true, status: true },
+        select: { id: true, systemId: true, status: true, score: true },
       }),
     ]);
 
@@ -388,7 +388,7 @@ export class ProcurementService {
         }
 
         const nextStatus = existing.status === 'longlist' ? 'shortlist' : existing.status;
-        if (nextStatus !== existing.status || candidate.score !== null) {
+        if (nextStatus !== existing.status || existing.score !== candidate.score) {
           await tx.shortlistEntry.update({
             where: { id: existing.id },
             data: {

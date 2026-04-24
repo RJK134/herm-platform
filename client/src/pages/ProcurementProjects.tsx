@@ -826,7 +826,7 @@ function EvaluationView({
                 className="inline-flex items-center gap-2 rounded-full bg-gray-100 dark:bg-gray-700 px-3 py-1 text-xs text-gray-700 dark:text-gray-200"
               >
                 <span>{system.name}</span>
-                {typeof system.score === 'number' && (
+                {system.score != null && (
                   <span className="font-semibold text-teal-700 dark:text-teal-300">
                     {system.score.toFixed(1)}%
                   </span>
