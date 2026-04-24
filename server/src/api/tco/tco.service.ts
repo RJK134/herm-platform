@@ -113,16 +113,27 @@ export class TcoService {
     });
   }
 
-  async listEstimates() {
+  /**
+   * Tenant-scoped list. An `institutionId` is required (stamped by the
+   * controller from `req.user.institutionId`) so an authenticated user
+   * of institution A cannot enumerate institution B's estimates.
+   */
+  async listEstimates(institutionId: string) {
     return prisma.tcoEstimate.findMany({
+      where: { institutionId },
       orderBy: { createdAt: 'desc' },
       include: { system: { select: { id: true, name: true, vendor: true } } },
     });
   }
 
-  async getEstimate(id: string) {
-    return prisma.tcoEstimate.findUnique({
-      where: { id },
+  /**
+   * Tenant-scoped read. Returns null for both "not found" and "belongs
+   * to a different institution" so callers cannot probe existence
+   * across tenants.
+   */
+  async getEstimate(id: string, institutionId: string) {
+    return prisma.tcoEstimate.findFirst({
+      where: { id, institutionId },
       include: { system: { select: { id: true, name: true, vendor: true } } },
     });
   }

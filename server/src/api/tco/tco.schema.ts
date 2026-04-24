@@ -24,6 +24,14 @@ export const compareTcoSchema = z.object({
   horizonYears: z.number().int().min(1).max(20),
 });
 
+/**
+ * Phase 4: both `createdById` AND `institutionId` are intentionally
+ * absent from the body schema. They are stamped server-side from the
+ * authenticated caller's JWT (same pattern as architecture, documents,
+ * keys). A body override would create a cross-tenant write gap for
+ * any authenticated user. If an admin-only "save on behalf" endpoint
+ * is needed later, it belongs as a separate `requireRole`-gated route.
+ */
 export const saveEstimateSchema = z.object({
   name: z.string().min(1).max(200),
   institutionSize: z.enum(['small', 'medium', 'large', 'xlarge']),
@@ -45,8 +53,6 @@ export const saveEstimateSchema = z.object({
   annualRunRate: z.number().optional(),
   perStudentCost: z.number().optional(),
   notes: z.string().optional(),
-  institutionId: z.string().optional(),
-  createdById: z.string().optional(),
 });
 
 export type CalculateTcoInput = z.infer<typeof calculateTcoSchema>;

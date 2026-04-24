@@ -77,7 +77,17 @@ export const saveEstimate = async (
 ): Promise<void> => {
   try {
     const data = saveEstimateSchema.parse(req.body);
-    const estimate = await service.saveEstimate(data);
+    // `authenticateJWT` runs before this controller so `req.user` is
+    // guaranteed. Both `createdById` and `institutionId` are stamped
+    // unconditionally from the JWT — never from the body — so an
+    // authenticated user of tenant A can't inject an estimate into
+    // tenant B's namespace. (Consistent with architecture, documents,
+    // keys controllers.)
+    const estimate = await service.saveEstimate({
+      ...data,
+      createdById: req.user!.userId,
+      institutionId: req.user!.institutionId,
+    });
     res.status(201).json({ success: true, data: estimate });
   } catch (err) {
     next(err);
@@ -85,12 +95,13 @@ export const saveEstimate = async (
 };
 
 export const listEstimates = async (
-  _req: Request,
+  req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
   try {
-    const data = await service.listEstimates();
+    // `authenticateJWT` guards this route, so `req.user` is guaranteed.
+    const data = await service.listEstimates(req.user!.institutionId);
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -103,8 +114,13 @@ export const getEstimate = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const data = await service.getEstimate(req.params['id'] as string);
+    const data = await service.getEstimate(
+      req.params['id'] as string,
+      req.user!.institutionId,
+    );
     if (!data) {
+      // Uniform "not found" for both truly-missing and cross-tenant
+      // IDs so callers can't probe estimate existence across tenants.
       res.status(404).json({
         success: false,
         error: { code: 'NOT_FOUND', message: 'Estimate not found' },
