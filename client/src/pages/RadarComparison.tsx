@@ -1,18 +1,26 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Download } from 'lucide-react';
 import { Header } from '../components/layout/Header';
 import { Card } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
 import { RadarChart } from '../components/charts/RadarChart';
 import { useSystems, useCompare } from '../hooks/useApi';
+import { useFramework } from '../contexts/FrameworkContext';
 import { CATEGORY_COLORS } from '../lib/constants';
 import { formatPercent } from '../lib/utils';
 import { LicenceAttribution } from '../components/LicenceAttribution';
+import {
+  downloadRadarComparisonPdf,
+  type RadarComparisonEntry,
+} from '../lib/pdf/radar-comparison-pdf';
 
 const DEFAULT_IDS_SLUGS = ['sits', 'banner', 'workday_student', 'sjms'];
 
 export function RadarComparison() {
   const { t } = useTranslation('capabilities');
   const { data: allSystems, isLoading: loadingSystems } = useSystems();
+  const { activeFramework } = useFramework();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // Once systems load, pick defaults by name matching
@@ -56,12 +64,47 @@ export function RadarComparison() {
 
   const activeIds = selectedIds.length > 0 ? selectedIds : resolvedIds;
 
+  const canExport = Array.isArray(comparison) && comparison.length > 0 && !loadingCompare;
+
+  const handleExportPdf = () => {
+    if (!canExport || !comparison) return;
+    // `comparison` already has the shape the helper expects; narrow
+    // the type to the persisted-row shape.
+    const entries = comparison as unknown as RadarComparisonEntry[];
+    downloadRadarComparisonPdf(
+      entries,
+      {
+        frameworkName: activeFramework?.name ?? 'Capability Framework',
+        // Only embed attribution for CC-licensed frameworks. Proprietary
+        // frameworks (FHE) deliberately ship with no licence notice.
+        attribution: activeFramework?.licenceNotice ?? null,
+      },
+      `radar-comparison-${new Date().toISOString().slice(0, 10)}.pdf`,
+    );
+  };
+
   return (
     <div>
       <Header
         title={t('radar.title', 'Radar Comparison')}
         subtitle={t('radar.subtitle', 'Compare up to 5 systems across all 11 HERM capability families')}
       />
+
+      <div className="flex justify-end mb-4">
+        <Button
+          variant="secondary"
+          disabled={!canExport}
+          onClick={handleExportPdf}
+          title={
+            canExport
+              ? 'Download a PDF of this comparison'
+              : 'Select at least 2 systems to export'
+          }
+        >
+          <Download className="w-4 h-4 mr-1.5" />
+          Export PDF
+        </Button>
+      </div>
 
       {/* System selector */}
       <Card className="mb-6">
