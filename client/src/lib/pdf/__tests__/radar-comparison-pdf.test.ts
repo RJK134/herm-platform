@@ -136,6 +136,50 @@ describe('buildRadarComparisonPdf', () => {
     expect(bytes.byteLength).toBeGreaterThan(500);
   });
 
+  it('wraps the attribution at the footer font size, not the default', () => {
+    // Regression for PR #21 BugBot finding: `splitTextToSize` uses the
+    // current font size to measure widths. If called before
+    // `setFontSize(8)` it wraps at default ~16pt width → ~half the
+    // chars per line → double the footer height → too few body pages.
+    //
+    // Two passes of the same 180-row body, one with `attribution: null`
+    // (zero-line footer) and one with the 277-char HERM notice
+    // (wraps to 2–3 lines at 8pt). The page difference should be
+    // tight — 1 extra page for a real-world footer, NOT 2–3 extra
+    // pages that the old default-size-wrap bug would produce.
+    const bigEntry: RadarComparisonEntry = {
+      system: { id: 's1', name: 'Large', vendor: 'Acme' },
+      percentage: 70,
+      domainScores: Array.from({ length: 180 }, (_, i) => ({
+        domainCode: `D${i}`,
+        domainName: `Domain ${i}`,
+        percentage: (i * 1.3) % 100,
+      })),
+    };
+
+    const countPages = (bytes: Uint8Array): number => {
+      const text = new TextDecoder('latin1').decode(bytes);
+      return (text.match(/\/Type\s*\/Page[^s]/g) || []).length;
+    };
+    const none = countPages(
+      buildRadarComparisonPdfBytes([bigEntry], {
+        frameworkName: 'X',
+        attribution: null,
+      }),
+    );
+    const full = countPages(
+      buildRadarComparisonPdfBytes([bigEntry], {
+        frameworkName: 'HERM',
+        attribution: HERM_NOTICE_FULL,
+      }),
+    );
+    // The delta reflects the ~3-line footer at 8pt. Under the old
+    // default-size bug the attribution wrapped to ~6 lines and this
+    // delta would be much larger. Cap at 2 to lock down the fix.
+    expect(full - none).toBeLessThanOrEqual(2);
+    expect(full - none).toBeGreaterThanOrEqual(1);
+  });
+
   it('reserves enough vertical space for a multi-line attribution (no body/footer overlap)', () => {
     // Regression for PR #21 BugBot finding: with the real 277-char HERM
     // notice (3 lines at 8pt), body rows could previously be placed

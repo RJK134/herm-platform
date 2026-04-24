@@ -76,15 +76,29 @@ function renderRadarComparisonDoc(
 
   // ── Footer geometry (computed up-front) ────────────────────────────────
   // The attribution notice can wrap to several lines for real HERM
-  // copy (~277 chars → 3 lines at 8pt). Derive the footer's vertical
+  // copy (~277 chars → 2–3 lines at 8pt). Derive the footer's vertical
   // footprint ONCE so every page-break threshold below agrees with
   // where the footer will actually land — otherwise long notices
   // overlap body text near the page bottom.
+  //
+  // CRITICAL: `splitTextToSize` uses the *current* font size to measure
+  // character widths, so we MUST switch to the 8pt footer size before
+  // wrapping or we'll wrap at default ~16pt width (roughly half as
+  // many chars per line → double the lines → over-reserved footer →
+  // wasted vertical space on every page).
   const footerLineHeight = 10;
   const pageNumberReserve = 20; // height for the "Page X of N" line
-  const attributionLines = opts.attribution
-    ? (doc.splitTextToSize(opts.attribution, pageWidth - margin * 2) as string[])
-    : [];
+  const footerFontSize = 8;
+  let attributionLines: string[] = [];
+  if (opts.attribution) {
+    const priorFontSize = doc.getFontSize();
+    doc.setFontSize(footerFontSize);
+    attributionLines = doc.splitTextToSize(
+      opts.attribution,
+      pageWidth - margin * 2,
+    ) as string[];
+    doc.setFontSize(priorFontSize);
+  }
   // Total vertical footprint of the footer region, measured from the
   // bottom of the page upward. Includes attribution lines, the page
   // number, and a little breathing room so body text never kisses the
