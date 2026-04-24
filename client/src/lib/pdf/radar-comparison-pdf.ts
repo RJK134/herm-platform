@@ -74,6 +74,33 @@ function renderRadarComparisonDoc(
 
   const now = opts.now ?? new Date();
 
+  // ── Footer geometry (computed up-front) ────────────────────────────────
+  // The attribution notice can wrap to several lines for real HERM
+  // copy (~277 chars → 3 lines at 8pt). Derive the footer's vertical
+  // footprint ONCE so every page-break threshold below agrees with
+  // where the footer will actually land — otherwise long notices
+  // overlap body text near the page bottom.
+  const footerLineHeight = 10;
+  const pageNumberReserve = 20; // height for the "Page X of N" line
+  const attributionLines = opts.attribution
+    ? (doc.splitTextToSize(opts.attribution, pageWidth - margin * 2) as string[])
+    : [];
+  // Total vertical footprint of the footer region, measured from the
+  // bottom of the page upward. Includes attribution lines, the page
+  // number, and a little breathing room so body text never kisses the
+  // footer baseline.
+  const footerHeight =
+    attributionLines.length * footerLineHeight + pageNumberReserve + 12;
+  // Any body element drawn at `y` must keep `y <= bodyMaxY` or the next
+  // element's baseline will overlap the footer.
+  const bodyMaxY = pageHeight - footerHeight;
+  // Conservative thresholds for the various body elements — each
+  // leaves a bit more headroom than its own row height so the page
+  // break fires BEFORE the last fitting row.
+  const summaryRowBreak = bodyMaxY - 14;
+  const sectionHeaderBreak = bodyMaxY - 40;
+  const domainRowBreak = bodyMaxY - 12;
+
   // Header
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
@@ -105,7 +132,7 @@ function renderRadarComparisonDoc(
     const line = `${rank}. ${entry.system.name}${entry.system.vendor ? ` — ${entry.system.vendor}` : ''}  ·  ${pct}`;
     doc.text(line, margin, y);
     y += 14;
-    if (y > pageHeight - 120) {
+    if (y > summaryRowBreak) {
       doc.addPage();
       y = margin;
     }
@@ -115,7 +142,7 @@ function renderRadarComparisonDoc(
 
   // Per-system domain breakdown
   entries.forEach((entry) => {
-    if (y > pageHeight - 150) {
+    if (y > sectionHeaderBreak) {
       doc.addPage();
       y = margin;
     }
@@ -131,7 +158,7 @@ function renderRadarComparisonDoc(
     doc.setFontSize(9);
     doc.setTextColor(70);
     entry.domainScores.forEach((dom) => {
-      if (y > pageHeight - 80) {
+      if (y > domainRowBreak) {
         doc.addPage();
         y = margin;
       }
@@ -146,7 +173,9 @@ function renderRadarComparisonDoc(
   });
 
   // Footer on every page — HERM attribution is mandatory on offline
-  // derivatives of CC-licensed HERM content.
+  // derivatives of CC-licensed HERM content. Positioned using the
+  // `footerHeight` geometry computed above so body-content thresholds
+  // and footer placement agree exactly.
   const pageCount = doc.getNumberOfPages();
   for (let p = 1; p <= pageCount; p++) {
     doc.setPage(p);
@@ -154,11 +183,10 @@ function renderRadarComparisonDoc(
     doc.setFontSize(8);
     doc.setTextColor(120);
 
-    if (opts.attribution) {
-      // Wrap attribution text so it fits the page width.
-      const lines = doc.splitTextToSize(opts.attribution, pageWidth - margin * 2);
-      const footerY = pageHeight - margin - lines.length * 10 - 12;
-      doc.text(lines, margin, footerY);
+    if (attributionLines.length > 0) {
+      const footerY =
+        pageHeight - footerHeight + footerLineHeight; // first baseline
+      doc.text(attributionLines, margin, footerY);
     }
 
     doc.setFont('helvetica', 'normal');

@@ -8,6 +8,16 @@ import {
 const HERM_NOTICE =
   'Capability data licensed by CAUDIT under CC BY-NC-SA 4.0. Source: UCISA HERM v3.1.';
 
+// The full canonical notice as persisted in Framework.licenceNotice
+// (see prisma/seed.ts). At 8pt this wraps to ~3 lines — the test for
+// footer/body overlap uses this to catch regression of the original
+// BugBot finding on PR #21.
+const HERM_NOTICE_FULL =
+  'This work is based on the UCISA Higher Education Reference Model (HERM) v3.1, ' +
+  'published by the Council of Australasian University Directors of Information ' +
+  'Technology (CAUDIT) and licensed under the Creative Commons Attribution-' +
+  'NonCommercial-ShareAlike 4.0 International License.';
+
 const baseEntries: RadarComparisonEntry[] = [
   {
     system: { id: 's1', name: 'Alpha SIS', vendor: 'Acme', category: 'SIS' },
@@ -124,5 +134,55 @@ describe('buildRadarComparisonPdf', () => {
       { frameworkName: 'HERM' },
     );
     expect(bytes.byteLength).toBeGreaterThan(500);
+  });
+
+  it('reserves enough vertical space for a multi-line attribution (no body/footer overlap)', () => {
+    // Regression for PR #21 BugBot finding: with the real 277-char HERM
+    // notice (3 lines at 8pt), body rows could previously be placed
+    // within the footer band. Construct an entry list whose domain
+    // rows pack tightly enough to exercise the page-break threshold,
+    // then assert that a longer attribution pushes to MORE pages than
+    // an empty attribution does — i.e. the geometry actually reserves
+    // room for the footer.
+    const bigEntry: RadarComparisonEntry = {
+      system: { id: 's1', name: 'Large', vendor: 'Acme' },
+      percentage: 70,
+      // 180 domain rows at ~12pt each ≈ 2160pt — guaranteed to spill
+      // across 3+ pages on A4 (pageHeight ~842pt) so the break
+      // threshold is load-bearing and the footer-reservation effect
+      // is observable in the page count.
+      domainScores: Array.from({ length: 180 }, (_, i) => ({
+        domainCode: `D${i}`,
+        domainName: `Domain ${i}`,
+        percentage: (i * 1.3) % 100,
+      })),
+    };
+
+    const countPages = (bytes: Uint8Array): number => {
+      const text = new TextDecoder('latin1').decode(bytes);
+      return (text.match(/\/Type\s*\/Page[^s]/g) || []).length;
+    };
+
+    const withoutAttribution = countPages(
+      buildRadarComparisonPdfBytes([bigEntry], {
+        frameworkName: 'Proprietary',
+        attribution: null,
+      }),
+    );
+    const withFullAttribution = countPages(
+      buildRadarComparisonPdfBytes([bigEntry], {
+        frameworkName: 'UCISA HERM v3.1',
+        attribution: HERM_NOTICE_FULL,
+      }),
+    );
+
+    // With a 3-line footer reserving ~40pt at the bottom of every
+    // page, the same body content must occupy at least as many pages
+    // as the no-footer case — and usually more, because fewer rows
+    // fit per page once the footer band is carved out. The strict
+    // inequality catches the overlap regression: if the threshold
+    // ignored the footer, both counts would be equal.
+    expect(withoutAttribution).toBeGreaterThan(0);
+    expect(withFullAttribution).toBeGreaterThan(withoutAttribution);
   });
 });
