@@ -191,6 +191,9 @@ const CURRENCY_SYMBOLS: Record<Currency, string> = {
   GBP: '£', EUR: '€', USD: '$', AUD: 'A$',
 };
 
+const DEFAULT_BASKET_IMPORT_LIMIT = 5;
+const SCORE_DISPLAY_DECIMALS = 1;
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatValue(value: number, currency: Currency = 'GBP'): string {
@@ -705,7 +708,9 @@ function EvaluationView({
 
   const importBasketMutation = useMutation({
     mutationFn: () =>
-      api.importBasketShortlistV2(projectId, { limit: 5 }).then((r) => r.data.data),
+      api
+        .importBasketShortlistV2(projectId, { limit: DEFAULT_BASKET_IMPORT_LIMIT })
+        .then((r) => r.data.data),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['procurement-v2-shortlist', projectId] });
       setImportMessage(
@@ -824,7 +829,7 @@ function EvaluationView({
                 <span>{system.name}</span>
                 {system.score != null && (
                   <span className="font-semibold text-teal-700 dark:text-teal-300">
-                    {system.score?.toFixed(1)}%
+                    {system.score?.toFixed(SCORE_DISPLAY_DECIMALS)}%
                   </span>
                 )}
               </span>

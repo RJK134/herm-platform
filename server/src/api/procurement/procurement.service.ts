@@ -61,7 +61,11 @@ const WORKFLOW_STAGES = [
   { stageNumber: 8, title: 'Contract Award', status: 'pending' },
 ] as const;
 
+const MIN_BASKET_IMPORT_LIMIT = 1;
+const DEFAULT_BASKET_IMPORT_LIMIT = 5;
+const MAX_BASKET_IMPORT_LIMIT = 10;
 const BASKET_IMPORT_NOTE = 'Imported from linked capability basket evaluation';
+const SCORE_PRECISION_MULTIPLIER = 10;
 
 function priorityMultiplier(priority: string): number {
   switch (priority) {
@@ -312,7 +316,10 @@ export class ProcurementService {
   }
 
   async importBasketToShortlist(projectId: string, opts: { limit?: number } = {}) {
-    const limit = Math.max(1, Math.min(opts.limit ?? 5, 10));
+    const limit = Math.max(
+      MIN_BASKET_IMPORT_LIMIT,
+      Math.min(opts.limit ?? DEFAULT_BASKET_IMPORT_LIMIT, MAX_BASKET_IMPORT_LIMIT),
+    );
 
     const project = await prisma.procurementProject.findUnique({
       where: { id: projectId },
@@ -371,7 +378,7 @@ export class ProcurementService {
 
         return {
           systemId: system.id,
-          score: Math.round(percentage * 10) / 10,
+          score: Math.round(percentage * SCORE_PRECISION_MULTIPLIER) / SCORE_PRECISION_MULTIPLIER,
         };
       })
       .filter((entry) => entry.score > 0)
