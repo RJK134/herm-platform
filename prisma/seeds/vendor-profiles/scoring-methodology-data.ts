@@ -88,7 +88,7 @@ export const methodologyRecords: ScoringMethodologyRecord[] = [
       category: 'review_process',
       content: {
         title: 'Review and Update Process',
-        overview: 'How the HERM Platform scores are maintained and quality-assured.',
+        overview: 'How Future Horizons ASPT scores are maintained and quality-assured.',
         process: [
           {
             stage: 1,

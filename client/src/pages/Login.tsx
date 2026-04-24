@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { LogIn, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { PRODUCT } from '../lib/branding';
 
 /**
  * Returns the path if it's a safe same-origin route, otherwise null.
@@ -65,7 +66,7 @@ export function Login() {
             <LogIn className="w-7 h-7 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            HERM Platform
+            {PRODUCT.name}
           </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
             UCISA HERM v3.1 Procurement Intelligence

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { Login } from '../pages/Login';
+import { PRODUCT } from '../lib/branding';
 
 const mockLogin = vi.hoisted(() => vi.fn());
 const mockAuth = vi.hoisted(() => ({
@@ -33,6 +34,17 @@ describe('Login — post-login redirect safety', () => {
   beforeEach(() => {
     mockLogin.mockReset();
     mockLogin.mockResolvedValue(undefined);
+  });
+
+  it('renders the Future Horizons ASPT product branding', () => {
+    renderLoginAt('/login');
+
+    expect(
+      screen.getByRole('heading', { name: PRODUCT.name, level: 1 }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/UCISA HERM v3\.1 Procurement Intelligence/i),
+    ).toBeInTheDocument();
   });
 
   it('uses ?returnTo when it is a safe internal path', async () => {

@@ -5,6 +5,7 @@ import axios from 'axios';
 import { Modal } from '../components/ui/Modal';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { PRODUCT } from '../lib/branding';
 
 const TOKEN_KEY = 'herm_auth_token';
 const authHeader = () => {
@@ -275,7 +276,7 @@ export function ApiIntegration() {
           <Card>
             <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-3">{t("apiKeys.restOverview", "REST API Overview")}</h2>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              The HERM Platform REST API provides programmatic access to system capability data, leaderboard scores,
+              The {PRODUCT.name} REST API provides programmatic access to system capability data, leaderboard scores,
               and procurement intelligence. All endpoints return JSON and follow the{' '}
               <code className="text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">{'{ success, data, error }'}</code>{' '}
               envelope format. Authenticate by passing your API key in the{' '}
