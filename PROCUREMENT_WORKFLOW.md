@@ -220,6 +220,47 @@ map — back-compat for clients that only read numeric values.
 - `<ShortlistDecisionBadge />` does the same for shortlist entries; the
   tooltip shows rationale, reviewer, and decision date inline.
 
+## Seeding a shortlist from a basket (Phase 4)
+
+A procurement project may link a `CapabilityBasket` via `basketId`. Once
+linked, the shortlist can be seeded from the basket's evaluation rather
+than added system-by-system:
+
+| Method | Path                                                                 | Auth             | Purpose |
+|--------|----------------------------------------------------------------------|------------------|---------|
+| POST   | `/api/procurement/projects/:id/shortlist/seed-from-basket`           | **JWT required** | Seed    |
+
+Request body (all optional):
+```json
+{ "topN": 10, "minPercentage": 40 }
+```
+
+- `topN` caps how many systems land on the shortlist (default: no cap).
+- `minPercentage` filters out systems whose basket-weighted match is
+  below the threshold (default `0` — include every evaluated system).
+
+The server calls `BasketsService.evaluateBasket` (priority × weight,
+framework-scoped) and creates one `ShortlistEntry` per qualifying
+system with `status='longlist'`, `decisionStatus='pending'`, and
+`score` set to the evaluated percentage. Seeded entries still have to
+go through the Phase 3 approve/reject governance flow before being
+promoted.
+
+**Idempotent**: dedupes against the existing `@@unique(projectId,
+systemId)` so calling again after a basket change only adds the new
+systems. The returned payload reports `{added, skipped, ranking,
+entries}`.
+
+**Audit**: writes `procurement.shortlist.seed` with the full ranking
+block (system name, percentage, rank) into `AuditLog.changes`. The
+ranking survives there even when the basket is edited afterwards so
+the seed decision stays reconstructable.
+
+Error shapes:
+- `404 NOT_FOUND` — project doesn't exist
+- `400 VALIDATION_ERROR` — project has no linked basket
+- `400 VALIDATION_ERROR` — malformed body (topN/minPercentage out of range)
+
 ## What's still advisory vs workflow-governed
 
 **Workflow-governed** (Phase 3 enforces state + reviewer attribution):

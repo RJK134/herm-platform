@@ -6,8 +6,10 @@ import type {
   UpdateShortlistEntryInput,
   TransitionProjectInput,
   DecideShortlistInput,
+  SeedShortlistFromBasketInput,
 } from './procurement.schema';
 import prisma from '../../utils/prisma';
+import { BasketsService } from '../baskets/baskets.service';
 import {
   assertTransition,
   InvalidTransitionError,
@@ -581,6 +583,133 @@ export class ProcurementService {
       });
 
       return updated;
+    });
+  }
+
+  // ── Phase 4: basket-to-shortlist seeding ───────────────────────────────
+
+  /**
+   * Seed a project's shortlist from its linked basket.
+   *
+   * The basket is evaluated (priority × weight per capability, framework-
+   * scoped) and the resulting per-system match percentage is stored as
+   * `ShortlistEntry.score`. Entries are created as `longlist` /
+   * `pending` so every seeded system still has to go through the Phase 3
+   * decision governance flow before it's promoted.
+   *
+   * Safe to call repeatedly: dedupes against the existing
+   * `@@unique(projectId, systemId)` constraint via `skipDuplicates`, and
+   * the AuditLog row captures both the number of newly-added entries and
+   * the full evaluated ranking so a second seed after basket changes is
+   * fully reconstructable.
+   */
+  async seedShortlistFromBasket(
+    projectId: string,
+    opts: SeedShortlistFromBasketInput,
+    actor?: { userId?: string; name?: string },
+  ) {
+    const project = await prisma.procurementProject.findUnique({
+      where: { id: projectId },
+      select: { id: true, basketId: true },
+    });
+    if (!project) throw new NotFoundError(`Project not found: ${projectId}`);
+    if (!project.basketId) {
+      throw new ValidationError(
+        'Project has no linked basket; set `basketId` on the project first',
+      );
+    }
+
+    const basketsService = new BasketsService();
+    const ranking = await basketsService.evaluateBasket(project.basketId);
+
+    if (ranking.length === 0) {
+      // Basket has no items — nothing to evaluate. Return early with an
+      // empty result; don't write an audit row for a no-op.
+      return { added: 0, skipped: 0, ranking: [] as typeof ranking, entries: [] };
+    }
+
+    const minPercentage = opts.minPercentage ?? 0;
+    const filtered = ranking.filter((r) => r.percentage >= minPercentage);
+    const capped =
+      opts.topN !== undefined ? filtered.slice(0, opts.topN) : filtered;
+
+    return prisma.$transaction(async (tx) => {
+      // Read the existing shortlist INSIDE the transaction and compute
+      // the "add" set from that snapshot. Doing the read outside would
+      // let a concurrent seed land between read and createMany; the
+      // `skipDuplicates: true` call would silently drop the dup but
+      // the audit counts below would overstate `added`.
+      const existing = await tx.shortlistEntry.findMany({
+        where: { projectId },
+        select: { systemId: true },
+      });
+      const existingSystemIds = new Set(existing.map((e) => e.systemId));
+
+      const toAdd = capped.filter((r) => !existingSystemIds.has(r.system.id));
+
+      // Authoritative `added` count comes from createMany's result so
+      // a sibling transaction that snuck an overlapping row in before
+      // our createMany is still reflected correctly in the audit log.
+      let added = 0;
+      if (toAdd.length > 0) {
+        const created = await tx.shortlistEntry.createMany({
+          data: toAdd.map((r) => ({
+            projectId,
+            systemId: r.system.id,
+            status: 'longlist',
+            score: r.percentage,
+          })),
+          // Belt-and-braces: @@unique(projectId, systemId) means a race
+          // that adds a row between our SELECT and INSERT would otherwise
+          // throw P2002. skipDuplicates keeps the seed idempotent.
+          skipDuplicates: true,
+        });
+        added = created.count;
+      }
+      const skippedAlreadyOnShortlist = capped.length - added;
+
+      await tx.auditLog.create({
+        data: {
+          userId: actor?.userId ?? null,
+          action: 'procurement.shortlist.seed',
+          entityType: 'ProcurementProject',
+          entityId: projectId,
+          changes: {
+            basketId: project.basketId,
+            opts: {
+              topN: opts.topN ?? null,
+              minPercentage: opts.minPercentage ?? null,
+            },
+            added,
+            skippedAlreadyOnShortlist,
+            // Persist the ranking so someone auditing the seed later can
+            // see exactly which scores the decision was based on, even
+            // if the basket is edited afterwards.
+            ranking: ranking.map((r) => ({
+              systemId: r.system.id,
+              systemName: r.system.name,
+              percentage: r.percentage,
+              rank: r.rank,
+            })),
+            actorName: normaliseActorName(actor),
+          },
+        },
+      });
+
+      const entries = await tx.shortlistEntry.findMany({
+        where: { projectId },
+        include: {
+          system: { select: { id: true, name: true, vendor: true, category: true } },
+        },
+        orderBy: { score: 'desc' },
+      });
+
+      return {
+        added,
+        skipped: skippedAlreadyOnShortlist,
+        ranking,
+        entries: entries.map(stripShortlistGovernance),
+      };
     });
   }
 }

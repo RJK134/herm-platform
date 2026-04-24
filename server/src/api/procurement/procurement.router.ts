@@ -6,6 +6,7 @@ import {
   addShortlistEntry, getShortlist, updateShortlistEntry, removeShortlistEntry,
   transitionProjectStatus, getProjectStatus,
   decideShortlistEntry, clearShortlistDecision,
+  seedShortlistFromBasket,
 } from './procurement.controller';
 import {
   createProjectV2, listProjectsV2, getProjectV2, advanceStage,
@@ -60,6 +61,15 @@ router.get('/projects/:id/shortlist', getShortlist);
 // `rationale` that the GET endpoints carefully scrub.
 router.patch('/projects/:id/shortlist/:entryId', authenticateJWT, updateShortlistEntry);
 router.delete('/projects/:id/shortlist/:entryId', removeShortlistEntry);
+
+// Phase 4: seed the shortlist from the project's linked basket. Writes
+// an AuditLog row with the full ranking so a seed is always
+// reconstructable, even after the basket evolves — hence JWT-only.
+router.post(
+  '/projects/:id/shortlist/seed-from-basket',
+  authenticateJWT,
+  seedShortlistFromBasket,
+);
 
 // ── Phase 3: governance ───────────────────────────────────────────────────
 // Mutations require a real JWT so audit-log `userId` + `actorName` are

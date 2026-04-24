@@ -12,6 +12,7 @@ vi.mock('../../../utils/prisma', () => {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
     findMany: vi.fn(),
+    createMany: vi.fn(),
     update: vi.fn(),
   };
   const auditLog = {
@@ -34,6 +35,20 @@ vi.mock('../../../utils/prisma', () => {
   };
   return { default: prismaMock };
 });
+
+// Phase 4: `seedShortlistFromBasket` delegates to `BasketsService.evaluateBasket`.
+// Mock it so the tests don't have to stub three layers of prisma (basket +
+// its items + capability scores + vendor systems) just to assert the seed
+// shape.
+const mockEvaluateBasket = vi.fn();
+vi.mock('../../baskets/baskets.service', () => ({
+  // `new BasketsService()` in the service under test must return an
+  // instance with `evaluateBasket`, so the mock has to be a real class
+  // — `vi.fn().mockImplementation(() => obj)` isn't a constructor.
+  BasketsService: class {
+    evaluateBasket = mockEvaluateBasket;
+  },
+}));
 
 import { ProcurementService } from '../procurement.service';
 import prisma from '../../../utils/prisma';
@@ -568,6 +583,223 @@ describe('ProcurementService.clearShortlistDecision — tenant scoping + audit',
       service.clearShortlistDecision('wrong-project', 'e1'),
     ).rejects.toThrow(/Shortlist entry not found/);
     expect(prisma.shortlistEntry.update).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('ProcurementService.seedShortlistFromBasket', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockEvaluateBasket.mockReset();
+  });
+
+  // Every evaluation result the BasketsService would give us.
+  const baseRanking = [
+    {
+      system: { id: 'sys-1', name: 'Alpha', vendor: 'A', category: 'SIS' },
+      score: 80,
+      maxScore: 100,
+      percentage: 80,
+      rank: 1,
+    },
+    {
+      system: { id: 'sys-2', name: 'Beta', vendor: 'B', category: 'LMS' },
+      score: 40,
+      maxScore: 100,
+      percentage: 40,
+      rank: 2,
+    },
+    {
+      system: { id: 'sys-3', name: 'Gamma', vendor: 'G', category: 'HCM' },
+      score: 10,
+      maxScore: 100,
+      percentage: 10,
+      rank: 3,
+    },
+  ];
+
+  it('seeds every ranked system when no topN / minPercentage is given', async () => {
+    vi.mocked(prisma.procurementProject.findUnique).mockResolvedValueOnce({
+      id: 'p1',
+      basketId: 'bk1',
+    } as never);
+    mockEvaluateBasket.mockResolvedValueOnce(baseRanking);
+    vi.mocked(prisma.shortlistEntry.findMany)
+      .mockResolvedValueOnce([]) // pre-transaction check: empty shortlist
+      .mockResolvedValueOnce([]); // post-seed re-read (mocked minimal)
+    vi.mocked(prisma.shortlistEntry.createMany).mockResolvedValueOnce({
+      count: 3,
+    } as never);
+    vi.mocked(prisma.auditLog.create).mockResolvedValueOnce({} as never);
+
+    const result = await service.seedShortlistFromBasket(
+      'p1',
+      {},
+      { userId: 'u1', name: 'Alice' },
+    );
+
+    expect(result.added).toBe(3);
+    expect(result.skipped).toBe(0);
+
+    // createMany receives every ranked system as a longlist entry.
+    expect(prisma.shortlistEntry.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({ projectId: 'p1', systemId: 'sys-1', status: 'longlist', score: 80 }),
+        expect.objectContaining({ projectId: 'p1', systemId: 'sys-2', score: 40 }),
+        expect.objectContaining({ projectId: 'p1', systemId: 'sys-3', score: 10 }),
+      ],
+      skipDuplicates: true,
+    });
+
+    // Audit row carries the full ranking and the actor — auditors can
+    // reconstruct the seed even after the basket evolves.
+    expect(prisma.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'procurement.shortlist.seed',
+        entityType: 'ProcurementProject',
+        entityId: 'p1',
+        userId: 'u1',
+        changes: expect.objectContaining({
+          basketId: 'bk1',
+          added: 3,
+          skippedAlreadyOnShortlist: 0,
+          actorName: 'Alice',
+          ranking: expect.arrayContaining([
+            expect.objectContaining({ systemId: 'sys-1', percentage: 80 }),
+          ]),
+        }),
+      }),
+    });
+  });
+
+  it('applies topN cap and minPercentage filter together', async () => {
+    vi.mocked(prisma.procurementProject.findUnique).mockResolvedValueOnce({
+      id: 'p1',
+      basketId: 'bk1',
+    } as never);
+    mockEvaluateBasket.mockResolvedValueOnce(baseRanking);
+    vi.mocked(prisma.shortlistEntry.findMany)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    vi.mocked(prisma.shortlistEntry.createMany).mockResolvedValueOnce({
+      count: 1,
+    } as never);
+    vi.mocked(prisma.auditLog.create).mockResolvedValueOnce({} as never);
+
+    // minPercentage=50 drops sys-2 (40%) and sys-3 (10%) → only sys-1
+    // survives; topN=2 is a no-op after the filter.
+    await service.seedShortlistFromBasket('p1', { topN: 2, minPercentage: 50 });
+
+    expect(prisma.shortlistEntry.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({ systemId: 'sys-1', score: 80 }),
+      ],
+      skipDuplicates: true,
+    });
+  });
+
+  it('dedupes against systems already on the shortlist', async () => {
+    vi.mocked(prisma.procurementProject.findUnique).mockResolvedValueOnce({
+      id: 'p1',
+      basketId: 'bk1',
+    } as never);
+    mockEvaluateBasket.mockResolvedValueOnce(baseRanking);
+    // sys-2 is already on the shortlist (maybe added manually earlier).
+    vi.mocked(prisma.shortlistEntry.findMany)
+      .mockResolvedValueOnce([{ systemId: 'sys-2' }] as never)
+      .mockResolvedValueOnce([]);
+    vi.mocked(prisma.shortlistEntry.createMany).mockResolvedValueOnce({
+      count: 2,
+    } as never);
+    vi.mocked(prisma.auditLog.create).mockResolvedValueOnce({} as never);
+
+    const result = await service.seedShortlistFromBasket('p1', {});
+
+    expect(result.added).toBe(2);
+    expect(result.skipped).toBe(1);
+    // Only the two new systems are passed to createMany — the existing
+    // sys-2 entry is not overwritten.
+    expect(prisma.shortlistEntry.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({ systemId: 'sys-1' }),
+        expect.objectContaining({ systemId: 'sys-3' }),
+      ],
+      skipDuplicates: true,
+    });
+  });
+
+  it('audit counts reflect createMany.count, not the pre-flight computation (TOCTOU)', async () => {
+    // Scenario: pre-flight read sees no existing entries → all 3 systems
+    // are candidates to add. Between that read and our createMany, a
+    // concurrent seed landed sys-1, so skipDuplicates drops it and
+    // createMany returns count=2. The audit log + response must report
+    // `added=2` / `skipped=1`, NOT `added=3` / `skipped=0`.
+    vi.mocked(prisma.procurementProject.findUnique).mockResolvedValueOnce({
+      id: 'p1',
+      basketId: 'bk1',
+    } as never);
+    mockEvaluateBasket.mockResolvedValueOnce(baseRanking);
+    vi.mocked(prisma.shortlistEntry.findMany)
+      .mockResolvedValueOnce([]) // in-tx pre-check: empty at snapshot
+      .mockResolvedValueOnce([]); // post-seed re-read
+    // createMany's count reflects the actual racing outcome.
+    vi.mocked(prisma.shortlistEntry.createMany).mockResolvedValueOnce({
+      count: 2,
+    } as never);
+    vi.mocked(prisma.auditLog.create).mockResolvedValueOnce({} as never);
+
+    const result = await service.seedShortlistFromBasket(
+      'p1',
+      {},
+      { userId: 'u1', name: 'Alice' },
+    );
+
+    expect(result.added).toBe(2);
+    expect(result.skipped).toBe(1);
+    expect(prisma.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        changes: expect.objectContaining({
+          added: 2,
+          skippedAlreadyOnShortlist: 1,
+        }),
+      }),
+    });
+  });
+
+  it('throws ValidationError when the project has no linked basket', async () => {
+    vi.mocked(prisma.procurementProject.findUnique).mockResolvedValueOnce({
+      id: 'p1',
+      basketId: null,
+    } as never);
+
+    await expect(
+      service.seedShortlistFromBasket('p1', {}),
+    ).rejects.toThrow(/no linked basket/);
+
+    expect(mockEvaluateBasket).not.toHaveBeenCalled();
+    expect(prisma.shortlistEntry.createMany).not.toHaveBeenCalled();
+  });
+
+  it('throws NotFoundError when the project does not exist', async () => {
+    vi.mocked(prisma.procurementProject.findUnique).mockResolvedValueOnce(null);
+    await expect(
+      service.seedShortlistFromBasket('missing', {}),
+    ).rejects.toThrow(/Project not found/);
+  });
+
+  it('short-circuits on an empty basket without writing an audit row', async () => {
+    vi.mocked(prisma.procurementProject.findUnique).mockResolvedValueOnce({
+      id: 'p1',
+      basketId: 'bk1',
+    } as never);
+    mockEvaluateBasket.mockResolvedValueOnce([]); // empty basket → empty eval
+
+    const result = await service.seedShortlistFromBasket('p1', {});
+    expect(result.added).toBe(0);
+    expect(result.skipped).toBe(0);
+    expect(result.ranking).toEqual([]);
+    // No side effects for a no-op seed.
+    expect(prisma.shortlistEntry.createMany).not.toHaveBeenCalled();
     expect(prisma.auditLog.create).not.toHaveBeenCalled();
   });
 });
