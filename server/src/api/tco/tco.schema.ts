@@ -25,14 +25,12 @@ export const compareTcoSchema = z.object({
 });
 
 /**
- * Phase 4: `createdById` is intentionally NOT accepted from the body.
- * The route requires an authenticated JWT, and the server stamps the
- * creator from `req.user` so a client can't forge attribution. A
- * body-supplied override would be silently ignored anyway — omit it.
- *
- * Similarly `institutionId` defaults to the caller's institution from
- * the JWT; a body override is still accepted for SUPER_ADMIN flows
- * that save estimates on behalf of another tenant.
+ * Phase 4: both `createdById` AND `institutionId` are intentionally
+ * absent from the body schema. They are stamped server-side from the
+ * authenticated caller's JWT (same pattern as architecture, documents,
+ * keys). A body override would create a cross-tenant write gap for
+ * any authenticated user. If an admin-only "save on behalf" endpoint
+ * is needed later, it belongs as a separate `requireRole`-gated route.
  */
 export const saveEstimateSchema = z.object({
   name: z.string().min(1).max(200),
@@ -55,7 +53,6 @@ export const saveEstimateSchema = z.object({
   annualRunRate: z.number().optional(),
   perStudentCost: z.number().optional(),
   notes: z.string().optional(),
-  institutionId: z.string().optional(),
 });
 
 export type CalculateTcoInput = z.infer<typeof calculateTcoSchema>;

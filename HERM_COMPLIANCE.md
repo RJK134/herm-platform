@@ -89,7 +89,7 @@ All framework-scoped responses in this bucket now emit `meta.provenance.framewor
 | `/api/evaluations`, `/api/vendor-portal`       | Tenant-scoped projects / vendor data       |
 | `/api/subscriptions`, `/api/notifications`     | User account & billing                     |
 | `/api/institutions`                            | Institution profile                        |
-| `/api/tco/estimates`                           | Persisted TCO estimates — `createdById` stamped from JWT, list/read scoped to caller's institutionId |
+| `/api/tco/estimates`                           | Persisted TCO estimates — both `createdById` and `institutionId` stamped from JWT (never the body); list/read scoped to caller's institutionId |
 
 ### Enterprise-tier gated
 

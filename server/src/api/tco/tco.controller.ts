@@ -78,14 +78,15 @@ export const saveEstimate = async (
   try {
     const data = saveEstimateSchema.parse(req.body);
     // `authenticateJWT` runs before this controller so `req.user` is
-    // guaranteed. Creator attribution is stamped server-side; a body
-    // field would just be ignored. Institution defaults to the caller's
-    // institution but a body override is still honoured for SUPER_ADMIN
-    // flows that save on behalf of another tenant.
+    // guaranteed. Both `createdById` and `institutionId` are stamped
+    // unconditionally from the JWT — never from the body — so an
+    // authenticated user of tenant A can't inject an estimate into
+    // tenant B's namespace. (Consistent with architecture, documents,
+    // keys controllers.)
     const estimate = await service.saveEstimate({
       ...data,
       createdById: req.user!.userId,
-      institutionId: data.institutionId ?? req.user!.institutionId,
+      institutionId: req.user!.institutionId,
     });
     res.status(201).json({ success: true, data: estimate });
   } catch (err) {

@@ -95,21 +95,26 @@ describe('POST /api/tco/estimates — auth + attribution', () => {
     });
   });
 
-  it('honours a body-supplied institutionId (cross-tenant save for admins)', async () => {
+  it('ignores body-supplied institutionId (no cross-tenant writes)', async () => {
+    // Regression: BugBot flagged that accepting an `institutionId`
+    // override from the body let any authenticated user inject into
+    // another tenant's namespace. The schema now strips it and the
+    // controller stamps unconditionally from the JWT.
     vi.mocked(prisma.tcoEstimate.create).mockResolvedValueOnce({
       id: 'tco-2',
     } as never);
 
-    const token = makeToken({ userId: 'u-admin', institutionId: 'inst-home' });
+    const token = makeToken({ userId: 'u-attacker', institutionId: 'inst-home' });
     await request(app)
       .post('/api/tco/estimates')
       .set('Authorization', `Bearer ${token}`)
-      .send({ ...validSaveBody, institutionId: 'inst-other' });
+      .send({ ...validSaveBody, institutionId: 'inst-victim' });
 
     expect(prisma.tcoEstimate.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        createdById: 'u-admin',
-        institutionId: 'inst-other',
+        createdById: 'u-attacker',
+        // Always the JWT institution — never the body's 'inst-victim'.
+        institutionId: 'inst-home',
       }),
     });
   });
