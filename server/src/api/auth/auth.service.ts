@@ -16,6 +16,14 @@ function buildSlug(name: string): string {
   );
 }
 
+// Pre-billing dev flag: every authenticated user behaves as Enterprise.
+// Off unless DEV_UNLOCK_ALL_TIERS=true. env-check.ts warns loudly if this is
+// ever set in production. Leaves the DB untouched — flipping the flag off
+// returns users to their real subscription tier on next login.
+export function resolveEffectiveTier(tier: string): string {
+  return process.env['DEV_UNLOCK_ALL_TIERS'] === 'true' ? 'enterprise' : tier;
+}
+
 export class AuthService {
   async register(data: RegisterInput) {
     const existing = await prisma.user.findUnique({
@@ -65,7 +73,7 @@ export class AuthService {
       role: result.user.role,
       institutionId: result.institution.id,
       institutionName: result.institution.name,
-      tier: 'free',
+      tier: resolveEffectiveTier('free'),
     };
 
     return { token: generateToken(payload), user: payload };
@@ -90,8 +98,9 @@ export class AuthService {
       throw new AppError(401, 'AUTHENTICATION_ERROR', 'Invalid email or password');
     }
 
-    const tier =
-      user.institution.subscription?.tier?.toLowerCase() ?? 'free';
+    const tier = resolveEffectiveTier(
+      user.institution.subscription?.tier?.toLowerCase() ?? 'free',
+    );
 
     const payload: JwtPayload = {
       userId: user.id,
@@ -127,7 +136,9 @@ export class AuthService {
       role: user.role,
       institutionId: user.institutionId,
       institutionName: user.institution.name,
-      tier: user.institution.subscription?.tier?.toLowerCase() ?? 'free',
+      tier: resolveEffectiveTier(
+        user.institution.subscription?.tier?.toLowerCase() ?? 'free',
+      ),
       subscription: user.institution.subscription,
       institution: {
         id: user.institution.id,
@@ -157,7 +168,9 @@ export class AuthService {
       role: user.role,
       institutionId: user.institutionId,
       institutionName: user.institution.name,
-      tier: user.institution.subscription?.tier?.toLowerCase() ?? 'free',
+      tier: resolveEffectiveTier(
+        user.institution.subscription?.tier?.toLowerCase() ?? 'free',
+      ),
     };
   }
 }

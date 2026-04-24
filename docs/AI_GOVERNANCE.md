@@ -71,6 +71,35 @@ If `ANTHROPIC_API_KEY` is not set, `isAiConfigured()` returns `false` and chat r
 - Anthropic's data-retention policy applies to prompts sent to their API. Do not send unrelated PII or secret material through the AI surface.
 - Error contexts logged by pino redact `authorization`, `cookie`, `password`, `token`, and `apiKey` fields automatically (`pino` `redact` config in `server/src/lib/logger.ts`).
 
+## Rotating the API key
+
+Use this when the Anthropic key has expired, been revoked, or needs replacing for any reason. The server never stores the key in the DB — it reads `ANTHROPIC_API_KEY` from the environment on every startup.
+
+1. Sign in at **https://console.anthropic.com** with the account that owns your billing.
+2. **Billing → Usage limits** — set a monthly spend cap before issuing a key. A heavy AI-Assistant testing session runs $1–3, so a $20/mo cap is a safe dev default. Keys inherit the organisation's cap; no way to set per-key caps today.
+3. **API Keys → Create Key**. Name it descriptively (`herm-dev-local-alice-2026-04`, `herm-prod-fly-2026-04`). You get **one chance** to copy the secret — it starts with `sk-ant-api03-` and is not shown again after the dialog closes.
+4. Paste into the relevant environment:
+
+   **Local:** edit `.env` at the repo root:
+   ```
+   ANTHROPIC_API_KEY="sk-ant-api03-…your new key…"
+   ```
+   Restart `npm run dev`. The server's startup log should no longer include the `ANTHROPIC_API_KEY` warning from `env-check.ts`.
+
+   **Fly.io:** `fly secrets set ANTHROPIC_API_KEY="sk-ant-api03-…"` — triggers an automatic redeploy.
+
+   **Render / other PaaS:** set via the provider's env-var UI and redeploy.
+
+5. **Verify:** log in, open `/assistant`, ask a capability-coded question such as `"Which systems cover BC011 best?"`. A real reply citing specific systems means the key is live. The generic fallback message (_"AI Assistant requires an ANTHROPIC_API_KEY…"_) means the server still sees no key.
+6. **Revoke the old key** in the Anthropic console once the new one is confirmed working. Do not leave superseded keys active.
+
+### If the new key doesn't work
+
+- **No surrounding quotes or trailing spaces in `.env`.** The file is read verbatim.
+- **Confirm `.env` is gitignored:** `git check-ignore .env` → should print `.env`. If it prints nothing, stop and fix this before committing.
+- **Model allowlist still valid?** `ai-client.ts` pins `claude-sonnet-4-20250514`. If Anthropic retires that model ID, calls fail with `AiLimitExceededError`. Check current model names at https://docs.anthropic.com/en/docs/about-claude/models and update `ALLOWED_MODELS` via a PR (see invariant #2 above).
+- **Anthropic-side errors** (401, 429, 529) are logged server-side with status. Grep `npm run dev` output for `"Anthropic"` or `AiNotConfiguredError`.
+- **Never paste the key** into a GitHub issue, PR, commit, chat log, or ticket. If one leaks, revoke it in the console immediately and issue a new one — that's why step 3 uses a descriptive name (makes the revoke target obvious).
 ## Incident response
 
 ### Abuse / prompt-injection suspected

@@ -43,6 +43,14 @@ export function checkEnvironment(): void {
     else warnings.push(msg);
   }
 
+  // Shout if the pre-billing tier-unlock flag is set in production.
+  // Not fatal — there are legitimate staging-as-production uses — but loud.
+  if (isProd && process.env['DEV_UNLOCK_ALL_TIERS'] === 'true') {
+    console.error(
+      '[ENV] ⚠  DEV_UNLOCK_ALL_TIERS=true in production — every logged-in user will behave as Enterprise. Unset before real customers land.',
+    );
+  }
+
   if (missing.length > 0) {
     const header = isProd
       ? '[ENV] FATAL: required environment variables not set:'
