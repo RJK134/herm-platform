@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { capabilitiesData } from './seeds/capabilities-data';
 
 const prisma = new PrismaClient();
+const DEMO_PASSWORD = process.env['DEMO_PASSWORD'] ?? 'demo12345';
 
 async function main() {
   console.log('Seeding HERM platform...');
@@ -245,7 +246,7 @@ async function main() {
     },
   });
 
-  const demoHash = await bcrypt.hash('demo12345', 10);
+  const demoHash = await bcrypt.hash(DEMO_PASSWORD, 10);
   await prisma.user.upsert({
     where: { email: 'demo@demo-university.ac.uk' },
     update: {},
@@ -257,7 +258,7 @@ async function main() {
       institutionId: demoInstitution.id,
     },
   });
-  console.log('Demo user seeded — demo@demo-university.ac.uk / demo12345');
+  console.log('Demo user seeded — demo@demo-university.ac.uk (password documented for local demos)');
 
   // ── Demo capability basket ────────────────────────────────────────────────
   const demoBasket = await prisma.capabilityBasket.upsert({

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
-import app from '../app';
+import { createApp } from '../app';
+const app = createApp();
 
 const $queryRaw = vi.fn();
 

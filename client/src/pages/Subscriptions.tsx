@@ -49,6 +49,7 @@ interface CheckoutResponse {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const TIER_ORDER: Record<string, number> = { FREE: 0, PROFESSIONAL: 1, ENTERPRISE: 2 };
+const STRIPE_BILLING_PORTAL_URL = import.meta.env.VITE_STRIPE_BILLING_PORTAL_URL?.trim();
 
 interface TierFeature {
   feature: string;
@@ -210,9 +211,9 @@ export function Subscriptions() {
           </div>
 
           <div className="flex items-center gap-2">
-            {(currentTier === 'PROFESSIONAL' || currentTier === 'ENTERPRISE') && sub?.stripeCustomerId && (
+            {(currentTier === 'PROFESSIONAL' || currentTier === 'ENTERPRISE') && sub?.stripeCustomerId && STRIPE_BILLING_PORTAL_URL && (
               <a
-                href="https://billing.stripe.com/p/login/test"
+                href={STRIPE_BILLING_PORTAL_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-teal-600 dark:text-teal-400 border border-teal-300 dark:border-teal-700 rounded-lg hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors"
