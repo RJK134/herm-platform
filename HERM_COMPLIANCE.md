@@ -74,7 +74,7 @@ compliance action that needs a matching entry here.
 | `/api/auth/*`                                         | Registration + login                                |
 | `/api/systems`, `/api/capabilities`, `/api/scores`, `/api/export` | HERM content (framework-scoped, tierGate enforced) |
 | `/api/vendors`, `/api/research`, `/api/scoring`, `/api/frameworks` | Reference data, no tenant context        |
-| `/api/tco`, `/api/integration`                        | Calculators available on the free tier              |
+| `/api/tco/benchmarks`, `/api/tco/calculate`, `/api/tco/compare`, `/api/integration` | Stateless calculators, free tier |
 
 All framework-scoped responses in this bucket now emit `meta.provenance.framework{…}`, and framework-mappings (enterprise-gated, below) emits a `{source, target}` pair so HERM attribution travels even on the cross-framework surface.
 
@@ -89,6 +89,7 @@ All framework-scoped responses in this bucket now emit `meta.provenance.framewor
 | `/api/evaluations`, `/api/vendor-portal`       | Tenant-scoped projects / vendor data       |
 | `/api/subscriptions`, `/api/notifications`     | User account & billing                     |
 | `/api/institutions`                            | Institution profile                        |
+| `/api/tco/estimates`                           | Persisted TCO estimates — `createdById` stamped from JWT, list/read scoped to caller's institutionId |
 
 ### Enterprise-tier gated
 

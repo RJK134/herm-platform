@@ -77,7 +77,16 @@ export const saveEstimate = async (
 ): Promise<void> => {
   try {
     const data = saveEstimateSchema.parse(req.body);
-    const estimate = await service.saveEstimate(data);
+    // `authenticateJWT` runs before this controller so `req.user` is
+    // guaranteed. Creator attribution is stamped server-side; a body
+    // field would just be ignored. Institution defaults to the caller's
+    // institution but a body override is still honoured for SUPER_ADMIN
+    // flows that save on behalf of another tenant.
+    const estimate = await service.saveEstimate({
+      ...data,
+      createdById: req.user!.userId,
+      institutionId: data.institutionId ?? req.user!.institutionId,
+    });
     res.status(201).json({ success: true, data: estimate });
   } catch (err) {
     next(err);
@@ -85,12 +94,13 @@ export const saveEstimate = async (
 };
 
 export const listEstimates = async (
-  _req: Request,
+  req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
   try {
-    const data = await service.listEstimates();
+    // `authenticateJWT` guards this route, so `req.user` is guaranteed.
+    const data = await service.listEstimates(req.user!.institutionId);
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -103,8 +113,13 @@ export const getEstimate = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const data = await service.getEstimate(req.params['id'] as string);
+    const data = await service.getEstimate(
+      req.params['id'] as string,
+      req.user!.institutionId,
+    );
     if (!data) {
+      // Uniform "not found" for both truly-missing and cross-tenant
+      // IDs so callers can't probe estimate existence across tenants.
       res.status(404).json({
         success: false,
         error: { code: 'NOT_FOUND', message: 'Estimate not found' },

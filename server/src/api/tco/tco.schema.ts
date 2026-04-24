@@ -24,6 +24,16 @@ export const compareTcoSchema = z.object({
   horizonYears: z.number().int().min(1).max(20),
 });
 
+/**
+ * Phase 4: `createdById` is intentionally NOT accepted from the body.
+ * The route requires an authenticated JWT, and the server stamps the
+ * creator from `req.user` so a client can't forge attribution. A
+ * body-supplied override would be silently ignored anyway — omit it.
+ *
+ * Similarly `institutionId` defaults to the caller's institution from
+ * the JWT; a body override is still accepted for SUPER_ADMIN flows
+ * that save estimates on behalf of another tenant.
+ */
 export const saveEstimateSchema = z.object({
   name: z.string().min(1).max(200),
   institutionSize: z.enum(['small', 'medium', 'large', 'xlarge']),
@@ -46,7 +56,6 @@ export const saveEstimateSchema = z.object({
   perStudentCost: z.number().optional(),
   notes: z.string().optional(),
   institutionId: z.string().optional(),
-  createdById: z.string().optional(),
 });
 
 export type CalculateTcoInput = z.infer<typeof calculateTcoSchema>;

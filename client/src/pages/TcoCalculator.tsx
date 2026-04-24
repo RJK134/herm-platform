@@ -15,9 +15,17 @@ import {
 import { Header } from '../components/layout/Header';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import {
+  SaveTcoEstimateButton,
+  type InstitutionSize,
+  type TcoSavePayload,
+} from '../components/tco/SaveTcoEstimateButton';
 import { useSystems } from '../hooks/useApi';
 import { api } from '../lib/api';
 import { formatCurrency } from '../lib/utils';
+
+// Preset index → persisted `institutionSize` enum on the server.
+const SIZE_KEYS: readonly InstitutionSize[] = ['small', 'medium', 'large', 'xlarge'];
 
 ChartJS.register(
   ArcElement,
@@ -139,6 +147,34 @@ export function TcoCalculator() {
       setLoading(false);
     }
   };
+
+  // Derive the persisted-shape payload from the current calculation.
+  // Cost breakdown items are per-year; multiply licence/staff/support/
+  // infrastructure/customDev by `horizon` so the saved row matches the
+  // lifetime-cost semantics the `TcoEstimate` columns expect.
+  const savePayload: TcoSavePayload | null =
+    result && selectedSystemId
+      ? {
+          systemId: selectedSystemId,
+          institutionSize: SIZE_KEYS[sizePreset] ?? 'medium',
+          studentFte: studentCount,
+          // No staff-FTE input yet — 0 is the schema-safe default; the
+          // user can edit on the backend if needed (future enhancement).
+          staffFte: 0,
+          horizonYears: horizon,
+          licenceCostYear1: result.breakdown.licence,
+          implementationCost: result.breakdown.implementation,
+          internalStaffCost: result.breakdown.staff * horizon,
+          trainingCost: 0,
+          infrastructureCost: result.breakdown.infrastructure * horizon,
+          integrationCost: 0,
+          supportCost: result.breakdown.support * horizon,
+          customDevCost: result.breakdown.customDev * horizon,
+          totalTco: result.totalTco,
+          annualRunRate: result.annualRunRate,
+          perStudentCost: result.perStudentAnnual,
+        }
+      : null;
 
   const breakdownData = result
     ? {
@@ -392,6 +428,13 @@ export function TcoCalculator() {
 
           {result && mode === 'single' && (
             <>
+              <div className="flex justify-end">
+                <SaveTcoEstimateButton
+                  payload={savePayload}
+                  systemName={systems?.find((s) => s.id === selectedSystemId)?.name}
+                />
+              </div>
+
               <div className="grid grid-cols-3 gap-4">
                 <Card className="text-center">
                   <div className="text-xl font-bold text-gray-900 dark:text-white">
