@@ -100,7 +100,6 @@ Use this when the Anthropic key has expired, been revoked, or needs replacing fo
 - **Model allowlist still valid?** `ai-client.ts` pins `claude-sonnet-4-20250514`. If Anthropic retires that model ID, calls fail with `AiLimitExceededError`. Check current model names at https://docs.anthropic.com/en/docs/about-claude/models and update `ALLOWED_MODELS` via a PR (see invariant #2 above).
 - **Anthropic-side errors** (401, 429, 529) are logged server-side with status. Grep `npm run dev` output for `"Anthropic"` or `AiNotConfiguredError`.
 - **Never paste the key** into a GitHub issue, PR, commit, chat log, or ticket. If one leaks, revoke it in the console immediately and issue a new one — that's why step 3 uses a descriptive name (makes the revoke target obvious).
-
 ## Incident response
 
 ### Abuse / prompt-injection suspected
