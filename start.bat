@@ -1,7 +1,7 @@
 @echo off
 setlocal
 echo ============================================
-echo  HERM Platform -- Starting Development Stack
+echo  Future Horizons ASPT -- Starting Development Stack
 echo ============================================
 echo.
 

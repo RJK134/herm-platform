@@ -1,6 +1,6 @@
 # AI Governance
 
-AI usage in HERM Platform is deliberately narrow: one feature
+AI usage in Future Horizons ASPT is deliberately narrow: one feature
 (`/api/chat` → AI Assistant), one provider (Anthropic), one file
 (`server/src/services/ai-assistant.ts`). This document pins the policy.
 

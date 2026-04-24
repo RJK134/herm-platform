@@ -4,7 +4,7 @@
  */
 
 export const PRODUCT = {
-  name: 'HERM Platform',
+  name: 'Future Horizons ASPT',
   vendor: 'Future Horizons Education',
   supportEmail: 'support@futurehorizons.education',
 } as const;

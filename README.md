@@ -1,4 +1,4 @@
-# HERM Platform
+# Future Horizons ASPT
 
 Higher-education procurement intelligence: score, compare and shortlist SIS/LMS/CRM/HCM systems against the UCISA HERM v3.1 reference model (165 business capabilities).
 

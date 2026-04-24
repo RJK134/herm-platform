@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { PRODUCT } from '../lib/branding';
 
 export function NotFound() {
   const { t } = useTranslation('common');
@@ -18,7 +19,9 @@ export function NotFound() {
             {t('notFound.goBack', 'Go Back')}
           </button>
         </div>
-        <div className="mt-10 text-xs text-gray-400 dark:text-gray-600">HERM Platform v3.1 · Future Horizons Education</div>
+        <div className="mt-10 text-xs text-gray-400 dark:text-gray-600">
+          {PRODUCT.name} · {PRODUCT.vendor}
+        </div>
       </div>
     </div>
   );

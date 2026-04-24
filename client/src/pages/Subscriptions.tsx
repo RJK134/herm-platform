@@ -10,6 +10,7 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { Header } from '../components/layout/Header';
+import { PRODUCT } from '../lib/branding';
 
 // ── Interfaces ────────────────────────────────────────────────────────────────
 
@@ -236,6 +237,10 @@ export function Subscriptions() {
       {/* ── Tier Comparison ───────────────────────────────────────── */}
       <Card>
         <h3 className="font-semibold dark:text-white text-sm mb-4">{t("subscription.planComparison", "Plan Comparison")}</h3>
+        <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
+          {PRODUCT.name} plans add workspace, analytics, and API tooling. Access to the UCISA HERM v3.1 reference
+          model remains free on every tier.
+        </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

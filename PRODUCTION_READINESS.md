@@ -1,6 +1,6 @@
 # Production Readiness
 
-This document tracks what is in place to run HERM Platform in production and
+This document tracks what is in place to run Future Horizons ASPT in production and
 what is explicitly deferred. Update it as gaps close or new ones surface.
 
 ## HERM licence compliance

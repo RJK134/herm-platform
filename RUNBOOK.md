@@ -1,6 +1,6 @@
 # Runbook
 
-Day-two operations for HERM Platform. Commands assume the repo root and a
+Day-two operations for Future Horizons ASPT. Commands assume the repo root and a
 configured `.env` (see `.env.example`).
 
 ## Start / stop
