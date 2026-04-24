@@ -125,8 +125,13 @@ export const addEvaluationSchema = z.object({
   }).optional(),
 });
 
+export const importBasketShortlistSchema = z.object({
+  limit: z.number().int().min(1).max(10).optional(),
+});
+
 export type CreateProjectV2Input = z.infer<typeof createProjectV2Schema>;
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
 export type UpdateApprovalInput = z.infer<typeof updateApprovalSchema>;
 export type UpdateEvaluationInput = z.infer<typeof updateEvaluationSchema>;
 export type AddEvaluationInput = z.infer<typeof addEvaluationSchema>;
+export type ImportBasketShortlistInput = z.infer<typeof importBasketShortlistSchema>;

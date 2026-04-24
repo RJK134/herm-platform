@@ -112,6 +112,11 @@ interface CapabilityBasketItem {
 interface ShortlistedSystem {
   id: string;
   name: string;
+  vendor?: string;
+  category?: string;
+  status?: string;
+  score?: number | null;
+  shortlistEntryId?: string;
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -661,13 +666,20 @@ function TimelineView({ projectId }: { projectId: string }) {
   );
 }
 
-function EvaluationView({ projectId }: { projectId: string }) {
+function EvaluationView({
+  projectId,
+  basketId,
+}: {
+  projectId: string;
+  basketId?: string;
+}) {
   const { t } = useTranslation("procurement");
   const qc = useQueryClient();
   const [weights, setWeights] = useState<WeightingProfile>({
     framework: 40, technical: 25, commercial: 20, implementation: 10, references: 5,
   });
   const [addSystemId, setAddSystemId] = useState('');
+  const [importMessage, setImportMessage] = useState<string | null>(null);
 
   const { data: evaluations, isLoading } = useQuery({
     queryKey: ['procurement-v2-evaluations', projectId],
@@ -689,6 +701,22 @@ function EvaluationView({ projectId }: { projectId: string }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['procurement-v2-evaluations', projectId] });
       setAddSystemId('');
+    },
+  });
+
+  const importBasketMutation = useMutation({
+    mutationFn: () =>
+      axios.post<ApiResponse<{ importedCount: number }>>(
+        `/api/procurement/v2/projects/${projectId}/shortlist/import-basket`,
+        { limit: 5 },
+      ).then((r) => r.data.data),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['procurement-v2-shortlist', projectId] });
+      setImportMessage(
+        data.importedCount > 0
+          ? `Imported ${data.importedCount} basket-ranked systems into the shortlist.`
+          : 'Shortlist already reflects the linked basket recommendations.',
+      );
     },
   });
 
@@ -761,6 +789,56 @@ function EvaluationView({ projectId }: { projectId: string }) {
 
       {/* Add system */}
       <Card>
+        <div className="flex items-start justify-between gap-4 mb-3">
+          <div>
+            <h3 className="font-semibold text-gray-900 dark:text-white">
+              Linked Basket Shortlist
+            </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              {basketId
+                ? 'Import the top basket-ranked systems into the shortlist, then add them to evaluation.'
+                : 'Link a capability basket to this project to generate a shortlist from HERM basket scoring.'}
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => importBasketMutation.mutate()}
+            disabled={!basketId || importBasketMutation.isPending}
+          >
+            {importBasketMutation.isPending ? (
+              <><RefreshCw className="w-4 h-4 mr-1 animate-spin" /> Importing…</>
+            ) : (
+              'Import top basket matches'
+            )}
+          </Button>
+        </div>
+        {importMessage && (
+          <p className="text-sm text-emerald-600 dark:text-emerald-400 mb-3">
+            {importMessage}
+          </p>
+        )}
+        {shortlist.length > 0 ? (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {shortlist.map((system) => (
+              <span
+                key={system.shortlistEntryId ?? system.id}
+                className="inline-flex items-center gap-2 rounded-full bg-gray-100 dark:bg-gray-700 px-3 py-1 text-xs text-gray-700 dark:text-gray-200"
+              >
+                <span>{system.name}</span>
+                {typeof system.score === 'number' && (
+                  <span className="font-semibold text-teal-700 dark:text-teal-300">
+                    {system.score.toFixed(1)}%
+                  </span>
+                )}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            No shortlist entries yet.
+          </p>
+        )}
         <h3 className="font-semibold text-gray-900 dark:text-white mb-3">{t("evaluation.addSystemToEvaluation", "Add System to Evaluation")}</h3>
         <div className="flex items-center gap-2">
           <select
@@ -1356,7 +1434,11 @@ export function ProcurementProjects() {
 
       {/* Tab 4 — Evaluation */}
       {activeTab === 'evaluation' && selectedProjectId && (
-        <EvaluationView projectId={selectedProjectId} />
+        <EvaluationView
+          key={selectedProjectId}
+          projectId={selectedProjectId}
+          basketId={selectedProject?.basketId}
+        />
       )}
 
       {/* Create wizard modal */}
