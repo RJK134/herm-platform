@@ -64,20 +64,28 @@ export function RadarComparison() {
 
   const activeIds = selectedIds.length > 0 ? selectedIds : resolvedIds;
 
-  const canExport = Array.isArray(comparison) && comparison.length > 0 && !loadingCompare;
+  // Export is gated on the framework context being loaded. If we let
+  // the user click before `activeFramework` resolves, a HERM-scored
+  // comparison could ship without its CC-BY-NC-SA notice attached —
+  // a direct compliance gap flagged by BugBot.
+  const canExport =
+    Array.isArray(comparison) &&
+    comparison.length > 0 &&
+    !loadingCompare &&
+    !!activeFramework;
 
   const handleExportPdf = () => {
-    if (!canExport || !comparison) return;
+    if (!canExport || !comparison || !activeFramework) return;
     // `comparison` already has the shape the helper expects; narrow
     // the type to the persisted-row shape.
     const entries = comparison as unknown as RadarComparisonEntry[];
     downloadRadarComparisonPdf(
       entries,
       {
-        frameworkName: activeFramework?.name ?? 'Capability Framework',
+        frameworkName: activeFramework.name,
         // Only embed attribution for CC-licensed frameworks. Proprietary
         // frameworks (FHE) deliberately ship with no licence notice.
-        attribution: activeFramework?.licenceNotice ?? null,
+        attribution: activeFramework.licenceNotice ?? null,
       },
       `radar-comparison-${new Date().toISOString().slice(0, 10)}.pdf`,
     );

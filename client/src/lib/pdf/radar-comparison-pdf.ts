@@ -81,14 +81,21 @@ function renderRadarComparisonDoc(
   // where the footer will actually land — otherwise long notices
   // overlap body text near the page bottom.
   //
+  // Footer band (bottom-up):
+  //   [bottom margin]
+  //   attribution line N (baseline at pageHeight - margin)
+  //   …
+  //   attribution line 1
+  //   [gap]
+  //   "Page X of N"
+  //   [top of footer band]
+  //
   // CRITICAL: `splitTextToSize` uses the *current* font size to measure
   // character widths, so we MUST switch to the 8pt footer size before
-  // wrapping or we'll wrap at default ~16pt width (roughly half as
-  // many chars per line → double the lines → over-reserved footer →
-  // wasted vertical space on every page).
+  // wrapping or we'll wrap at default ~16pt width.
   const footerLineHeight = 10;
-  const pageNumberReserve = 20; // height for the "Page X of N" line
   const footerFontSize = 8;
+  const pageNumberGap = 14; // vertical space between page number and first attribution line
   let attributionLines: string[] = [];
   if (opts.attribution) {
     const priorFontSize = doc.getFontSize();
@@ -99,18 +106,27 @@ function renderRadarComparisonDoc(
     ) as string[];
     doc.setFontSize(priorFontSize);
   }
+  // Height of the attribution block, measured from its top baseline
+  // down to the bottom page margin (including the bottom margin as
+  // breathing room under the last line).
+  const attributionBlockHeight =
+    attributionLines.length > 0
+      ? attributionLines.length * footerLineHeight + margin
+      : 0;
+  // Page number occupies one line + a gap above the attribution block
+  // (or just one line of height at the bottom if no attribution).
+  const pageNumberBlockHeight =
+    attributionLines.length > 0
+      ? footerLineHeight + pageNumberGap
+      : margin; // no attribution: small bottom margin is enough
   // Total vertical footprint of the footer region, measured from the
-  // bottom of the page upward. Includes attribution lines, the page
-  // number, and a little breathing room so body text never kisses the
-  // footer baseline.
-  const footerHeight =
-    attributionLines.length * footerLineHeight + pageNumberReserve + 12;
-  // Any body element drawn at `y` must keep `y <= bodyMaxY` or the next
-  // element's baseline will overlap the footer.
+  // bottom of the page upward. Body content must not cross this.
+  const footerHeight = attributionBlockHeight + pageNumberBlockHeight;
+  // Any body element drawn at `y` must keep `y <= bodyMaxY`.
   const bodyMaxY = pageHeight - footerHeight;
-  // Conservative thresholds for the various body elements — each
-  // leaves a bit more headroom than its own row height so the page
-  // break fires BEFORE the last fitting row.
+  // Conservative thresholds per element type — each leaves a bit more
+  // headroom than its own row height so the page break fires BEFORE
+  // the last fitting row.
   const summaryRowBreak = bodyMaxY - 14;
   const sectionHeaderBreak = bodyMaxY - 40;
   const domainRowBreak = bodyMaxY - 12;
@@ -187,27 +203,45 @@ function renderRadarComparisonDoc(
   });
 
   // Footer on every page — HERM attribution is mandatory on offline
-  // derivatives of CC-licensed HERM content. Positioned using the
-  // `footerHeight` geometry computed above so body-content thresholds
-  // and footer placement agree exactly.
+  // derivatives of CC-licensed HERM content. Layout (bottom-up):
+  //   last attribution baseline ≈ pageHeight - margin
+  //   …wrapped attribution lines above…
+  //   page number on the line immediately above the first attribution
+  //   body content above bodyMaxY
+  // The page number lives *above* the attribution with a real gap so
+  // the two never share a Y coordinate.
   const pageCount = doc.getNumberOfPages();
   for (let p = 1; p <= pageCount; p++) {
     doc.setPage(p);
-    doc.setFont('helvetica', 'italic');
-    doc.setFontSize(8);
-    doc.setTextColor(120);
 
+    // Attribution block — bottom-anchored to the page margin so the
+    // last baseline sits at `pageHeight - margin`.
+    let attributionFirstBaseline: number | null = null;
     if (attributionLines.length > 0) {
-      const footerY =
-        pageHeight - footerHeight + footerLineHeight; // first baseline
-      doc.text(attributionLines, margin, footerY);
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(footerFontSize);
+      doc.setTextColor(120);
+      const attributionLastBaseline = pageHeight - margin;
+      attributionFirstBaseline =
+        attributionLastBaseline - (attributionLines.length - 1) * footerLineHeight;
+      doc.text(attributionLines, margin, attributionFirstBaseline);
     }
 
+    // Page number. When attribution is present, sit directly above the
+    // attribution block with a `pageNumberGap` buffer so they never
+    // share a Y. When absent, the old behaviour (below the bottom
+    // margin) is fine.
     doc.setFont('helvetica', 'normal');
+    doc.setFontSize(footerFontSize);
+    doc.setTextColor(120);
+    const pageNumberY =
+      attributionFirstBaseline !== null
+        ? attributionFirstBaseline - pageNumberGap
+        : pageHeight - margin + 8;
     doc.text(
       `Page ${p} of ${pageCount}`,
       pageWidth - margin,
-      pageHeight - margin + 8,
+      pageNumberY,
       { align: 'right' },
     );
   }
