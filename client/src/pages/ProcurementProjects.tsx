@@ -13,6 +13,7 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { ProjectStatusPill } from '../components/procurement/ProjectStatusPill';
+import { api } from '../lib/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -684,20 +685,18 @@ function EvaluationView({
   const { data: evaluations, isLoading } = useQuery({
     queryKey: ['procurement-v2-evaluations', projectId],
     queryFn: () =>
-      axios.get<ApiResponse<EvaluationEntry[]>>(`/api/procurement/v2/projects/${projectId}/evaluations`)
-        .then((r) => r.data.data),
+      api.getEvaluations(projectId).then((r) => r.data.data as EvaluationEntry[]),
   });
 
   const { data: shortlistData } = useQuery({
     queryKey: ['procurement-v2-shortlist', projectId],
     queryFn: () =>
-      axios.get<ApiResponse<ShortlistedSystem[]>>(`/api/procurement/v2/projects/${projectId}/shortlist`)
-        .then((r) => r.data.data),
+      api.getProjectShortlistV2(projectId).then((r) => r.data.data as ShortlistedSystem[]),
   });
 
   const addSystemMutation = useMutation({
     mutationFn: (systemId: string) =>
-      axios.post<ApiResponse<unknown>>(`/api/procurement/v2/projects/${projectId}/evaluations`, { systemId }),
+      api.addEvaluation(projectId, { systemId }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['procurement-v2-evaluations', projectId] });
       setAddSystemId('');
@@ -706,10 +705,7 @@ function EvaluationView({
 
   const importBasketMutation = useMutation({
     mutationFn: () =>
-      axios.post<ApiResponse<{ importedCount: number }>>(
-        `/api/procurement/v2/projects/${projectId}/shortlist/import-basket`,
-        { limit: 5 },
-      ).then((r) => r.data.data),
+      api.importBasketShortlistV2(projectId, { limit: 5 }).then((r) => r.data.data),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['procurement-v2-shortlist', projectId] });
       setImportMessage(
@@ -722,7 +718,7 @@ function EvaluationView({
 
   const updateScoreMutation = useMutation({
     mutationFn: ({ entryId, field, value }: { entryId: string; field: string; value: number }) =>
-      axios.patch<ApiResponse<unknown>>(`/api/procurement/v2/projects/${projectId}/evaluations/${entryId}`, { [field]: value }),
+      api.updateEvaluation(projectId, entryId, { [field]: value }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['procurement-v2-evaluations', projectId] });
     },
@@ -982,13 +978,18 @@ function CreateProjectWizard({
   const { data: baskets } = useQuery({
     queryKey: ['baskets'],
     queryFn: () =>
-      axios.get<ApiResponse<CapabilityBasketItem[]>>('/api/baskets').then((r) => r.data.data),
+      api.listBaskets().then((r) =>
+        r.data.data.map((basket) => ({
+          id: basket.id,
+          name: basket.name,
+          itemCount: basket.items.length,
+        })),
+      ),
   });
 
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
-      axios.post<ApiResponse<{ id: string }>>('/api/procurement/v2/projects', data)
-        .then((r) => r.data.data),
+      api.createProjectV2(data).then((r) => r.data.data as { id: string }),
     onSuccess: (data) => onCreated(data.id),
   });
 
