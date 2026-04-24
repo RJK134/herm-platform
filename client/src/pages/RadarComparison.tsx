@@ -10,10 +10,7 @@ import { useFramework } from '../contexts/FrameworkContext';
 import { CATEGORY_COLORS } from '../lib/constants';
 import { formatPercent } from '../lib/utils';
 import { LicenceAttribution } from '../components/LicenceAttribution';
-import {
-  downloadRadarComparisonPdf,
-  type RadarComparisonEntry,
-} from '../lib/pdf/radar-comparison-pdf';
+import { downloadRadarComparisonPdf } from '../lib/pdf/radar-comparison-pdf';
 
 const DEFAULT_IDS_SLUGS = ['sits', 'banner', 'workday_student', 'sjms'];
 
@@ -76,11 +73,12 @@ export function RadarComparison() {
 
   const handleExportPdf = () => {
     if (!canExport || !comparison || !activeFramework) return;
-    // `comparison` already has the shape the helper expects; narrow
-    // the type to the persisted-row shape.
-    const entries = comparison as unknown as RadarComparisonEntry[];
+    // `LeaderboardEntry` is structurally a superset of
+    // `RadarComparisonEntry`, so pass it directly — if the API shape
+    // ever diverges (e.g. a renamed field) TypeScript will flag it
+    // here instead of the PDF rendering `undefined`.
     downloadRadarComparisonPdf(
-      entries,
+      comparison,
       {
         frameworkName: activeFramework.name,
         // Only embed attribution for CC-licensed frameworks. Proprietary
