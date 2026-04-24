@@ -14,7 +14,10 @@ export class EvaluationsService {
         data: {
           name: data.name,
           description: data.description,
-          institutionId: data.institutionId ?? institutionId,
+          // `institutionId` is always the caller's JWT tenant. The
+          // schema no longer accepts it from the body, so there is no
+          // override path.
+          institutionId,
           leadUserId,
           basketId: data.basketId,
           deadline: data.deadline ? new Date(data.deadline) : undefined,
@@ -52,7 +55,7 @@ export class EvaluationsService {
       return proj;
     });
 
-    return this.getProject(project.id);
+    return this.getProject(project.id, institutionId);
   }
 
   async listProjects(institutionId: string) {
@@ -82,9 +85,13 @@ export class EvaluationsService {
     });
   }
 
-  async getProject(id: string) {
-    const project = await prisma.evaluationProject.findUnique({
-      where: { id },
+  async getProject(id: string, institutionId: string) {
+    // Compound filter: `findFirst({ where: { id, institutionId } })`
+    // returns null for both "does not exist" and "exists in another
+    // tenant". Callers surface that as a 404 via `NotFoundError`, so
+    // no existence-oracle leaks the presence of another tenant's row.
+    const project = await prisma.evaluationProject.findFirst({
+      where: { id, institutionId },
       include: {
         systems: {
           include: {
@@ -111,14 +118,23 @@ export class EvaluationsService {
     return project;
   }
 
-  async updateProject(id: string, data: UpdateEvaluationProjectInput) {
-    return prisma.evaluationProject.update({
-      where: { id },
+  async updateProject(id: string, institutionId: string, data: UpdateEvaluationProjectInput) {
+    // Guard with the compound filter before mutating. `updateMany` with
+    // `where: { id, institutionId }` atomically enforces tenant scope;
+    // if no rows match, the subsequent `findUnique` falls through to
+    // a 404 via `getProject`, matching the "does not exist / wrong
+    // tenant" response shape.
+    const result = await prisma.evaluationProject.updateMany({
+      where: { id, institutionId },
       data: {
         ...data,
         deadline: data.deadline ? new Date(data.deadline) : data.deadline === null ? null : undefined,
       },
     });
+    if (result.count === 0) {
+      throw new NotFoundError('Evaluation project not found');
+    }
+    return this.getProject(id, institutionId);
   }
 
   async addMember(projectId: string, userId: string, role: string) {
