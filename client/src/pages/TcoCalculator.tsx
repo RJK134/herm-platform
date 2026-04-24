@@ -27,6 +27,20 @@ import { formatCurrency } from '../lib/utils';
 // Preset index → persisted `institutionSize` enum on the server.
 const SIZE_KEYS: readonly InstitutionSize[] = ['small', 'medium', 'large', 'xlarge'];
 
+/**
+ * Classify any student count to a Prisma-enum-safe `institutionSize`.
+ * Used when the user enters a custom student count — the `sizePreset`
+ * state can be stale in that path, so we derive the enum from the
+ * count at calculate-time. Thresholds mirror the preset definitions
+ * (3k / 12k / 25k / 50k+).
+ */
+function classifyInstitutionSize(students: number): InstitutionSize {
+  if (students < 7500) return 'small';
+  if (students < 18500) return 'medium';
+  if (students < 37500) return 'large';
+  return 'xlarge';
+}
+
 ChartJS.register(
   ArcElement,
   Tooltip,
@@ -106,6 +120,17 @@ export function TcoCalculator() {
   const [customStudents, setCustomStudents] = useState<number | null>(null);
   const [horizon, setHorizon] = useState(5);
   const [result, setResult] = useState<TcoResult | null>(null);
+  // Snapshot of the inputs that produced `result`. We persist the saved
+  // estimate from this snapshot — not from live state — so changing
+  // inputs after calculating but before saving can't produce an
+  // internally inconsistent row (e.g. horizonYears=10 alongside a
+  // 5-year totalTco). Cleared whenever `result` is invalidated.
+  const [resultInputs, setResultInputs] = useState<{
+    systemId: string;
+    studentCount: number;
+    horizonYears: number;
+    institutionSize: InstitutionSize;
+  } | null>(null);
   const [compareResults, setCompareResults] = useState<CompareResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -129,6 +154,20 @@ export function TcoCalculator() {
         const slug = getSlugForId(selectedSystemId);
         const res = await api.calculateTco({ systemSlug: slug, studentCount, horizonYears: horizon });
         setResult(res.data.data as TcoResult);
+        // Snapshot the inputs so a subsequent Save uses the numbers the
+        // user actually computed against, not whatever they tweaked
+        // afterwards. `institutionSize` is classified from the snapshot
+        // `studentCount` — this fixes the custom-students case where
+        // `sizePreset` would otherwise be stale.
+        setResultInputs({
+          systemId: selectedSystemId,
+          studentCount,
+          horizonYears: horizon,
+          institutionSize:
+            customStudents === null
+              ? (SIZE_KEYS[sizePreset] ?? classifyInstitutionSize(studentCount))
+              : classifyInstitutionSize(studentCount),
+        });
         setCompareResults([]);
       } else {
         if (compareSystemIds.length === 0) {
@@ -139,37 +178,51 @@ export function TcoCalculator() {
         const res = await api.compareTco({ systemSlugs: slugs, studentCount, horizonYears: horizon });
         setCompareResults(res.data.data as CompareResult[]);
         setResult(null);
+        setResultInputs(null);
       }
     } catch (e) {
       setError('Calculation failed — please check your inputs');
       console.error('TCO calculation failed:', e);
+      // Don't leave a stale snapshot beside a failed calc.
+      setResultInputs(null);
     } finally {
       setLoading(false);
     }
   };
 
-  // Derive the persisted-shape payload from the current calculation.
-  // Cost breakdown items are per-year; multiply licence/staff/support/
-  // infrastructure/customDev by `horizon` so the saved row matches the
-  // lifetime-cost semantics the `TcoEstimate` columns expect.
+  // Are the live inputs still aligned with the snapshot that produced
+  // `result`? If the user tweaked a slider after calculating, we treat
+  // the result as dirty and disable Save — the alternative (saving a
+  // mix of stale totals and new inputs) was a BugBot finding.
+  const snapshotMatchesLive =
+    result !== null &&
+    resultInputs !== null &&
+    resultInputs.systemId === selectedSystemId &&
+    resultInputs.studentCount === studentCount &&
+    resultInputs.horizonYears === horizon;
+
+  // Derive the persisted-shape payload EXCLUSIVELY from the snapshot +
+  // the `result` it produced. Never mix live state in. Per-year
+  // breakdown items are scaled by the snapshot's `horizonYears` so the
+  // saved row matches `TcoEstimate`'s lifetime-cost semantics.
   const savePayload: TcoSavePayload | null =
-    result && selectedSystemId
+    result && resultInputs && snapshotMatchesLive
       ? {
-          systemId: selectedSystemId,
-          institutionSize: SIZE_KEYS[sizePreset] ?? 'medium',
-          studentFte: studentCount,
+          systemId: resultInputs.systemId,
+          institutionSize: resultInputs.institutionSize,
+          studentFte: resultInputs.studentCount,
           // No staff-FTE input yet — 0 is the schema-safe default; the
           // user can edit on the backend if needed (future enhancement).
           staffFte: 0,
-          horizonYears: horizon,
+          horizonYears: resultInputs.horizonYears,
           licenceCostYear1: result.breakdown.licence,
           implementationCost: result.breakdown.implementation,
-          internalStaffCost: result.breakdown.staff * horizon,
+          internalStaffCost: result.breakdown.staff * resultInputs.horizonYears,
           trainingCost: 0,
-          infrastructureCost: result.breakdown.infrastructure * horizon,
+          infrastructureCost: result.breakdown.infrastructure * resultInputs.horizonYears,
           integrationCost: 0,
-          supportCost: result.breakdown.support * horizon,
-          customDevCost: result.breakdown.customDev * horizon,
+          supportCost: result.breakdown.support * resultInputs.horizonYears,
+          customDevCost: result.breakdown.customDev * resultInputs.horizonYears,
           totalTco: result.totalTco,
           annualRunRate: result.annualRunRate,
           perStudentCost: result.perStudentAnnual,
