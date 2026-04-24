@@ -179,7 +179,7 @@ export const getEvaluations = async (req: Request, res: Response, next: NextFunc
 // GET /api/procurement/v2/projects/:id/shortlist
 export const getShortlistV2 = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const entries = await procurementService.getShortlistSystems(req.params['id'] as string);
+    const entries = await procurementService.getShortlistSystems(req.params.id);
     res.json({ success: true, data: entries });
   } catch (err) { next(err); }
 };
@@ -189,7 +189,7 @@ export const importBasketShortlistV2 = async (req: Request, res: Response, next:
   try {
     const data = importBasketShortlistSchema.parse(req.body);
     const result = await procurementService.importBasketToShortlist(
-      req.params['id'] as string,
+      req.params.id,
       data,
     );
     res.json({ success: true, data: result });
