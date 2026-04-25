@@ -122,6 +122,43 @@ describe('PATCH /api/evaluations/:id — transactional audit', () => {
     });
   });
 
+  it('normalises deadline to ISO strings on both sides of the audit', async () => {
+    // Regression for BugBot LOW finding on PR #28: Prisma returns
+    // `prior.deadline` as a `Date` while the Zod schema preserves
+    // `data.deadline` as a raw string, so without normalisation the
+    // serialised JSON in `AuditLog.changes` would mix
+    // `'2026-04-25T00:00:00.000Z'` (Date) and `'2026-04-25'` (string).
+    // Both sides now go through `.toISOString()` (or null).
+    const priorDate = new Date('2026-03-01T00:00:00.000Z');
+    vi.mocked(prisma.evaluationProject.findFirst).mockResolvedValueOnce({
+      name: 'Original',
+      description: null,
+      status: 'planning',
+      deadline: priorDate,
+      basketId: null,
+    } as never);
+    vi.mocked(prisma.evaluationProject.updateMany).mockResolvedValueOnce({ count: 1 } as never);
+    vi.mocked(prisma.evaluationProject.findFirst).mockResolvedValueOnce({
+      id: 'eval-1', systems: [], members: [], domainAssignments: [],
+    } as never);
+
+    const token = makeToken();
+    const res = await request(app)
+      .patch('/api/evaluations/eval-1')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ deadline: '2026-12-31' });
+
+    expect(res.status).toBe(200);
+    expect(prisma.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        changes: expect.objectContaining({
+          fromDeadline: '2026-03-01T00:00:00.000Z',
+          toDeadline: '2026-12-31T00:00:00.000Z',
+        }),
+      }),
+    });
+  });
+
   it('records description changes in the audit changes payload', async () => {
     // Regression for BugBot finding on PR #28: the prior snapshot
     // omitted `description`, so a `PATCH { description: 'new' }`

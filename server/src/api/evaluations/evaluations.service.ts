@@ -170,8 +170,15 @@ export class EvaluationsService {
             }),
             ...(data.status !== undefined && { fromStatus: prior.status, toStatus: data.status }),
             ...(data.deadline !== undefined && {
-              fromDeadline: prior.deadline,
-              toDeadline: data.deadline,
+              // Normalise both sides to ISO-8601 strings (or null) so a
+              // governance reviewer comparing before/after sees the
+              // same shape on both sides. Prisma returns `prior.deadline`
+              // as `Date`, while `data.deadline` is the raw client
+              // string from the Zod schema — without normalisation the
+              // serialised JSON would mix `2026-04-25T00:00:00.000Z`
+              // (Date) and `2026-04-25` (string).
+              fromDeadline: prior.deadline ? prior.deadline.toISOString() : null,
+              toDeadline: data.deadline ? new Date(data.deadline).toISOString() : null,
             }),
             ...(data.basketId !== undefined && {
               fromBasketId: prior.basketId,
