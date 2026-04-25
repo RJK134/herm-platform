@@ -1,0 +1,8 @@
+{
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "install": "npm ci --cache .npm --prefer-offline --no-audit && npm run db:generate",
+  "start": ""
+}
