@@ -1,12 +1,17 @@
 import { Router } from 'express';
-import { optionalJWT } from '../../middleware/auth';
+import { authenticateJWT, optionalJWT } from '../../middleware/auth';
 import { generatePreview, saveDocument, listDocuments, getDocument, updateDocument, deleteDocument } from './documents.controller';
 
 const router = Router();
-router.use(optionalJWT);
 
-/** POST /api/documents/generate — stateless preview (no save) */
-router.post('/generate', generatePreview);
+/** POST /api/documents/generate — stateless preview (no save). Public-friendly. */
+router.post('/generate', optionalJWT, generatePreview);
+
+// Persisted documents are tenant-scoped per HERM_COMPLIANCE.md
+// "Authenticated (any tier)". JWT is mandatory on the persisted-write
+// surface so `institutionId` is always stamped from the token rather
+// than the request body.
+router.use(authenticateJWT);
 
 /** POST /api/documents — generate + save */
 router.post('/', saveDocument);

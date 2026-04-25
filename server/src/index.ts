@@ -2,7 +2,6 @@ import prisma from './utils/prisma';
 import { createApp } from './app';
 import { PRODUCT } from './lib/branding';
 import { logger } from './lib/logger';
-import { PRODUCT } from './lib/branding';
 
 const app = createApp();
 const PORT = Number(process.env['PORT'] ?? 3002);
