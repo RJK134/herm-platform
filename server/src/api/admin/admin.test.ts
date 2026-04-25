@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
-import app from '../../app';
+import { createApp } from '../../app';
+const app = createApp();
 
 const JWT_SECRET = process.env['JWT_SECRET'] ?? 'dev-secret';
 

@@ -63,8 +63,9 @@ vi.mock('../../../utils/prisma', () => {
   return mocked;
 });
 
-import app from '../../../app';
+import { createApp } from '../../../app';
 import prisma from '../../../utils/prisma';
+const app = createApp();
 
 const baseCreateBody = {
   name: 'FY26 SIS evaluation',

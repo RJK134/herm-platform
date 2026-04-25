@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
-import app from '../../app';
+import { createApp } from '../../app';
 import bcrypt from 'bcryptjs';
+const app = createApp();
 
 const HASH = bcrypt.hashSync('password123', 1); // fast hash for tests
 

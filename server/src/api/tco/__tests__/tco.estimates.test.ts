@@ -44,8 +44,9 @@ vi.mock('../../../utils/prisma', () => {
   };
 });
 
-import app from '../../../app';
+import { createApp } from '../../../app';
 import prisma from '../../../utils/prisma';
+const app = createApp();
 
 const validSaveBody = {
   name: 'Workday 10k-student horizon',

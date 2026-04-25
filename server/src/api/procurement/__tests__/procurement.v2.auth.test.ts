@@ -60,9 +60,10 @@ vi.mock('../../../services/procurement-engine', () => ({
   },
 }));
 
-import app from '../../../app';
+import { createApp } from '../../../app';
 import prisma from '../../../utils/prisma';
 import { procurementEngine } from '../../../services/procurement-engine';
+const app = createApp();
 
 const validCreateBody = {
   name: 'FY26 SIS procurement',
