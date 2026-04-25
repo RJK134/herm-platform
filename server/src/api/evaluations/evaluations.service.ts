@@ -133,7 +133,7 @@ export class EvaluationsService {
     await prisma.$transaction(async (tx) => {
       const prior = await tx.evaluationProject.findFirst({
         where: { id, institutionId },
-        select: { name: true, status: true, deadline: true, basketId: true },
+        select: { name: true, description: true, status: true, deadline: true, basketId: true },
       });
       if (!prior) throw new NotFoundError('Evaluation project not found');
 
@@ -159,8 +159,15 @@ export class EvaluationsService {
           entityId: id,
           changes: {
             // Only record fields the client actually sent — avoids a
-            // noisy log full of `null → null` for absent fields.
+            // noisy log full of `null → null` for absent fields. All
+            // updatable columns on UpdateEvaluationProjectInput must
+            // appear here; otherwise a governance review can't
+            // reconstruct what changed.
             ...(data.name !== undefined && { fromName: prior.name, toName: data.name }),
+            ...(data.description !== undefined && {
+              fromDescription: prior.description,
+              toDescription: data.description,
+            }),
             ...(data.status !== undefined && { fromStatus: prior.status, toStatus: data.status }),
             ...(data.deadline !== undefined && {
               fromDeadline: prior.deadline,
@@ -326,7 +333,15 @@ export class EvaluationsService {
       const expectedTotal = totalCaps * totalSystems;
       const actualTotal = await tx.evaluationDomainScore.count({ where: { assignmentId } });
 
-      const justCompleted = actualTotal >= expectedTotal && expectedTotal > 0;
+      // `complete` reflects the post-submission state — used by the
+      // controller's response shape. `justCompleted` is the strict
+      // edge: it is true only when THIS submission flipped the
+      // assignment from non-completed to completed. Re-submissions
+      // against an already-completed assignment must not (a) overwrite
+      // the original `completedAt` timestamp or (b) emit a misleading
+      // "this submission completed it" audit log.
+      const complete = actualTotal >= expectedTotal && expectedTotal > 0;
+      const justCompleted = complete && assignment.status !== 'completed';
       if (justCompleted) {
         await tx.evaluationDomainAssignment.update({
           where: { id: assignmentId },
@@ -348,6 +363,7 @@ export class EvaluationsService {
           changes: {
             domainId: assignment.domainId,
             projectId: assignment.projectId,
+            priorStatus: assignment.status,
             scoresSubmitted: data.scores.length,
             scoresTotal: actualTotal,
             scoresExpected: expectedTotal,
@@ -357,7 +373,7 @@ export class EvaluationsService {
         },
       });
 
-      return { submitted: data.scores.length, complete: justCompleted };
+      return { submitted: data.scores.length, complete };
     });
   }
 

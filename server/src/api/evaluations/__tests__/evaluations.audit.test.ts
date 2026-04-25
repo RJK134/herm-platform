@@ -122,6 +122,44 @@ describe('PATCH /api/evaluations/:id — transactional audit', () => {
     });
   });
 
+  it('records description changes in the audit changes payload', async () => {
+    // Regression for BugBot finding on PR #28: the prior snapshot
+    // omitted `description`, so a `PATCH { description: 'new' }`
+    // would update the row but leave the audit log silent on the
+    // change — a governance gap. The snapshot now includes
+    // description and the changes payload conditionally records it.
+    vi.mocked(prisma.evaluationProject.findFirst).mockResolvedValueOnce({
+      name: 'Original',
+      description: 'old description',
+      status: 'planning',
+      deadline: null,
+      basketId: null,
+    } as never);
+    vi.mocked(prisma.evaluationProject.updateMany).mockResolvedValueOnce({ count: 1 } as never);
+    vi.mocked(prisma.evaluationProject.findFirst).mockResolvedValueOnce({
+      id: 'eval-1',
+      systems: [],
+      members: [],
+      domainAssignments: [],
+    } as never);
+
+    const token = makeToken({ userId: 'u-actor', name: 'Actor' });
+    const res = await request(app)
+      .patch('/api/evaluations/eval-1')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ description: 'new description' });
+
+    expect(res.status).toBe(200);
+    expect(prisma.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        changes: expect.objectContaining({
+          fromDescription: 'old description',
+          toDescription: 'new description',
+        }),
+      }),
+    });
+  });
+
   it('returns 404 and does NOT write an audit log when project is missing', async () => {
     vi.mocked(prisma.evaluationProject.findFirst).mockResolvedValueOnce(null);
 
@@ -145,6 +183,7 @@ describe('EvaluationsService.submitDomainScores — transactional audit', () => 
       id: 'asn-1',
       domainId: 'dom-1',
       projectId: 'proj-1',
+      status: 'pending',
       domain: { capabilities: [{ id: 'c-1' }, { id: 'c-2' }] },
       project: { systems: [{ systemId: 'sys-1' }] },
     } as never);
@@ -192,6 +231,7 @@ describe('EvaluationsService.submitDomainScores — transactional audit', () => 
       id: 'asn-1',
       domainId: 'dom-1',
       projectId: 'proj-1',
+      status: 'pending',
       domain: { capabilities: [{ id: 'c-1' }, { id: 'c-2' }] },
       project: { systems: [{ systemId: 'sys-1' }] },
     } as never);
@@ -220,6 +260,46 @@ describe('EvaluationsService.submitDomainScores — transactional audit', () => 
     ).rejects.toMatchObject({ statusCode: 404 });
     expect(prisma.evaluationDomainScore.upsert).not.toHaveBeenCalled();
     expect(prisma.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('does NOT re-flip completion (or overwrite completedAt) when assignment is already completed', async () => {
+    // Regression for BugBot finding on PR #28: `justCompleted` was
+    // computed from score count alone, so a re-submission against an
+    // assignment that was *already* `status: completed` would
+    // (a) emit a misleading audit log claiming "this submission
+    // completed it" and (b) overwrite the original `completedAt`
+    // timestamp with `new Date()`. Snapshotting `assignment.status`
+    // and gating the flip on the prior status closes both holes.
+    vi.mocked(prisma.evaluationDomainAssignment.findUnique).mockResolvedValueOnce({
+      id: 'asn-1',
+      domainId: 'dom-1',
+      projectId: 'proj-1',
+      status: 'completed', // already complete from a prior submission
+      domain: { capabilities: [{ id: 'c-1' }, { id: 'c-2' }] },
+      project: { systems: [{ systemId: 'sys-1' }] },
+    } as never);
+    vi.mocked(prisma.evaluationDomainScore.upsert).mockResolvedValue({} as never);
+    vi.mocked(prisma.evaluationDomainScore.count).mockResolvedValueOnce(2);
+
+    const result = await svc.submitDomainScores(
+      'asn-1',
+      { scores: [{ systemId: 'sys-1', capabilityId: 'c-1', value: 50 }] },
+      { userId: 'u-actor', name: 'Actor' },
+    );
+
+    // `complete` still reflects the post-submission state, but
+    // `justCompleted` MUST be false because the prior status was
+    // already 'completed'.
+    expect(result).toEqual({ submitted: 1, complete: true });
+    expect(prisma.evaluationDomainAssignment.update).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        changes: expect.objectContaining({
+          priorStatus: 'completed',
+          justCompleted: false,
+        }),
+      }),
+    });
   });
 });
 
