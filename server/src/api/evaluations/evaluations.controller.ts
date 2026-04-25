@@ -8,7 +8,7 @@ import {
   submitDomainScoresSchema,
   addSystemSchema,
 } from './evaluations.schema';
-import { NotFoundError } from '../../utils/errors';
+import { NotFoundError, ValidationError } from '../../utils/errors';
 
 const svc = new EvaluationsService();
 
@@ -60,6 +60,7 @@ export const updateProject = async (req: Request, res: Response, next: NextFunct
       req.params['id'] as string,
       req.user!.institutionId,
       data,
+      { userId: req.user!.userId, name: req.user!.name },
     );
     res.json({ success: true, data: result });
   } catch (err) { next(err); }
@@ -79,8 +80,11 @@ export const addMember = async (req: Request, res: Response, next: NextFunction)
       userId = user.id;
     }
     if (!userId) {
-      res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'userId or email required' } });
-      return;
+      // Throw so the global errorHandler renders the standard
+      // `{ success, error: { code, message, requestId } }` envelope —
+      // matches every other validation failure on the surface and
+      // keeps requestId attribution working.
+      throw new ValidationError('userId or email required');
     }
     const result = await svc.addMember(projectId, userId, body.role);
     res.status(201).json({ success: true, data: result });
@@ -127,7 +131,11 @@ export const getDomainProgress = async (req: Request, res: Response, next: NextF
 export const submitDomainScores = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const data = submitDomainScoresSchema.parse(req.body);
-    const result = await svc.submitDomainScores(req.params['domainId'] as string, data);
+    const result = await svc.submitDomainScores(
+      req.params['domainId'] as string,
+      data,
+      { userId: req.user!.userId, name: req.user!.name },
+    );
     res.json({ success: true, data: result });
   } catch (err) { next(err); }
 };
