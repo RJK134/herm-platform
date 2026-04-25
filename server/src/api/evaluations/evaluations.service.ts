@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import prisma from '../../utils/prisma';
 import { NotFoundError, ConflictError } from '../../utils/errors';
 import type {
@@ -138,15 +139,22 @@ export class EvaluationsService {
   }
 
   async addMember(projectId: string, userId: string, role: string) {
-    const existing = await prisma.evaluationMember.findUnique({
-      where: { projectId_userId: { projectId, userId } },
-    });
-    if (existing) throw new ConflictError('User is already a member of this project');
-
-    return prisma.evaluationMember.create({
-      data: { projectId, userId, role },
-      include: { user: { select: { id: true, name: true, email: true } } },
-    });
+    // Race-safe: the previous `findUnique + create` could double-submit
+    // past the check into a Prisma P2002 (unique constraint violation)
+    // that leaked out as a 500. Rely on the unique constraint itself
+    // as the serialisation point — the first `create` wins, the second
+    // throws P2002 which we translate to our normal `ConflictError`.
+    try {
+      return await prisma.evaluationMember.create({
+        data: { projectId, userId, role },
+        include: { user: { select: { id: true, name: true, email: true } } },
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictError('User is already a member of this project');
+      }
+      throw err;
+    }
   }
 
   async removeMember(projectId: string, memberId: string) {
@@ -155,15 +163,19 @@ export class EvaluationsService {
   }
 
   async addSystem(projectId: string, systemId: string) {
-    const existing = await prisma.evaluationSystem.findUnique({
-      where: { projectId_systemId: { projectId, systemId } },
-    });
-    if (existing) throw new ConflictError('System is already in this evaluation');
-
-    return prisma.evaluationSystem.create({
-      data: { projectId, systemId },
-      include: { system: { select: { id: true, name: true, vendor: true } } },
-    });
+    // Same race-safe shape as addMember — let the unique constraint
+    // serialise concurrent adds instead of the stale findUnique check.
+    try {
+      return await prisma.evaluationSystem.create({
+        data: { projectId, systemId },
+        include: { system: { select: { id: true, name: true, vendor: true } } },
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictError('System is already in this evaluation');
+      }
+      throw err;
+    }
   }
 
   async removeSystem(projectId: string, systemId: string) {

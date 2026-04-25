@@ -95,7 +95,13 @@ export const getProjectV2 = async (req: Request, res: Response, next: NextFuncti
 // POST /api/procurement/v2/projects/:id/stages/:stageId/advance
 export const advanceStage = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const result = await procurementEngine.advanceStage(req.params['id'] as string);
+    // Route is behind `authenticateJWT`, so `req.user` is guaranteed.
+    // Pass actor through so the engine records a transactional audit
+    // log alongside the stage state change.
+    const result = await procurementEngine.advanceStage(req.params['id'] as string, {
+      userId: req.user!.userId,
+      name: req.user!.name,
+    });
     if (!result.success) {
       res.status(422).json({ success: false, error: { code: 'COMPLIANCE_FAILURE', message: 'Stage cannot be advanced', details: result.failures } });
       return;
@@ -108,13 +114,47 @@ export const advanceStage = async (req: Request, res: Response, next: NextFuncti
 export const updateTask = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const data = updateTaskSchema.parse(req.body);
-    const task = await prisma.stageTask.update({
-      where: { id: req.params['taskId'] as string },
-      data: {
-        ...data,
-        completedAt: data.isCompleted ? new Date() : null,
-        completedBy: data.isCompleted ? (data.completedBy ?? req.user?.name ?? 'user') : null,
-      },
+    const taskId = req.params['taskId'] as string;
+
+    // Callback transaction: read prior state, write, log. A concurrent
+    // writer can no longer leave the AuditLog pointing at a stale
+    // "before" snapshot.
+    const task = await prisma.$transaction(async (tx) => {
+      const prior = await tx.stageTask.findUnique({
+        where: { id: taskId },
+        select: { isCompleted: true, completedBy: true, completedAt: true },
+      });
+      if (!prior) throw new NotFoundError('Task not found');
+
+      const updated = await tx.stageTask.update({
+        where: { id: taskId },
+        data: {
+          ...data,
+          completedAt: data.isCompleted ? new Date() : null,
+          // Completion attribution comes from the JWT when flagging
+          // complete. An explicit `data.completedBy` is only honoured
+          // when present; the old `?? 'user'` fallback is gone now
+          // that the route is JWT-gated.
+          completedBy: data.isCompleted ? (data.completedBy ?? req.user!.name) : null,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          userId: req.user!.userId,
+          action: 'procurement.task.update',
+          entityType: 'StageTask',
+          entityId: taskId,
+          changes: {
+            fromCompleted: prior.isCompleted,
+            toCompleted: updated.isCompleted,
+            completedBy: updated.completedBy,
+            actorName: req.user!.name,
+          },
+        },
+      });
+
+      return updated;
     });
     res.json({ success: true, data: task });
   } catch (err) { next(err); }
@@ -124,9 +164,37 @@ export const updateTask = async (req: Request, res: Response, next: NextFunction
 export const updateApproval = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const data = updateApprovalSchema.parse(req.body);
-    const approval = await prisma.stageApproval.update({
-      where: { id: req.params['approvalId'] as string },
-      data: { ...data, decidedAt: new Date() },
+    const approvalId = req.params['approvalId'] as string;
+
+    const approval = await prisma.$transaction(async (tx) => {
+      const prior = await tx.stageApproval.findUnique({
+        where: { id: approvalId },
+        select: { status: true, approverName: true, comments: true },
+      });
+      if (!prior) throw new NotFoundError('Approval not found');
+
+      const updated = await tx.stageApproval.update({
+        where: { id: approvalId },
+        data: { ...data, decidedAt: new Date() },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          userId: req.user!.userId,
+          action: 'procurement.approval.decide',
+          entityType: 'StageApproval',
+          entityId: approvalId,
+          changes: {
+            fromStatus: prior.status,
+            toStatus: updated.status,
+            approverName: updated.approverName,
+            comments: updated.comments,
+            actorName: req.user!.name,
+          },
+        },
+      });
+
+      return updated;
     });
     res.json({ success: true, data: approval });
   } catch (err) { next(err); }
@@ -156,17 +224,51 @@ export const getTimeline = async (req: Request, res: Response, next: NextFunctio
 export const addEvaluation = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const data = addEvaluationSchema.parse(req.body);
-    const evaluation = await prisma.procurementEvaluation.upsert({
-      where: { projectId_systemId_evaluatorId: { projectId: req.params['id'] as string, systemId: data.systemId, evaluatorId: req.user?.userId ?? 'anonymous' } },
-      update: { weightingProfile: (data.weightingProfile ?? { framework: 40, technical: 25, commercial: 20, implementation: 10, reference: 5 }) as unknown as import('@prisma/client').Prisma.InputJsonValue },
-      create: {
-        projectId: req.params['id'] as string,
-        systemId: data.systemId,
-        evaluatorId: req.user?.userId ?? 'anonymous',
-        evaluatorName: data.evaluatorName ?? req.user?.name ?? 'Evaluator',
-        weightingProfile: (data.weightingProfile ?? { framework: 40, technical: 25, commercial: 20, implementation: 10, reference: 5 }) as unknown as import('@prisma/client').Prisma.InputJsonValue,
-      },
-      include: { system: { select: { id: true, name: true, vendor: true } } },
+    const projectId = req.params['id'] as string;
+    const evaluatorId = req.user!.userId;
+    const weightingProfile = (data.weightingProfile ?? {
+      framework: 40, technical: 25, commercial: 20, implementation: 10, reference: 5,
+    }) as unknown as import('@prisma/client').Prisma.InputJsonValue;
+
+    const evaluation = await prisma.$transaction(async (tx) => {
+      const prior = await tx.procurementEvaluation.findUnique({
+        where: { projectId_systemId_evaluatorId: { projectId, systemId: data.systemId, evaluatorId } },
+        select: { id: true, weightingProfile: true },
+      });
+
+      const upserted = await tx.procurementEvaluation.upsert({
+        where: { projectId_systemId_evaluatorId: { projectId, systemId: data.systemId, evaluatorId } },
+        update: { weightingProfile },
+        create: {
+          projectId,
+          systemId: data.systemId,
+          evaluatorId,
+          // Evaluator attribution comes from the JWT (`authenticateJWT`
+          // gate above). `data.evaluatorName` is accepted only as a
+          // display override; the audit `userId` is always the JWT sub.
+          evaluatorName: data.evaluatorName ?? req.user!.name,
+          weightingProfile,
+        },
+        include: { system: { select: { id: true, name: true, vendor: true } } },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          userId: evaluatorId,
+          action: prior ? 'procurement.evaluation.reweight' : 'procurement.evaluation.add',
+          entityType: 'ProcurementEvaluation',
+          entityId: upserted.id,
+          changes: {
+            projectId,
+            systemId: data.systemId,
+            priorWeighting: prior?.weightingProfile ?? null,
+            newWeighting: weightingProfile,
+            actorName: req.user!.name,
+          },
+        },
+      });
+
+      return upserted;
     });
     res.status(201).json({ success: true, data: evaluation });
   } catch (err) { next(err); }
@@ -208,42 +310,73 @@ export const importBasketShortlistV2 = async (req: Request, res: Response, next:
 export const updateEvaluation = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const data = updateEvaluationSchema.parse(req.body);
-    const existing = await prisma.procurementEvaluation.findUnique({ where: { id: req.params['evalId'] as string } });
-    if (!existing) throw new NotFoundError('Evaluation not found');
+    const evalId = req.params['evalId'] as string;
 
-    // Auto-calculate overall score
-    const wp = (data.weightingProfile ?? existing.weightingProfile ?? { framework: 40, technical: 25, commercial: 20, implementation: 10, reference: 5 }) as Record<string, number>;
-    const frameworkScore = Number(data.frameworkScore ?? existing.frameworkScore ?? 0);
-    const technicalScore = Number(data.technicalScore ?? existing.technicalScore ?? 0);
-    const commercialScore = Number(data.commercialScore ?? existing.commercialScore ?? 0);
-    const implementationScore = Number(data.implementationScore ?? existing.implementationScore ?? 0);
-    const referenceScore = Number(data.referenceScore ?? existing.referenceScore ?? 0);
+    // Callback transaction: snapshot prior state, compute new scores,
+    // write, audit. Without the tx, a concurrent PATCH between the
+    // read and the write could silently overwrite scores with a
+    // half-stale weighting profile.
+    const updated = await prisma.$transaction(async (tx) => {
+      const existing = await tx.procurementEvaluation.findUnique({ where: { id: evalId } });
+      if (!existing) throw new NotFoundError('Evaluation not found');
 
-    const overallScore = (
-      frameworkScore * (wp['framework'] ?? 40) +
-      technicalScore * (wp['technical'] ?? 25) +
-      commercialScore * (wp['commercial'] ?? 20) +
-      implementationScore * (wp['implementation'] ?? 10) +
-      referenceScore * (wp['reference'] ?? 5)
-    ) / 100;
+      const wp = (data.weightingProfile ?? existing.weightingProfile ?? {
+        framework: 40, technical: 25, commercial: 20, implementation: 10, reference: 5,
+      }) as Record<string, number>;
+      const frameworkScore = Number(data.frameworkScore ?? existing.frameworkScore ?? 0);
+      const technicalScore = Number(data.technicalScore ?? existing.technicalScore ?? 0);
+      const commercialScore = Number(data.commercialScore ?? existing.commercialScore ?? 0);
+      const implementationScore = Number(data.implementationScore ?? existing.implementationScore ?? 0);
+      const referenceScore = Number(data.referenceScore ?? existing.referenceScore ?? 0);
 
-    const recommendation = overallScore >= 75 ? 'award' : overallScore >= 60 ? 'shortlist' : overallScore >= 45 ? 'reserve' : 'reject';
+      const overallScore = (
+        frameworkScore * (wp['framework'] ?? 40) +
+        technicalScore * (wp['technical'] ?? 25) +
+        commercialScore * (wp['commercial'] ?? 20) +
+        implementationScore * (wp['implementation'] ?? 10) +
+        referenceScore * (wp['reference'] ?? 5)
+      ) / 100;
 
-    const updated = await prisma.procurementEvaluation.update({
-      where: { id: req.params['evalId'] as string },
-      data: {
-        frameworkScore: data.frameworkScore ?? undefined,
-        technicalScore: data.technicalScore ?? undefined,
-        commercialScore: data.commercialScore ?? undefined,
-        implementationScore: data.implementationScore ?? undefined,
-        referenceScore: data.referenceScore ?? undefined,
-        overallScore: Math.round(overallScore * 10) / 10,
-        recommendation: data.recommendation ?? recommendation,
-        notes: data.notes ?? undefined,
-        weightingProfile: data.weightingProfile ? (data.weightingProfile as unknown as import('@prisma/client').Prisma.InputJsonValue) : undefined,
-        submittedAt: new Date(),
-      },
-      include: { system: { select: { id: true, name: true, vendor: true } } },
+      const recommendation = overallScore >= 75 ? 'award' : overallScore >= 60 ? 'shortlist' : overallScore >= 45 ? 'reserve' : 'reject';
+
+      const row = await tx.procurementEvaluation.update({
+        where: { id: evalId },
+        data: {
+          frameworkScore: data.frameworkScore ?? undefined,
+          technicalScore: data.technicalScore ?? undefined,
+          commercialScore: data.commercialScore ?? undefined,
+          implementationScore: data.implementationScore ?? undefined,
+          referenceScore: data.referenceScore ?? undefined,
+          overallScore: Math.round(overallScore * 10) / 10,
+          recommendation: data.recommendation ?? recommendation,
+          notes: data.notes ?? undefined,
+          weightingProfile: data.weightingProfile ? (data.weightingProfile as unknown as import('@prisma/client').Prisma.InputJsonValue) : undefined,
+          submittedAt: new Date(),
+        },
+        include: { system: { select: { id: true, name: true, vendor: true } } },
+      });
+
+      // Capture prior vs new scores so an audit review can reconstruct
+      // the decision trail. `recommendation` changes are the most
+      // commercially significant — e.g. a flip from 'reject' to
+      // 'award' should be visible in the log even if notes are empty.
+      await tx.auditLog.create({
+        data: {
+          userId: req.user!.userId,
+          action: 'procurement.evaluation.update',
+          entityType: 'ProcurementEvaluation',
+          entityId: evalId,
+          changes: {
+            fromRecommendation: existing.recommendation,
+            toRecommendation: row.recommendation,
+            fromOverallScore: existing.overallScore,
+            toOverallScore: row.overallScore,
+            actorName: req.user!.name,
+          },
+        },
+      });
+
+      return row;
     });
     res.json({ success: true, data: updated });
   } catch (err) { next(err); }

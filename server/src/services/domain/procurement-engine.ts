@@ -659,7 +659,10 @@ export class ProcurementEngine {
     return { passed: failures.length === 0, failures };
   }
 
-  async advanceStage(projectId: string): Promise<{ success: boolean; newStage?: string; failures?: ComplianceResult['failures'] }> {
+  async advanceStage(
+    projectId: string,
+    actor?: { userId?: string; name?: string },
+  ): Promise<{ success: boolean; newStage?: string; failures?: ComplianceResult['failures'] }> {
     const compliance = await this.runComplianceCheck(projectId);
     if (!compliance.passed) {
       return { success: false, failures: compliance.failures };
@@ -693,6 +696,26 @@ export class ProcurementEngine {
           data: { status: 'awarded' },
         });
       }
+      // Audit trail — sits inside the same tx as the state change so the
+      // log cannot drift out of sync with the stage status. `changes`
+      // captures from/to codes plus whether this was the terminal
+      // transition (project → awarded). An awarded project is the
+      // single most commercially significant event in the workflow;
+      // losing its audit row would be a governance failure.
+      await tx.auditLog.create({
+        data: {
+          userId: actor?.userId ?? null,
+          action: 'procurement.stage.advance',
+          entityType: 'ProcurementProject',
+          entityId: projectId,
+          changes: {
+            fromStage: currentStage.stageCode,
+            toStage: nextStage?.stageCode ?? null,
+            awarded: !nextStage,
+            actorName: actor?.name ?? null,
+          },
+        },
+      });
     });
 
     return { success: true, newStage: nextStage?.stageCode };
