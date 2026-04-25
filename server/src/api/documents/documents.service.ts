@@ -2,6 +2,7 @@ import prisma from '../../utils/prisma';
 import { NotFoundError } from '../../utils/errors';
 import { PRODUCT } from '../../lib/branding';
 import type { GenerateDocumentInput, UpdateDocumentInput } from './documents.schema';
+import { PRODUCT } from '../../lib/branding';
 
 interface DocumentSection {
   id: string;

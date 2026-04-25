@@ -19,9 +19,7 @@ export function NotFound() {
             {t('notFound.goBack', 'Go Back')}
           </button>
         </div>
-        <div className="mt-10 text-xs text-gray-400 dark:text-gray-600">
-          {PRODUCT.name} · {PRODUCT.vendor}
-        </div>
+        <div className="mt-10 text-xs text-gray-400 dark:text-gray-600">{PRODUCT.name} · Future Horizons Education</div>
       </div>
     </div>
   );

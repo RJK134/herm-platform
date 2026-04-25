@@ -58,6 +58,12 @@ describe('Login — post-login redirect safety', () => {
     await waitFor(() => expect(mockLogin).toHaveBeenCalledWith('a@b.co', 'pw'));
   });
 
+  it('renders the current product name', () => {
+    renderLoginAt('/login');
+
+    expect(screen.getByRole('heading', { name: PRODUCT.name })).toBeInTheDocument();
+  });
+
   it('rejects protocol-relative returnTo (//evil.com)', async () => {
     mockLogin.mockResolvedValueOnce(undefined);
     renderLoginAt('/login?returnTo=%2F%2Fevil.com');
