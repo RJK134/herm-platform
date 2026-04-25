@@ -10,7 +10,6 @@ import {
 import axios from 'axios';
 import { PRODUCT } from '../lib/branding';
 import type { ApiResponse } from '../types';
-import { PRODUCT } from '../lib/branding';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

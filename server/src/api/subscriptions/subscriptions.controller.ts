@@ -5,8 +5,8 @@ import prisma from '../../utils/prisma';
 export const createCheckout = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { tier } = req.body as { tier: string };
-    const institutionId = req.user?.institutionId;
-    const email = req.user?.email ?? '';
+    // Router-level authenticateJWT guarantees req.user is present.
+    const { institutionId, email } = req.user!;
     const result = await stripeService.createCheckoutSession({
       tier: tier as Parameters<typeof stripeService.createCheckoutSession>[0]['tier'],
       email,
@@ -26,11 +26,8 @@ export const stripeWebhook = async (req: Request, res: Response, next: NextFunct
 
 export const getStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const institutionId = req.user?.institutionId;
-    if (!institutionId) {
-      res.json({ success: true, data: { tier: 'FREE', status: 'inactive' } });
-      return;
-    }
+    // Router-level authenticateJWT guarantees req.user is present.
+    const { institutionId } = req.user!;
     const sub = await prisma.subscription.findUnique({
       where: { institutionId },
       include: { payments: { orderBy: { createdAt: 'desc' }, take: 5 } },
@@ -41,11 +38,7 @@ export const getStatus = async (req: Request, res: Response, next: NextFunction)
 
 export const cancelSub = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const institutionId = req.user?.institutionId;
-    if (!institutionId) {
-      res.status(401).json({ success: false, error: { code: 'AUTHENTICATION_ERROR', message: 'Auth required' } });
-      return;
-    }
+    const { institutionId } = req.user!;
     const sub = await prisma.subscription.findUnique({ where: { institutionId } });
     if (sub?.stripeSubscriptionId) {
       await stripeService.cancelSubscription(sub.stripeSubscriptionId);
@@ -57,11 +50,7 @@ export const cancelSub = async (req: Request, res: Response, next: NextFunction)
 
 export const getInvoices = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const institutionId = req.user?.institutionId;
-    if (!institutionId) {
-      res.json({ success: true, data: [] });
-      return;
-    }
+    const { institutionId } = req.user!;
     const sub = await prisma.subscription.findUnique({
       where: { institutionId },
       include: { payments: { orderBy: { createdAt: 'desc' } } },
