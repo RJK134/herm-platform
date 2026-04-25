@@ -159,6 +159,47 @@ describe('PATCH /api/evaluations/:id — transactional audit', () => {
     });
   });
 
+  it('treats empty-string deadline as a no-op in BOTH update and audit', async () => {
+    // Regression for BugBot LOW finding on PR #28: `deadline: ""` is
+    // falsy, so the update branch mapped it to `undefined` (no-op)
+    // while the audit branch entered and recorded `toDeadline: null`,
+    // falsely claiming a clear the DB never saw. Both branches now
+    // derive from a single `nextDeadline` so they cannot disagree.
+    vi.mocked(prisma.evaluationProject.findFirst).mockResolvedValueOnce({
+      name: 'Original',
+      description: null,
+      status: 'planning',
+      deadline: new Date('2026-03-01T00:00:00.000Z'),
+      basketId: null,
+    } as never);
+    vi.mocked(prisma.evaluationProject.updateMany).mockResolvedValueOnce({ count: 1 } as never);
+    vi.mocked(prisma.evaluationProject.findFirst).mockResolvedValueOnce({
+      id: 'eval-1', systems: [], members: [], domainAssignments: [],
+    } as never);
+
+    const token = makeToken();
+    const res = await request(app)
+      .patch('/api/evaluations/eval-1')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ deadline: '' });
+
+    expect(res.status).toBe(200);
+    // Update branch: `deadline` MUST be undefined (no-op) so the
+    // existing column value is preserved.
+    expect(prisma.evaluationProject.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ deadline: undefined }),
+      }),
+    );
+    // Audit branch: must NOT include a fromDeadline / toDeadline pair
+    // (the ...(nextDeadline !== undefined) spread is skipped).
+    const auditCall = vi.mocked(prisma.auditLog.create).mock.calls[0]?.[0] as {
+      data: { changes: Record<string, unknown> };
+    };
+    expect(auditCall.data.changes).not.toHaveProperty('fromDeadline');
+    expect(auditCall.data.changes).not.toHaveProperty('toDeadline');
+  });
+
   it('records description changes in the audit changes payload', async () => {
     // Regression for BugBot finding on PR #28: the prior snapshot
     // omitted `description`, so a `PATCH { description: 'new' }`

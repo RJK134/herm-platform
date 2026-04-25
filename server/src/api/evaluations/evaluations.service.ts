@@ -137,6 +137,25 @@ export class EvaluationsService {
       });
       if (!prior) throw new NotFoundError('Evaluation project not found');
 
+      // Compute the deadline mutation ONCE so the update branch and
+      // the audit branch can never disagree. Three intent classes
+      // map cleanly to three outcomes:
+      //   undefined / ''         → no-op (skip both update and audit)
+      //   explicit `null`        → clear the column
+      //   non-empty ISO string   → set to that Date
+      // Empty-string special-cases the historic "deadline ? ... : null"
+      // ambiguity: previously the update branch silently treated `''`
+      // as a no-op (string was falsy) while the audit branch entered
+      // and recorded `toDeadline: null`, falsely claiming a clear
+      // that the DB never saw. Keep them aligned by deriving both
+      // from the same intermediate.
+      const nextDeadline: Date | null | undefined =
+        data.deadline === undefined || data.deadline === ''
+          ? undefined
+          : data.deadline === null
+            ? null
+            : new Date(data.deadline);
+
       // `updateMany` keeps the tenant guard atomic. The row was just
       // verified to exist, so count: 0 here would only mean it was
       // deleted between read and write — surface as 404 too.
@@ -144,7 +163,7 @@ export class EvaluationsService {
         where: { id, institutionId },
         data: {
           ...data,
-          deadline: data.deadline ? new Date(data.deadline) : data.deadline === null ? null : undefined,
+          deadline: nextDeadline,
         },
       });
       if (result.count === 0) {
@@ -169,16 +188,15 @@ export class EvaluationsService {
               toDescription: data.description,
             }),
             ...(data.status !== undefined && { fromStatus: prior.status, toStatus: data.status }),
-            ...(data.deadline !== undefined && {
+            ...(nextDeadline !== undefined && {
               // Normalise both sides to ISO-8601 strings (or null) so a
               // governance reviewer comparing before/after sees the
-              // same shape on both sides. Prisma returns `prior.deadline`
-              // as `Date`, while `data.deadline` is the raw client
-              // string from the Zod schema — without normalisation the
-              // serialised JSON would mix `2026-04-25T00:00:00.000Z`
-              // (Date) and `2026-04-25` (string).
+              // same shape on both sides. Both branches feed off the
+              // same `nextDeadline` resolved above, so an empty-string
+              // "no-op" intent neither updates the row NOR fires an
+              // audit row claiming the deadline was cleared.
               fromDeadline: prior.deadline ? prior.deadline.toISOString() : null,
-              toDeadline: data.deadline ? new Date(data.deadline).toISOString() : null,
+              toDeadline: nextDeadline === null ? null : nextDeadline.toISOString(),
             }),
             ...(data.basketId !== undefined && {
               fromBasketId: prior.basketId,
