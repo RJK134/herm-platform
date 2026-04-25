@@ -10,6 +10,7 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { Header } from '../components/layout/Header';
+import { PRODUCT } from '../lib/branding';
 
 // ── Interfaces ────────────────────────────────────────────────────────────────
 
@@ -48,6 +49,7 @@ interface CheckoutResponse {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const TIER_ORDER: Record<string, number> = { FREE: 0, PROFESSIONAL: 1, ENTERPRISE: 2 };
+const STRIPE_BILLING_PORTAL_URL = import.meta.env.VITE_STRIPE_BILLING_PORTAL_URL?.trim();
 
 interface TierFeature {
   feature: string;
@@ -209,9 +211,9 @@ export function Subscriptions() {
           </div>
 
           <div className="flex items-center gap-2">
-            {(currentTier === 'PROFESSIONAL' || currentTier === 'ENTERPRISE') && sub?.stripeCustomerId && (
+            {(currentTier === 'PROFESSIONAL' || currentTier === 'ENTERPRISE') && sub?.stripeCustomerId && STRIPE_BILLING_PORTAL_URL && (
               <a
-                href="https://billing.stripe.com/p/login/test"
+                href={STRIPE_BILLING_PORTAL_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-teal-600 dark:text-teal-400 border border-teal-300 dark:border-teal-700 rounded-lg hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors"
@@ -236,6 +238,10 @@ export function Subscriptions() {
       {/* ── Tier Comparison ───────────────────────────────────────── */}
       <Card>
         <h3 className="font-semibold dark:text-white text-sm mb-4">{t("subscription.planComparison", "Plan Comparison")}</h3>
+        <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
+          {PRODUCT.name} plans add workspace, analytics, and API tooling. Access to the UCISA HERM v3.1 reference
+          model remains free on every tier.
+        </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

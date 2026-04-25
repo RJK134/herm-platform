@@ -36,6 +36,17 @@ describe('Login — post-login redirect safety', () => {
     mockLogin.mockResolvedValue(undefined);
   });
 
+  it('renders the Future Horizons ASPT product branding', () => {
+    renderLoginAt('/login');
+
+    expect(
+      screen.getByRole('heading', { name: PRODUCT.name, level: 1 }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/UCISA HERM v3\.1 Procurement Intelligence/i),
+    ).toBeInTheDocument();
+  });
+
   it('uses ?returnTo when it is a safe internal path', async () => {
     mockLogin.mockResolvedValueOnce(undefined);
     renderLoginAt('/login?returnTo=%2Fassistant');

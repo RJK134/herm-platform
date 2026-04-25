@@ -90,6 +90,10 @@ export type SeedShortlistFromBasketInput = z.infer<typeof seedShortlistFromBaske
 
 // Phase 4: Enhanced schemas
 
+// `institutionId` is DELIBERATELY absent. The controller stamps it from
+// `req.user.institutionId` so an authenticated caller cannot write into
+// another tenant by sending `{ institutionId: 'inst-victim' }`. zod's
+// default strip behaviour drops any body override on the floor.
 export const createProjectV2Schema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().optional(),
@@ -98,7 +102,6 @@ export const createProjectV2Schema = z.object({
   procurementRoute: z.enum(['open', 'restricted', 'competitive_flexible', 'competitive_dialogue', 'direct_award', 'innovation_partnership']).optional(),
   basketId: z.string().optional(),
   startDate: z.string().optional(), // ISO date string
-  institutionId: z.string().optional(),
 });
 
 export const updateTaskSchema = z.object({

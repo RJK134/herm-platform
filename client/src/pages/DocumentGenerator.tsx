@@ -8,6 +8,7 @@ import {
   PlusCircle, Archive,
 } from 'lucide-react';
 import axios from 'axios';
+import { PRODUCT } from '../lib/branding';
 import type { ApiResponse } from '../types';
 import { PRODUCT } from '../lib/branding';
 

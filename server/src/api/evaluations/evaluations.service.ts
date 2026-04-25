@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import prisma from '../../utils/prisma';
 import { NotFoundError, ConflictError } from '../../utils/errors';
 import type {
@@ -14,7 +15,10 @@ export class EvaluationsService {
         data: {
           name: data.name,
           description: data.description,
-          institutionId: data.institutionId ?? institutionId,
+          // `institutionId` is always the caller's JWT tenant. The
+          // schema no longer accepts it from the body, so there is no
+          // override path.
+          institutionId,
           leadUserId,
           basketId: data.basketId,
           deadline: data.deadline ? new Date(data.deadline) : undefined,
@@ -52,7 +56,7 @@ export class EvaluationsService {
       return proj;
     });
 
-    return this.getProject(project.id);
+    return this.getProject(project.id, institutionId);
   }
 
   async listProjects(institutionId: string) {
@@ -82,9 +86,13 @@ export class EvaluationsService {
     });
   }
 
-  async getProject(id: string) {
-    const project = await prisma.evaluationProject.findUnique({
-      where: { id },
+  async getProject(id: string, institutionId: string) {
+    // Compound filter: `findFirst({ where: { id, institutionId } })`
+    // returns null for both "does not exist" and "exists in another
+    // tenant". Callers surface that as a 404 via `NotFoundError`, so
+    // no existence-oracle leaks the presence of another tenant's row.
+    const project = await prisma.evaluationProject.findFirst({
+      where: { id, institutionId },
       include: {
         systems: {
           include: {
@@ -111,26 +119,115 @@ export class EvaluationsService {
     return project;
   }
 
-  async updateProject(id: string, data: UpdateEvaluationProjectInput) {
-    return prisma.evaluationProject.update({
-      where: { id },
-      data: {
-        ...data,
-        deadline: data.deadline ? new Date(data.deadline) : data.deadline === null ? null : undefined,
-      },
+  async updateProject(
+    id: string,
+    institutionId: string,
+    data: UpdateEvaluationProjectInput,
+    actor?: { userId?: string; name?: string },
+  ) {
+    // Snapshot prior state, mutate scoped by (id, institutionId), audit.
+    // All inside one tx so the log can never drift out of sync with the
+    // committed state. The post-commit re-read uses the non-tx prisma
+    // so it sees the just-committed row (interactive-tx callbacks
+    // commit on successful return).
+    await prisma.$transaction(async (tx) => {
+      const prior = await tx.evaluationProject.findFirst({
+        where: { id, institutionId },
+        select: { name: true, description: true, status: true, deadline: true, basketId: true },
+      });
+      if (!prior) throw new NotFoundError('Evaluation project not found');
+
+      // Compute the deadline mutation ONCE so the update branch and
+      // the audit branch can never disagree. Three intent classes
+      // map cleanly to three outcomes:
+      //   undefined / ''         → no-op (skip both update and audit)
+      //   explicit `null`        → clear the column
+      //   non-empty ISO string   → set to that Date
+      // Empty-string special-cases the historic "deadline ? ... : null"
+      // ambiguity: previously the update branch silently treated `''`
+      // as a no-op (string was falsy) while the audit branch entered
+      // and recorded `toDeadline: null`, falsely claiming a clear
+      // that the DB never saw. Keep them aligned by deriving both
+      // from the same intermediate.
+      const nextDeadline: Date | null | undefined =
+        data.deadline === undefined || data.deadline === ''
+          ? undefined
+          : data.deadline === null
+            ? null
+            : new Date(data.deadline);
+
+      // `updateMany` keeps the tenant guard atomic. The row was just
+      // verified to exist, so count: 0 here would only mean it was
+      // deleted between read and write — surface as 404 too.
+      const result = await tx.evaluationProject.updateMany({
+        where: { id, institutionId },
+        data: {
+          ...data,
+          deadline: nextDeadline,
+        },
+      });
+      if (result.count === 0) {
+        throw new NotFoundError('Evaluation project not found');
+      }
+
+      await tx.auditLog.create({
+        data: {
+          userId: actor?.userId ?? null,
+          action: 'evaluation.project.update',
+          entityType: 'EvaluationProject',
+          entityId: id,
+          changes: {
+            // Only record fields the client actually sent — avoids a
+            // noisy log full of `null → null` for absent fields. All
+            // updatable columns on UpdateEvaluationProjectInput must
+            // appear here; otherwise a governance review can't
+            // reconstruct what changed.
+            ...(data.name !== undefined && { fromName: prior.name, toName: data.name }),
+            ...(data.description !== undefined && {
+              fromDescription: prior.description,
+              toDescription: data.description,
+            }),
+            ...(data.status !== undefined && { fromStatus: prior.status, toStatus: data.status }),
+            ...(nextDeadline !== undefined && {
+              // Normalise both sides to ISO-8601 strings (or null) so a
+              // governance reviewer comparing before/after sees the
+              // same shape on both sides. Both branches feed off the
+              // same `nextDeadline` resolved above, so an empty-string
+              // "no-op" intent neither updates the row NOR fires an
+              // audit row claiming the deadline was cleared.
+              fromDeadline: prior.deadline ? prior.deadline.toISOString() : null,
+              toDeadline: nextDeadline === null ? null : nextDeadline.toISOString(),
+            }),
+            ...(data.basketId !== undefined && {
+              fromBasketId: prior.basketId,
+              toBasketId: data.basketId,
+            }),
+            actorName: actor?.name ?? null,
+          },
+        },
+      });
     });
+
+    return this.getProject(id, institutionId);
   }
 
   async addMember(projectId: string, userId: string, role: string) {
-    const existing = await prisma.evaluationMember.findUnique({
-      where: { projectId_userId: { projectId, userId } },
-    });
-    if (existing) throw new ConflictError('User is already a member of this project');
-
-    return prisma.evaluationMember.create({
-      data: { projectId, userId, role },
-      include: { user: { select: { id: true, name: true, email: true } } },
-    });
+    // Race-safe: the previous `findUnique + create` could double-submit
+    // past the check into a Prisma P2002 (unique constraint violation)
+    // that leaked out as a 500. Rely on the unique constraint itself
+    // as the serialisation point — the first `create` wins, the second
+    // throws P2002 which we translate to our normal `ConflictError`.
+    try {
+      return await prisma.evaluationMember.create({
+        data: { projectId, userId, role },
+        include: { user: { select: { id: true, name: true, email: true } } },
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictError('User is already a member of this project');
+      }
+      throw err;
+    }
   }
 
   async removeMember(projectId: string, memberId: string) {
@@ -139,15 +236,19 @@ export class EvaluationsService {
   }
 
   async addSystem(projectId: string, systemId: string) {
-    const existing = await prisma.evaluationSystem.findUnique({
-      where: { projectId_systemId: { projectId, systemId } },
-    });
-    if (existing) throw new ConflictError('System is already in this evaluation');
-
-    return prisma.evaluationSystem.create({
-      data: { projectId, systemId },
-      include: { system: { select: { id: true, name: true, vendor: true } } },
-    });
+    // Same race-safe shape as addMember — let the unique constraint
+    // serialise concurrent adds instead of the stale findUnique check.
+    try {
+      return await prisma.evaluationSystem.create({
+        data: { projectId, systemId },
+        include: { system: { select: { id: true, name: true, vendor: true } } },
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictError('System is already in this evaluation');
+      }
+      throw err;
+    }
   }
 
   async removeSystem(projectId: string, systemId: string) {
@@ -211,42 +312,94 @@ export class EvaluationsService {
     });
   }
 
-  async submitDomainScores(assignmentId: string, data: SubmitDomainScoresInput) {
-    // Get the assignment to verify it exists
-    const assignment = await prisma.evaluationDomainAssignment.findUnique({
-      where: { id: assignmentId },
-      include: {
-        domain: { include: { capabilities: { select: { id: true } } } },
-        project: { include: { systems: { select: { systemId: true } } } },
-      },
-    });
-    if (!assignment) throw new NotFoundError('Domain assignment not found');
-
-    // Upsert all scores
-    await prisma.$transaction(
-      data.scores.map(s =>
-        prisma.evaluationDomainScore.upsert({
-          where: { assignmentId_systemId_capabilityId: { assignmentId, systemId: s.systemId, capabilityId: s.capabilityId } },
-          create: { assignmentId, systemId: s.systemId, capabilityId: s.capabilityId, value: s.value, notes: s.notes },
-          update: { value: s.value, notes: s.notes, scoredAt: new Date() },
-        })
-      )
-    );
-
-    // Check if all caps x systems scored — if so, mark complete
-    const totalCaps = assignment.domain.capabilities.length;
-    const totalSystems = assignment.project.systems.length;
-    const expectedTotal = totalCaps * totalSystems;
-    const actualTotal = await prisma.evaluationDomainScore.count({ where: { assignmentId } });
-
-    if (actualTotal >= expectedTotal && expectedTotal > 0) {
-      await prisma.evaluationDomainAssignment.update({
+  async submitDomainScores(
+    assignmentId: string,
+    data: SubmitDomainScoresInput,
+    actor?: { userId?: string; name?: string },
+  ) {
+    // Single callback transaction so the score upserts, completion
+    // status flip, and audit log all share one snapshot. Without the
+    // tx, a concurrent submit between the count and the status flip
+    // could leave the assignment "complete" while scores are still
+    // being added (or vice versa), and the audit log would point at
+    // a stale completion state.
+    return prisma.$transaction(async (tx) => {
+      const assignment = await tx.evaluationDomainAssignment.findUnique({
         where: { id: assignmentId },
-        data: { status: 'completed', completedAt: new Date() },
+        include: {
+          domain: { include: { capabilities: { select: { id: true } } } },
+          project: { include: { systems: { select: { systemId: true } } } },
+        },
       });
-    }
+      if (!assignment) throw new NotFoundError('Domain assignment not found');
 
-    return { submitted: data.scores.length, complete: actualTotal >= expectedTotal };
+      for (const s of data.scores) {
+        await tx.evaluationDomainScore.upsert({
+          where: {
+            assignmentId_systemId_capabilityId: {
+              assignmentId,
+              systemId: s.systemId,
+              capabilityId: s.capabilityId,
+            },
+          },
+          create: {
+            assignmentId,
+            systemId: s.systemId,
+            capabilityId: s.capabilityId,
+            value: s.value,
+            notes: s.notes,
+          },
+          update: { value: s.value, notes: s.notes, scoredAt: new Date() },
+        });
+      }
+
+      const totalCaps = assignment.domain.capabilities.length;
+      const totalSystems = assignment.project.systems.length;
+      const expectedTotal = totalCaps * totalSystems;
+      const actualTotal = await tx.evaluationDomainScore.count({ where: { assignmentId } });
+
+      // `complete` reflects the post-submission state — used by the
+      // controller's response shape. `justCompleted` is the strict
+      // edge: it is true only when THIS submission flipped the
+      // assignment from non-completed to completed. Re-submissions
+      // against an already-completed assignment must not (a) overwrite
+      // the original `completedAt` timestamp or (b) emit a misleading
+      // "this submission completed it" audit log.
+      const complete = actualTotal >= expectedTotal && expectedTotal > 0;
+      const justCompleted = complete && assignment.status !== 'completed';
+      if (justCompleted) {
+        await tx.evaluationDomainAssignment.update({
+          where: { id: assignmentId },
+          data: { status: 'completed', completedAt: new Date() },
+        });
+      }
+
+      // `changes` captures the count-of-rows-affected and whether
+      // this submission flipped the assignment to complete — the
+      // governance review surface needs both. Per-cell score values
+      // live in the EvaluationDomainScore rows themselves; logging
+      // them here would duplicate the score table without value.
+      await tx.auditLog.create({
+        data: {
+          userId: actor?.userId ?? null,
+          action: 'evaluation.domain.scores.submit',
+          entityType: 'EvaluationDomainAssignment',
+          entityId: assignmentId,
+          changes: {
+            domainId: assignment.domainId,
+            projectId: assignment.projectId,
+            priorStatus: assignment.status,
+            scoresSubmitted: data.scores.length,
+            scoresTotal: actualTotal,
+            scoresExpected: expectedTotal,
+            justCompleted,
+            actorName: actor?.name ?? null,
+          },
+        },
+      });
+
+      return { submitted: data.scores.length, complete };
+    });
   }
 
   async getAggregatedScores(projectId: string) {

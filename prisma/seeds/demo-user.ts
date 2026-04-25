@@ -6,6 +6,7 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
+const DEMO_PASSWORD = process.env['DEMO_PASSWORD'] ?? 'demo12345';
 
 async function main() {
   console.log('Seeding demo user...');
@@ -33,7 +34,7 @@ async function main() {
   });
   console.log('Subscription: Professional tier created');
 
-  const hash = await bcrypt.hash('demo12345', 10);
+  const hash = await bcrypt.hash(DEMO_PASSWORD, 10);
   const user = await prisma.user.upsert({
     where: { email: 'demo@demo-university.ac.uk' },
     update: {},
@@ -48,7 +49,7 @@ async function main() {
   console.log(`User: ${user.email} (role: ${user.role})`);
   console.log('\nDemo credentials:');
   console.log('  Email:    demo@demo-university.ac.uk');
-  console.log('  Password: demo12345');
+  console.log('  Password: set via DEMO_PASSWORD (defaults to documented demo password for local testing)');
 }
 
 main().catch(console.error).finally(() => prisma.$disconnect());

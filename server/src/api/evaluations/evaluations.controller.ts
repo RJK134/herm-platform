@@ -8,17 +8,23 @@ import {
   submitDomainScoresSchema,
   addSystemSchema,
 } from './evaluations.schema';
-import { NotFoundError } from '../../utils/errors';
+import { NotFoundError, ValidationError } from '../../utils/errors';
 
 const svc = new EvaluationsService();
 
-const DEFAULT_INSTITUTION = 'anonymous';
+// Sentinel tenant for anonymous reads. Never used on write paths —
+// those are all behind `authenticateJWT` now.
+const ANONYMOUS_INSTITUTION = 'anonymous';
 
 export const createProject = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const data = createEvaluationProjectSchema.parse(req.body);
-    const institutionId = req.user?.institutionId ?? DEFAULT_INSTITUTION;
-    const leadUserId = req.user?.userId ?? DEFAULT_INSTITUTION;
+    // Route is gated by `authenticateJWT`, so `req.user` is guaranteed.
+    // Stamp institutionId + leadUserId from the JWT unconditionally —
+    // the schema no longer accepts `institutionId` from the body, so
+    // a spoof attempt is silently dropped by zod strip anyway.
+    const institutionId = req.user!.institutionId;
+    const leadUserId = req.user!.userId;
     const project = await svc.createProject(data, institutionId, leadUserId);
     res.status(201).json({ success: true, data: project });
   } catch (err) { next(err); }
@@ -26,7 +32,11 @@ export const createProject = async (req: Request, res: Response, next: NextFunct
 
 export const listProjects = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const institutionId = (req.query['institutionId'] as string) ?? req.user?.institutionId ?? DEFAULT_INSTITUTION;
+    // Tenant scope is ALWAYS the caller's JWT institutionId — never the
+    // query string. The old behaviour let `?institutionId=other-tenant`
+    // leak another tenant's projects to any authenticated caller.
+    // Anonymous callers see only the sentinel tenant's projects.
+    const institutionId = req.user?.institutionId ?? ANONYMOUS_INSTITUTION;
     const data = await svc.listProjects(institutionId);
     res.json({ success: true, data });
   } catch (err) { next(err); }
@@ -34,7 +44,11 @@ export const listProjects = async (req: Request, res: Response, next: NextFuncti
 
 export const getProject = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const data = await svc.getProject(req.params['id'] as string);
+    // Compound filter `(id, institutionId)` — identical 404 for "does
+    // not exist" and "exists but belongs to another tenant" so no
+    // existence oracle leaks.
+    const institutionId = req.user?.institutionId ?? ANONYMOUS_INSTITUTION;
+    const data = await svc.getProject(req.params['id'] as string, institutionId);
     res.json({ success: true, data });
   } catch (err) { next(err); }
 };
@@ -42,7 +56,12 @@ export const getProject = async (req: Request, res: Response, next: NextFunction
 export const updateProject = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const data = updateEvaluationProjectSchema.parse(req.body);
-    const result = await svc.updateProject(req.params['id'] as string, data);
+    const result = await svc.updateProject(
+      req.params['id'] as string,
+      req.user!.institutionId,
+      data,
+      { userId: req.user!.userId, name: req.user!.name },
+    );
     res.json({ success: true, data: result });
   } catch (err) { next(err); }
 };
@@ -61,8 +80,11 @@ export const addMember = async (req: Request, res: Response, next: NextFunction)
       userId = user.id;
     }
     if (!userId) {
-      res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'userId or email required' } });
-      return;
+      // Throw so the global errorHandler renders the standard
+      // `{ success, error: { code, message, requestId } }` envelope —
+      // matches every other validation failure on the surface and
+      // keeps requestId attribution working.
+      throw new ValidationError('userId or email required');
     }
     const result = await svc.addMember(projectId, userId, body.role);
     res.status(201).json({ success: true, data: result });
@@ -109,7 +131,11 @@ export const getDomainProgress = async (req: Request, res: Response, next: NextF
 export const submitDomainScores = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const data = submitDomainScoresSchema.parse(req.body);
-    const result = await svc.submitDomainScores(req.params['domainId'] as string, data);
+    const result = await svc.submitDomainScores(
+      req.params['domainId'] as string,
+      data,
+      { userId: req.user!.userId, name: req.user!.name },
+    );
     res.json({ success: true, data: result });
   } catch (err) { next(err); }
 };
