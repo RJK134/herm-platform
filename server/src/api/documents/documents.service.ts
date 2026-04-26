@@ -407,8 +407,15 @@ export class DocumentsService {
     });
   }
 
-  async listDocuments() {
+  // ── Tenant-scoped reads/writes ─────────────────────────────────────────────
+  // Every list/get/update/delete must be scoped to the caller's institutionId
+  // so a tenant cannot read or mutate another tenant's persisted documents by
+  // id-guessing. Wrong-owner ids surface as 404 (NotFoundError), not 403 — we
+  // do not confirm existence to other tenants.
+
+  async listDocuments(institutionId: string) {
     return prisma.generatedDocument.findMany({
+      where: { institutionId },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -422,14 +429,14 @@ export class DocumentsService {
     });
   }
 
-  async getDocument(id: string) {
-    const doc = await prisma.generatedDocument.findUnique({ where: { id } });
+  async getDocument(id: string, institutionId: string) {
+    const doc = await prisma.generatedDocument.findFirst({ where: { id, institutionId } });
     if (!doc) throw new NotFoundError(`Document not found: ${id}`);
     return doc;
   }
 
-  async updateDocument(id: string, data: UpdateDocumentInput) {
-    const existing = await prisma.generatedDocument.findUnique({ where: { id } });
+  async updateDocument(id: string, institutionId: string, data: UpdateDocumentInput) {
+    const existing = await prisma.generatedDocument.findFirst({ where: { id, institutionId } });
     if (!existing) throw new NotFoundError(`Document not found: ${id}`);
 
     const updateData: Record<string, unknown> = {};
@@ -444,7 +451,11 @@ export class DocumentsService {
     return prisma.generatedDocument.update({ where: { id }, data: updateData });
   }
 
-  async deleteDocument(id: string) {
-    return prisma.generatedDocument.delete({ where: { id } });
+  async deleteDocument(id: string, institutionId: string) {
+    // updateMany/deleteMany takes a non-unique where, so we can scope by both
+    // id and institutionId in one round-trip. count=0 → wrong owner → 404.
+    const result = await prisma.generatedDocument.deleteMany({ where: { id, institutionId } });
+    if (result.count === 0) throw new NotFoundError(`Document not found: ${id}`);
+    return result;
   }
 }

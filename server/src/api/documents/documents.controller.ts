@@ -22,16 +22,21 @@ export const saveDocument = async (req: Request, res: Response, next: NextFuncti
   } catch (err) { next(err); }
 };
 
-export const listDocuments = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+// list/get/update/delete are tenant-scoped — `institutionId` comes from the
+// JWT (router-level authenticateJWT guarantees req.user). A wrong-owner id
+// surfaces as 404 (NotFoundError → errorHandler) so we never confirm a row
+// belongs to a different tenant.
+
+export const listDocuments = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const data = await service.listDocuments();
+    const data = await service.listDocuments(req.user!.institutionId);
     res.json({ success: true, data });
   } catch (err) { next(err); }
 };
 
 export const getDocument = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const data = await service.getDocument(req.params['id'] as string);
+    const data = await service.getDocument(req.params['id'] as string, req.user!.institutionId);
     res.json({ success: true, data });
   } catch (err) { next(err); }
 };
@@ -39,14 +44,14 @@ export const getDocument = async (req: Request, res: Response, next: NextFunctio
 export const updateDocument = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const data = updateDocumentSchema.parse(req.body);
-    const doc = await service.updateDocument(req.params['id'] as string, data);
+    const doc = await service.updateDocument(req.params['id'] as string, req.user!.institutionId, data);
     res.json({ success: true, data: doc });
   } catch (err) { next(err); }
 };
 
 export const deleteDocument = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    await service.deleteDocument(req.params['id'] as string);
+    await service.deleteDocument(req.params['id'] as string, req.user!.institutionId);
     res.json({ success: true, data: null });
   } catch (err) { next(err); }
 };

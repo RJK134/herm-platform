@@ -21,16 +21,19 @@ export const saveAnalysis = async (req: Request, res: Response, next: NextFuncti
   } catch (err) { next(err); }
 };
 
-export const listAnalyses = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+// list/get are tenant-scoped — institutionId from JWT (router-level
+// authenticateJWT guarantees req.user). Wrong-owner id → 404.
+
+export const listAnalyses = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const data = await service.listAnalyses();
+    const data = await service.listAnalyses(req.user!.institutionId);
     res.json({ success: true, data });
   } catch (err) { next(err); }
 };
 
 export const getAnalysis = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const data = await service.getAnalysis(req.params['id'] as string);
+    const data = await service.getAnalysis(req.params['id'] as string, req.user!.institutionId);
     res.json({ success: true, data });
   } catch (err) { next(err); }
 };

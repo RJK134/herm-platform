@@ -136,7 +136,7 @@ function generateFindings(
 }
 
 export class IntegrationService {
-  async createAssessment(data: CreateAssessmentInput) {
+  async createAssessment(data: CreateAssessmentInput, institutionId: string, createdById: string) {
     let targetApiStandards: string[] = [];
     let targetIsCloudNative = false;
     let targetName = 'target system';
@@ -167,7 +167,6 @@ export class IntegrationService {
       complexityScore
     );
 
-    // Cast findings to satisfy Prisma's InputJsonValue requirement
     const findingsJson = findings as unknown as import('@prisma/client').Prisma.InputJsonValue;
 
     return prisma.integrationAssessment.create({
@@ -178,7 +177,12 @@ export class IntegrationService {
         complexityScore,
         riskLevel,
         findings: findingsJson,
-        createdById: data.createdById ?? 'anonymous',
+        // institutionId / createdById are stamped from the JWT in the
+        // controller, never trusted from the request body. The body's
+        // legacy `createdById` field (still in the schema for backward
+        // compatibility) is intentionally ignored here.
+        institutionId,
+        createdById,
       },
       include: {
         targetSystem: { select: { id: true, name: true, vendor: true, cloudNative: true } },
@@ -186,8 +190,11 @@ export class IntegrationService {
     });
   }
 
-  async listAssessments() {
+  // ── Tenant-scoped reads ────────────────────────────────────────────────────
+
+  async listAssessments(institutionId: string) {
     return prisma.integrationAssessment.findMany({
+      where: { institutionId },
       orderBy: { createdAt: 'desc' },
       include: {
         targetSystem: { select: { id: true, name: true, vendor: true } },
@@ -195,9 +202,9 @@ export class IntegrationService {
     });
   }
 
-  async getAssessment(id: string) {
-    return prisma.integrationAssessment.findUnique({
-      where: { id },
+  async getAssessment(id: string, institutionId: string) {
+    return prisma.integrationAssessment.findFirst({
+      where: { id, institutionId },
       include: {
         targetSystem: { select: { id: true, name: true, vendor: true, cloudNative: true } },
       },

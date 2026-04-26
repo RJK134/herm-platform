@@ -444,11 +444,13 @@ model IntegrationAssessment {
   complexityScore Int           @default(0)
   riskLevel       String        @default("medium")
   findings        Json?
+  institutionId   String?
   createdById     String        @default("anonymous")
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   @@index([targetSystemId])
   @@index([createdById])
+  @@index([institutionId])
 }
 
 // ── Architecture & System Landscape Assessment ────────────────────────────────
