@@ -209,8 +209,14 @@ export class ArchitectureService {
     });
   }
 
-  async listAssessments() {
+  // ── Tenant-scoped reads/writes ─────────────────────────────────────────────
+  // Reads filter by institutionId so a tenant cannot enumerate or fetch
+  // another tenant's assessments by id-guessing. Wrong owner → 404 (we do
+  // not differentiate "does not exist" from "exists but not yours").
+
+  async listAssessments(institutionId: string) {
     return prisma.architectureAssessment.findMany({
+      where: { institutionId },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -224,17 +230,21 @@ export class ArchitectureService {
     });
   }
 
-  async getAssessment(id: string) {
-    const item = await prisma.architectureAssessment.findUnique({
-      where: { id },
+  async getAssessment(id: string, institutionId: string) {
+    const item = await prisma.architectureAssessment.findFirst({
+      where: { id, institutionId },
       include: { targetSystem: { select: { id: true, name: true, vendor: true, category: true } } },
     });
     if (!item) throw new NotFoundError(`Architecture assessment not found: ${id}`);
     return item;
   }
 
-  async deleteAssessment(id: string) {
-    return prisma.architectureAssessment.delete({ where: { id } });
+  async deleteAssessment(id: string, institutionId: string) {
+    const result = await prisma.architectureAssessment.deleteMany({
+      where: { id, institutionId },
+    });
+    if (result.count === 0) throw new NotFoundError(`Architecture assessment not found: ${id}`);
+    return result;
   }
 
   /** Stateless analysis — does not persist, used for real-time preview */

@@ -13,23 +13,26 @@ export const createAssessment = async (req: Request, res: Response, next: NextFu
   } catch (err) { next(err); }
 };
 
-export const listAssessments = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+// list/get/delete are tenant-scoped — institutionId from JWT (router-level
+// authenticateJWT guarantees req.user). Wrong-owner id → 404.
+
+export const listAssessments = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const data = await service.listAssessments();
+    const data = await service.listAssessments(req.user!.institutionId);
     res.json({ success: true, data });
   } catch (err) { next(err); }
 };
 
 export const getAssessment = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const data = await service.getAssessment(req.params['id'] as string);
+    const data = await service.getAssessment(req.params['id'] as string, req.user!.institutionId);
     res.json({ success: true, data });
   } catch (err) { next(err); }
 };
 
 export const deleteAssessment = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    await service.deleteAssessment(req.params['id'] as string);
+    await service.deleteAssessment(req.params['id'] as string, req.user!.institutionId);
     res.json({ success: true, data: null });
   } catch (err) { next(err); }
 };

@@ -215,8 +215,13 @@ export class ValueService {
     });
   }
 
-  async listAnalyses() {
+  // ── Tenant-scoped reads ────────────────────────────────────────────────────
+  // Reads filter by institutionId so a tenant cannot enumerate or fetch
+  // another tenant's value analyses by id-guessing.
+
+  async listAnalyses(institutionId: string) {
     return prisma.valueAnalysis.findMany({
+      where: { institutionId },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -230,9 +235,9 @@ export class ValueService {
     });
   }
 
-  async getAnalysis(id: string) {
-    const item = await prisma.valueAnalysis.findUnique({
-      where: { id },
+  async getAnalysis(id: string, institutionId: string) {
+    const item = await prisma.valueAnalysis.findFirst({
+      where: { id, institutionId },
       include: { targetSystem: { select: { id: true, name: true, vendor: true, category: true } } },
     });
     if (!item) throw new NotFoundError(`Value analysis not found: ${id}`);
