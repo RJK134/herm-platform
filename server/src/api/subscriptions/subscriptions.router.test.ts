@@ -46,10 +46,13 @@ function signToken(overrides: Record<string, unknown> = {}): string {
 function buildApp() {
   const app = express();
   app.use(requestId);
-  // Match production middleware order in app.ts: body parsing before routes.
-  // The webhook's raw-body handling is exercised via mock — these tests
-  // assert the auth contract (anonymous bounced; authenticated reaches the
-  // controller; webhook stays public) and not raw-body wire format.
+  // Mirror the production middleware order from app.ts:
+  //   1. raw-body parser, scoped to the webhook path only
+  //   2. global express.json() for everything else
+  // This is the order that allows `req.body` to be an unparsed Buffer for
+  // the webhook handler (so Stripe signature verification works) while
+  // every other route still gets a parsed JSON body.
+  app.use('/api/subscriptions/webhook', express.raw({ type: 'application/json' }));
   app.use(express.json());
   app.use('/api/subscriptions', subscriptionsRouter);
   app.use(errorHandler);
@@ -122,11 +125,29 @@ describe('subscriptions router auth', () => {
       .set('Content-Type', 'application/json')
       .set('stripe-signature', 't=0,v1=fake')
       .send({ id: 'evt_test', type: 'checkout.session.completed' });
-    // Auth invariant: an anonymous caller MUST reach the webhook handler
-    // (Stripe signature verification is the auth, not JWT). We don't assert
-    // raw-body wire format here — that is exercised end-to-end against
-    // Stripe's CLI in the runbook.
     expect(res.status).toBe(200);
     expect(stripeMock.handleWebhook).toHaveBeenCalledOnce();
+  });
+
+  it('forwards an unparsed Buffer (not parsed JSON) to stripe.handleWebhook', async () => {
+    // Regression guard for the body-parser ordering bug: the global
+    // `express.json()` was previously consuming the request body before
+    // the per-route raw parser ran, so `req.body` was a parsed object
+    // cast to Buffer and Stripe.webhooks.constructEvent rejected it.
+    // After moving `app.use('/api/subscriptions/webhook', express.raw(...))`
+    // ABOVE `express.json()`, the controller MUST observe a real Buffer.
+    stripeMock.handleWebhook.mockResolvedValueOnce({ handled: true, event: 'evt_test' });
+    const payload = JSON.stringify({ id: 'evt_test', type: 'checkout.session.completed' });
+    const res = await request(buildApp())
+      .post('/api/subscriptions/webhook')
+      .set('Content-Type', 'application/json')
+      .set('stripe-signature', 't=0,v1=fake')
+      .send(payload);
+    expect(res.status).toBe(200);
+    expect(stripeMock.handleWebhook).toHaveBeenCalledOnce();
+    const [body, signature] = stripeMock.handleWebhook.mock.calls[0]!;
+    expect(Buffer.isBuffer(body)).toBe(true);
+    expect((body as Buffer).toString('utf8')).toBe(payload);
+    expect(signature).toBe('t=0,v1=fake');
   });
 });

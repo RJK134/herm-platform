@@ -29,7 +29,9 @@ const { prismaMock } = vi.hoisted(() => ({
     generatedDocument: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
+      findUnique: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       deleteMany: vi.fn(),
     },
     architectureAssessment: {
@@ -122,14 +124,72 @@ describe('tenant isolation: persisted artefact reads/writes', () => {
       expect(res.body.data.id).toBe('doc-A1');
     });
 
-    it('PATCH against another tenant\'s id returns 404 (no update)', async () => {
-      prismaMock.generatedDocument.findFirst.mockResolvedValueOnce(null);
+    it('PATCH against another tenant\'s id returns 404 (atomic where-scope, no update)', async () => {
+      // updateMany is the atomic tenant-scoped gate: { id, institutionId }
+      // returns count=0 when the row exists but belongs to a different
+      // tenant — same response as not-found. Closes the TOCTOU window
+      // that a findFirst-then-update sequence would leave open.
+      prismaMock.generatedDocument.updateMany.mockResolvedValueOnce({ count: 0 });
       const res = await request(buildApp())
         .patch('/api/documents/doc-belongs-to-B')
         .set('Authorization', `Bearer ${tokenFor('inst-A')}`)
         .send({ title: 'sneaky rename' });
       expect(res.status).toBe(404);
+      expect(prismaMock.generatedDocument.updateMany).toHaveBeenCalledWith({
+        where: { id: 'doc-belongs-to-B', institutionId: 'inst-A' },
+        data: expect.objectContaining({ title: 'sneaky rename' }),
+      });
+      // The ordinary update() must never be called for cross-tenant PATCHes.
       expect(prismaMock.generatedDocument.update).not.toHaveBeenCalled();
+      // And we must not re-read the row (which would expose existence).
+      // The re-read uses findFirst with institutionId scoping; if updateMany
+      // returns 0 we throw before reaching it, so neither read should fire.
+      expect(prismaMock.generatedDocument.findFirst).not.toHaveBeenCalled();
+      expect(prismaMock.generatedDocument.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('PATCH against own id updates atomically and re-reads with institutionId scope', async () => {
+      prismaMock.generatedDocument.updateMany.mockResolvedValueOnce({ count: 1 });
+      // Defense-in-depth: the re-read after updateMany also filters by
+      // institutionId — every Prisma read on a tenant-owned model must
+      // carry the institutionId filter.
+      prismaMock.generatedDocument.findFirst.mockResolvedValueOnce({
+        id: 'doc-A1',
+        institutionId: 'inst-A',
+        title: 'renamed',
+      });
+      const res = await request(buildApp())
+        .patch('/api/documents/doc-A1')
+        .set('Authorization', `Bearer ${tokenFor('inst-A')}`)
+        .send({ title: 'renamed' });
+      expect(res.status).toBe(200);
+      expect(res.body.data.title).toBe('renamed');
+      expect(prismaMock.generatedDocument.updateMany).toHaveBeenCalledWith({
+        where: { id: 'doc-A1', institutionId: 'inst-A' },
+        data: expect.objectContaining({ title: 'renamed' }),
+      });
+      expect(prismaMock.generatedDocument.findFirst).toHaveBeenCalledWith({
+        where: { id: 'doc-A1', institutionId: 'inst-A' },
+      });
+      expect(prismaMock.generatedDocument.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('PATCH race-loss: concurrent DELETE between updateMany and re-read → 404 not stale 200', async () => {
+      // updateMany succeeds (count=1), but the row is gone by the time we
+      // re-read (e.g. an admin/super-admin deleted it in the meantime).
+      // Without the null guard the controller would emit a misleading
+      // `{ success: true, data: null }` 200; with the guard it throws
+      // NotFoundError → 404, preserving the prior non-null contract of
+      // `prisma.update`.
+      prismaMock.generatedDocument.updateMany.mockResolvedValueOnce({ count: 1 });
+      prismaMock.generatedDocument.findFirst.mockResolvedValueOnce(null);
+      const res = await request(buildApp())
+        .patch('/api/documents/doc-deleted-mid-flight')
+        .set('Authorization', `Bearer ${tokenFor('inst-A')}`)
+        .send({ title: 'race-loss' });
+      expect(res.status).toBe(404);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error.code).toBe('NOT_FOUND');
     });
 
     it('DELETE against another tenant\'s id returns 404 (no delete)', async () => {

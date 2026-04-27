@@ -1,13 +1,14 @@
-import express, { Router } from 'express';
+import { Router } from 'express';
 import { authenticateJWT } from '../../middleware/auth';
 import { createCheckout, stripeWebhook, getStatus, cancelSub, getInvoices } from './subscriptions.controller';
 
 const router = Router();
 
-// Stripe webhook needs raw body — must be registered BEFORE express.json() parsing.
-// Webhook authenticity is enforced by Stripe signature verification in
-// stripeService.handleWebhook, not by JWT. Keep it before the auth gate below.
-router.post('/webhook', express.raw({ type: 'application/json' }), stripeWebhook);
+// Stripe webhook stays public (signature is the auth, not JWT). The raw-body
+// parser is registered at the app level — `app.use('/api/subscriptions/webhook',
+// express.raw(...))` runs BEFORE the global `express.json()` so this handler
+// receives an unparsed Buffer that Stripe.webhooks.constructEvent can verify.
+router.post('/webhook', stripeWebhook);
 
 // All other subscription endpoints are tenant-scoped billing surfaces and
 // must require a real JWT. Previously this router used `optionalJWT`, which

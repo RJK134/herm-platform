@@ -47,6 +47,15 @@ export function createApp(): Express {
   app.use(httpLogger);
   app.use(helmetMiddleware);
   app.use(cors({ origin: allowedOrigin, credentials: true }));
+
+  // Stripe webhook needs the unparsed body to verify the signature. The
+  // raw-body parser MUST be registered before `express.json()` — otherwise
+  // the global JSON parser consumes the body stream first and the webhook
+  // handler receives a parsed object cast to Buffer, which fails Stripe's
+  // signature check. Scoped to the exact webhook path so no other route is
+  // affected.
+  app.use('/api/subscriptions/webhook', express.raw({ type: 'application/json' }));
+
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true }));
   app.use('/api', apiRateLimiter);

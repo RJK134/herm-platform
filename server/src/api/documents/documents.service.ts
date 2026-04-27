@@ -436,9 +436,6 @@ export class DocumentsService {
   }
 
   async updateDocument(id: string, institutionId: string, data: UpdateDocumentInput) {
-    const existing = await prisma.generatedDocument.findFirst({ where: { id, institutionId } });
-    if (!existing) throw new NotFoundError(`Document not found: ${id}`);
-
     const updateData: Record<string, unknown> = {};
     if (data.title) updateData.title = data.title;
     if (data.sections) {
@@ -448,7 +445,32 @@ export class DocumentsService {
     if (data.metadata) updateData.metadata = data.metadata;
     if (data.status) updateData.status = data.status;
 
-    return prisma.generatedDocument.update({ where: { id }, data: updateData });
+    // Atomic tenant-scoped update: updateMany takes a non-unique where so we
+    // can constrain by `{ id, institutionId }` in a single statement. count=0
+    // means either the row doesn't exist or belongs to a different tenant —
+    // both surface as 404, never confirming existence cross-tenant. This
+    // matches the deleteDocument pattern and closes the TOCTOU window that
+    // a findFirst-then-update sequence would otherwise leave open.
+    const result = await prisma.generatedDocument.updateMany({
+      where: { id, institutionId },
+      data: updateData,
+    });
+    if (result.count === 0) throw new NotFoundError(`Document not found: ${id}`);
+
+    // updateMany returns only `{ count }`. Re-read the row so the controller
+    // can echo the full updated document. Defense-in-depth: scope the read
+    // by `{ id, institutionId }` even though the row was just written under
+    // that scope — every Prisma query on a tenant-owned model carries the
+    // institutionId filter (matches `getDocument` and the project-wide rule).
+    //
+    // The re-read can still return null if a concurrent DELETE races between
+    // updateMany and findFirst. Treat that as not-found rather than letting
+    // the controller emit a misleading `{ success: true, data: null }` 200
+    // after a successful write — preserves the prior non-null contract of
+    // `prisma.generatedDocument.update(...)`.
+    const updated = await prisma.generatedDocument.findFirst({ where: { id, institutionId } });
+    if (!updated) throw new NotFoundError(`Document not found: ${id}`);
+    return updated;
   }
 
   async deleteDocument(id: string, institutionId: string) {
