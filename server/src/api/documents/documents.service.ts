@@ -462,7 +462,15 @@ export class DocumentsService {
     // by `{ id, institutionId }` even though the row was just written under
     // that scope — every Prisma query on a tenant-owned model carries the
     // institutionId filter (matches `getDocument` and the project-wide rule).
-    return prisma.generatedDocument.findFirst({ where: { id, institutionId } });
+    //
+    // The re-read can still return null if a concurrent DELETE races between
+    // updateMany and findFirst. Treat that as not-found rather than letting
+    // the controller emit a misleading `{ success: true, data: null }` 200
+    // after a successful write — preserves the prior non-null contract of
+    // `prisma.generatedDocument.update(...)`.
+    const updated = await prisma.generatedDocument.findFirst({ where: { id, institutionId } });
+    if (!updated) throw new NotFoundError(`Document not found: ${id}`);
+    return updated;
   }
 
   async deleteDocument(id: string, institutionId: string) {

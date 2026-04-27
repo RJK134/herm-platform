@@ -174,6 +174,24 @@ describe('tenant isolation: persisted artefact reads/writes', () => {
       expect(prismaMock.generatedDocument.findUnique).not.toHaveBeenCalled();
     });
 
+    it('PATCH race-loss: concurrent DELETE between updateMany and re-read → 404 not stale 200', async () => {
+      // updateMany succeeds (count=1), but the row is gone by the time we
+      // re-read (e.g. an admin/super-admin deleted it in the meantime).
+      // Without the null guard the controller would emit a misleading
+      // `{ success: true, data: null }` 200; with the guard it throws
+      // NotFoundError → 404, preserving the prior non-null contract of
+      // `prisma.update`.
+      prismaMock.generatedDocument.updateMany.mockResolvedValueOnce({ count: 1 });
+      prismaMock.generatedDocument.findFirst.mockResolvedValueOnce(null);
+      const res = await request(buildApp())
+        .patch('/api/documents/doc-deleted-mid-flight')
+        .set('Authorization', `Bearer ${tokenFor('inst-A')}`)
+        .send({ title: 'race-loss' });
+      expect(res.status).toBe(404);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error.code).toBe('NOT_FOUND');
+    });
+
     it('DELETE against another tenant\'s id returns 404 (no delete)', async () => {
       prismaMock.generatedDocument.deleteMany.mockResolvedValueOnce({ count: 0 });
       const res = await request(buildApp())
