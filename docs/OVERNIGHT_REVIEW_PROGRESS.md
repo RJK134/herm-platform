@@ -1,7 +1,8 @@
 # Overnight stabilisation pass — progress report
 
-**Branch:** `claude/stability-improvements-bj0tB`
-**Date:** 2026-04-25
+**Branch:** `claude/stability-improvements-bj0tB` (initial pass) → split per-item branches for follow-ups
+**Initial pass:** 2026-04-25
+**Last updated:** 2026-04-27
 **Scope:** Tightly-scoped route auth / tier enforcement + HERM compliance hardening; no architectural rewrites.
 
 ## Source-of-truth note
@@ -18,129 +19,90 @@ reconcile any divergence with the choices below.
 ## Routes audited
 
 Every prefix mounted in `server/src/app.ts` (lines 54–90) was checked against
-the canonical matrix. Compliant prefixes (no fix tonight):
+the canonical matrix. Compliant prefixes (no fix required):
 
 `/api/health`, `/api/ready`, `/api/auth/*`, `/api/institutions/*`,
 `/api/systems`, `/api/capabilities`, `/api/scores`, `/api/export`,
 `/api/vendors`, `/api/research`, `/api/scoring`, `/api/chat`,
-`/api/baskets`, `/api/tco`, `/api/procurement`, `/api/integration`,
-`/api/vendor-portal`, `/api/evaluations`, `/api/admin`,
-`/api/sector/analytics` (tier-gating explicitly deferred per
-`HERM_COMPLIANCE.md` "What's deferred"), `/api/keys`, `/api/frameworks`,
+`/api/baskets`, `/api/tco`, `/api/procurement`, `/api/integration`
+(now also tenant-scoped — see below), `/api/vendor-portal`,
+`/api/evaluations`, `/api/admin`, `/api/sector/analytics`
+(tier-gating still deferred), `/api/keys`, `/api/frameworks`,
 `/api/framework-mappings`.
 
-## Discrepancies found and disposition
+## Discrepancies — disposition
 
 | # | Severity | Prefix | Disposition |
 |---|---|---|---|
-| 1 | 🔴 HIGH | `/api/subscriptions/{checkout,status,cancel,invoices}` — `optionalJWT` allowed anonymous callers; `createCheckout` would create orphan Stripe sessions with `institutionId=undefined`. | **Fixed** — router-level `authenticateJWT` after the webhook; controllers now read `req.user.institutionId` directly. |
-| 2 | 🟠 MED | `/api/architecture/*`, `/api/value/*`, `/api/documents/*` mutations — `optionalJWT` only; controllers silently accepted writes with no `institutionId`. | **Fixed** — stateless previews (`/analyse`, `/calculate`, `/generate`) keep `optionalJWT` and stay public; persisted POST/GET/PATCH/DELETE require JWT. |
-| 3 | 🟡 LOW-MED | `/api/notifications` — anonymous PATCH `/:id/read` could flip another user's notification (where-clause did not scope by `userId`). | **Fixed** — router now requires `authenticateJWT`; PATCH switched to `updateMany` scoped by `{ id, userId }` with a 404 envelope on count=0. |
-| 4 | 🟢 INFO | `/api/sector/analytics/*` `optionalJWT` only. | **No change** — explicitly deferred in `HERM_COMPLIANCE.md` "What's deferred". Recorded as follow-up below. |
-| 5 | 🟢 INFO | `/api/integration/*` no auth. | **No change** — matches "stateless calculator" intent in the matrix. |
-| - | (release-discipline) | `documents.service.ts`, `server/src/index.ts`, `client/src/pages/DocumentGenerator.tsx` — duplicate `import { PRODUCT } from '.../branding'` from commit `b93f3c9`. | **Fixed** — single-line dedupes; was blocking `npm run typecheck` and breaking 15 vitest test-file transforms. |
+| 1 | 🔴 HIGH | `/api/subscriptions/{checkout,status,cancel,invoices}` — `optionalJWT` allowed anonymous callers; `createCheckout` would create orphan Stripe sessions with `institutionId=undefined`. | ✅ **Fixed (PR #30, merged).** Router-level `authenticateJWT` after the webhook; controllers now read `req.user.institutionId` directly. |
+| 2 | 🟠 MED | `/api/architecture/*`, `/api/value/*`, `/api/documents/*` mutations — `optionalJWT` only; controllers silently accepted writes with no `institutionId`. | ✅ **Fixed (PR #30).** Stateless previews keep `optionalJWT`; persisted POST/GET/PATCH/DELETE require JWT. |
+| 3 | 🟡 LOW-MED | `/api/notifications` — anonymous PATCH `/:id/read` could flip another user's notification. | ✅ **Fixed (PR #30).** Router requires `authenticateJWT`; PATCH switched to `updateMany` scoped by `{ id, userId }` with a 404 envelope on count=0. |
+| 4 | 🟠 MED | **Cross-tenant reads on persisted artefacts** — `listDocuments`, `getDocument`, `updateDocument`, `deleteDocument`, `getAssessment`, `listAssessments`, `getAnalysis`, `listAnalyses`, integration list/get all ran unscoped Prisma queries. Tenant A could read or mutate tenant B's rows by id-guessing. | ✅ **Fixed (PR #31, merged).** Every list/get/update/delete now takes an explicit `institutionId` parameter and uses `findFirst({ id, institutionId })` / `updateMany`/`deleteMany({ id, institutionId })` for atomic gating. Wrong-owner ids surface as 404, never 403. New `IntegrationAssessment.institutionId` column (additive, indexed migration). `/api/integration` newly gated with `authenticateJWT`. 16 new tenant-isolation tests. |
+| 5 | 🟠 MED | **Stripe webhook raw-body parsing** — `app.use(express.json())` registered globally before any route, consuming the body before the per-route `express.raw()` could run. Webhook handler received a parsed object cast to Buffer; Stripe signature verification would throw in production. | ✅ **Fixed (PR #32, merged).** Path-scoped `app.use('/api/subscriptions/webhook', express.raw(...))` registered BEFORE the global `express.json()`. Per-route `express.raw()` removed from router. New regression-guard test asserts `Buffer.isBuffer(req.body)` and raw bytes match payload. |
+| 5b | 🟢 INFO | `updateDocument` follow-ups (caught by Cursor Bugbot mid-review on PR #32) | ✅ **Fixed (in PR #32).** Three defense-in-depth tightenings: (a) `update({where:{id}})` → `updateMany({where:{id,institutionId}})` atomic gate; (b) re-read switched to `findFirst({where:{id,institutionId}})`; (c) null-guard on the re-read against concurrent-delete race, preserving the prior non-null contract. |
+| 6 | 🟢 INFO | `/api/sector/analytics/*` `optionalJWT` only. | ⏳ **Still deferred** — see follow-up #1 below. Now queued for the next session. |
+| 7 | (release-discipline) | Three duplicate `import { PRODUCT } from '.../branding'` statements from commit `b93f3c9` blocking `npm run typecheck` and 15 vitest test-file transforms. | ✅ **Fixed (PR #30).** Single-line dedupes. |
 
-## Code changes
+## Code changes (cumulative across PRs #30–#32)
 
-| File | Change |
+PR #30 (route control + tier enforcement)
+- `server/src/api/subscriptions/subscriptions.router.ts` — `authenticateJWT` (after webhook).
+- `server/src/api/subscriptions/subscriptions.controller.ts` — drop anonymous fallbacks.
+- `server/src/api/{architecture,value,documents}/{*}.router.ts` — public stateless previews; JWT-gated persisted ops.
+- `server/src/api/notifications/notifications.router.ts` — `authenticateJWT`; `userId`-scoped PATCH.
+- Three duplicate-`PRODUCT` import dedupes.
+
+PR #31 (tenant isolation)
+- `prisma/migrations/20260426000000_integration_assessment_institution_id/migration.sql` — additive, indexed.
+- `prisma/schema.prisma` — `IntegrationAssessment.institutionId` (nullable, indexed).
+- Service+controller plumbing for `institutionId` across documents / architecture / value / integration.
+- `/api/integration` newly gated with `authenticateJWT`.
+
+PR #32 (Stripe webhook)
+- `server/src/app.ts` — path-scoped `express.raw()` before global `express.json()`.
+- `server/src/api/subscriptions/subscriptions.router.ts` — drop redundant per-route raw parser.
+- `subscriptions.router.test.ts` — buildApp() mirrors new order; new Buffer regression guard.
+- `documents.service.ts::updateDocument` — atomic `updateMany`, scoped re-read with null-guard.
+
+## Tests added (cumulative)
+
+| File | Tests |
 |---|---|
-| `server/src/api/subscriptions/subscriptions.router.ts` | Replace `optionalJWT` with `authenticateJWT` (after webhook). |
-| `server/src/api/subscriptions/subscriptions.controller.ts` | Drop now-unreachable anonymous-fallback branches; use `req.user!` directly. |
-| `server/src/api/architecture/architecture.router.ts` | Stateless `/analyse` keeps `optionalJWT`; persisted ops gated by `authenticateJWT`. |
-| `server/src/api/value/value.router.ts` | Same pattern as architecture; `/benchmarks` and `/calculate` stay public. |
-| `server/src/api/documents/documents.router.ts` | Same pattern; `/generate` stays public. |
-| `server/src/api/notifications/notifications.router.ts` | Router-level `authenticateJWT`; PATCH `/:id/read` scoped to `req.user.userId` via `updateMany` + 404 on count=0. |
-| `server/src/api/documents/documents.service.ts` | Removed duplicate `PRODUCT` import. |
-| `server/src/index.ts` | Removed duplicate `PRODUCT` import. |
-| `client/src/pages/DocumentGenerator.tsx` | Removed duplicate `PRODUCT` import. |
+| `subscriptions.router.test.ts` | 8 (PR #30 added 7, PR #32 added the Buffer regression guard) |
+| `tierControl.test.ts` | 14 |
+| `persistedArtefactsAuth.test.ts` | 12 |
+| `tenantIsolation.test.ts` | 18 (PR #31 added 16, PR #32's bot follow-ups added 2: own-id PATCH atomicity assertion and concurrent-delete race-loss) |
 
-## Tests added
-
-**`server/src/api/subscriptions/subscriptions.router.test.ts`** (new, 7 tests)
-- anonymous /checkout, /status, /cancel, /invoices → 401, no Stripe / Prisma side-effects
-- authenticated FREE-tier /status → 200 with FREE envelope
-- /checkout passes `institutionId` from JWT, never the body (spoofed body is ignored)
-- /webhook stays public (signature is the auth, not JWT)
-
-**`server/src/__tests__/tierControl.test.ts`** (new, 14 tests)
-Pins HERM_COMPLIANCE.md invariants end-to-end through real routers + middleware:
-- FREE + anonymous can list `/api/capabilities` against the public HERM framework
-- FREE blocked from non-public framework (FHE) at `tierGate`
-- PROFESSIONAL can read FHE
-- FREE and PROFESSIONAL blocked from `/api/framework-mappings` and `/api/keys`
-- ENTERPRISE passes both
-- Anonymous on `/api/keys` → 401 (auth before tier)
-- HERM attribution: `meta.provenance.framework.publisher = "CAUDIT"` and
-  `licence.type = "CC-BY-NC-SA-4.0"` on `/api/capabilities` responses
-- Notifications PATCH `/:id/read` is anonymous-blocked, scopes by `userId`,
-  and returns 404 on a wrong-owner id
-
-**`server/src/__tests__/persistedArtefactsAuth.test.ts`** (new, 12 tests)
-Pins the architecture / value / documents stateless-vs-persisted boundary:
-- `/analyse`, `/calculate`, `/generate`, `/benchmarks` stay public
-- All persisted POST/GET/PATCH/DELETE return 401 to anonymous
-
-**Total new tests:** 33. **Server suite:** 304 / 304 passing (was 271 / 271
-once the duplicate-`PRODUCT` parse error was unblocked). **Client suite:**
-64 / 64 passing.
+**Server suite:** 322 / 322 passing (was 271 pre-pass). **Client suite:** 64 / 64 unchanged.
 
 ## Verify state
 
 ```
-npm run verify                    → PASS (lint 0 errors / 120 pre-existing warnings, typecheck clean, 368 tests, build OK)
+npm run verify  →  PASS at every merge point
+                   lint:       0 errors / 120 pre-existing warnings
+                   typecheck:  clean
+                   tests:      322 server + 64 client
+                   build:      OK
 ```
 
-## Unresolved items / follow-ups
+## Unresolved follow-ups
 
-Recorded — **not** done tonight, deliberately scoped out:
+1. **`/api/sector/analytics/*` tier gating.** Currently `optionalJWT` + k-anon only. `HERM_COMPLIANCE.md` "What's deferred" calls this out; `Subscriptions.tsx` does not yet list it as a paid-only feature. Align gate + pricing copy in a dedicated PR. **Now queued for the next session.**
 
-1. **`/api/sector/analytics/*` tier gating.** Currently `optionalJWT` + k-anon
-   only. `HERM_COMPLIANCE.md` "What's deferred" calls this out; copy on the
-   Subscriptions page does not yet list it as a paid feature. Align gate +
-   pricing copy in a dedicated PR.
+2. **CI workflow trigger gap.** `.github/workflows/ci.yml` is gated on `pull_request: branches: [main, develop]`. Neither branch exists in this repo (default is `master`). PR jobs never run today — only GitGuardian fires. One-line fix; **queued.**
 
-2. **Documents / architecture / value cross-tenant reads.** The route-level
-   auth is now correct, but the controllers' `listDocuments`,
-   `getDocument`, `getAssessment`, `listAssessments`, `listAnalyses`,
-   `getAnalysis` etc. still don't filter by `institutionId`. An authenticated
-   tenant A can read tenant B's persisted artefacts by id-guessing. Fix in
-   the relevant services / controllers as a follow-up — bigger than tonight's
-   scope and orthogonal to the auth matrix.
+3. **`HERM_COMPLIANCE.md` `/api/integration` wording is stale.** The doc still classifies it as "stateless calculator" — but the controller has always persisted to DB, and PR #31 made the route tenant-scoped + JWT-required. Doc should be updated to match reality (move `/api/integration` from the Public bucket to the Authenticated bucket).
 
-3. **Stripe webhook raw-body parsing.** App-level `express.json()` runs at
-   `app.ts:50`, which means by the time the request reaches the router-level
-   `express.raw()` on `/api/subscriptions/webhook`, the body stream has
-   already been consumed. The webhook handler then calls
-   `stripeService.handleWebhook(req.body as Buffer, sig)` with a parsed
-   object cast to Buffer. Stripe signature verification will reject this in
-   production. Fix by moving the webhook route registration to `app.ts`
-   *before* `express.json()`, or by skipping JSON parsing for that path.
-   (Touched the auth shape only tonight per the brief: "Keep webhook raw-body
-   handling intact for Stripe.")
+4. **Migration-first vs `db:push`.** CI runs `npm run db:push` against the throwaway test DB. `PRODUCTION_READINESS.md` already lists the migrate-deploy switch as deferred — leave it deferred unless prioritised.
 
-4. **Migration-first vs `db:push`.** CI runs `npm run db:push` against the
-   throwaway test DB. `PRODUCTION_READINESS.md` already lists the
-   migrate-deploy switch as deferred — leave it deferred.
+5. **Pre-existing lint warnings (120, 0 errors).** Mostly `consistent-type-imports` and `no-non-null-assertion`. Should be cleared in a focused style PR.
 
-5. **Pre-existing lint warnings (120, 0 errors).** Mostly
-   `consistent-type-imports` and `no-non-null-assertion`. Unchanged tonight;
-   they should be cleared in a focused style PR.
+6. **`procurement.v2.audit.test.ts` cwd footgun.** Reported as failing when running `npx vitest` from the repo root (wrong cwd / config resolution). Passes cleanly under `npm run test:server` / `npm run verify`. Document in RUNBOOK.
 
-6. **`procurement.v2.audit.test.ts > returns 404 for a missing evaluation`**
-   was reported as failing when running `npx vitest` directly from the repo
-   root (wrong cwd / config resolution). It passes cleanly under
-   `npm run test:server` and `npm run verify`. Not actionable; just a footgun
-   for local dev. Document in RUNBOOK if it bites again.
+## Recommended next session scope (proposal)
 
-## Recommended next step (tomorrow)
+1. Update this doc to mark items #1 (cross-tenant) and #2 (Stripe webhook) closed — **this commit.**
+2. CI workflow `branches: [main, develop]` → `master` fix — separate small PR.
+3. `/api/sector/analytics` tier gating + pricing-copy alignment — separate PR (was explicitly off-limits without confirmation; now confirmed).
 
-**Tackle the cross-tenant read leak in the persisted-artefact controllers
-(follow-up #2)** — this is the highest-value remaining risk on the same
-surface I touched tonight. The fix is pure controller/service work
-(filter `where: { institutionId: req.user.institutionId }` on each
-list/get) plus a Supertest-level "tenant A cannot read tenant B's row"
-test per surface. No router or middleware changes needed.
-
-Second-most-valuable: **Stripe webhook raw-body fix (follow-up #3)** —
-needs a 5-line surgery in `app.ts` (move webhook registration ahead of
-`express.json()`) plus an end-to-end test against the Stripe CLI.
+After those, the remaining deferred items (#3 doc text, #4 migration discipline, #5 lint warnings, #6 cwd footgun) are all low-urgency and can be batched later.
