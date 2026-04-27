@@ -91,6 +91,12 @@ All framework-scoped responses in this bucket now emit `meta.provenance.framewor
 | `/api/institutions`                            | Institution profile                        |
 | `/api/tco/estimates`                           | Persisted TCO estimates — both `createdById` and `institutionId` stamped from JWT (never the body); list/read scoped to caller's institutionId |
 
+### Paid-tier gated (Professional + Enterprise)
+
+| Prefix                          | Gate                                                                 |
+|---------------------------------|----------------------------------------------------------------------|
+| `/api/sector/analytics/*`       | `requirePaidTier(['professional', 'enterprise'])` — Sector Intelligence is a paid-tier feature; k-anonymity (≥ 5 institutions) still applies inside the gated controllers as a privacy floor, separate from the commercial gate. |
+
 ### Enterprise-tier gated
 
 | Prefix                        | Gate                                     |
@@ -137,10 +143,6 @@ client axios interceptor then clears any stale token and redirects to
   yet enforced in code. When they are, they belong in domain services
   (not middleware) because free-tier users need the first N requests
   to succeed.
-- **Sector analytics tier gating**: `/api/sector/analytics/*` applies a
-  minimum-5-institutions k-anonymity filter but no commercial gate.
-  Subscription copy does not yet list sector analytics as a paid
-  feature; align copy and gate together in a dedicated PR.
 - **CSV provenance body**: exports currently only expose provenance via
   `x-framework-*` headers (to avoid polluting the CSV body with
   non-parseable comment lines). If customers ask, we could add a second

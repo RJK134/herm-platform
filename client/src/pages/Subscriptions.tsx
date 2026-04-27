@@ -65,6 +65,7 @@ const TIER_FEATURES: TierFeature[] = [
   { feature: 'Document generation', free: '5/mo', professional: 'Unlimited', enterprise: 'Unlimited' },
   { feature: 'TCO calculations', free: '10/mo', professional: 'Unlimited', enterprise: 'Unlimited' },
   { feature: 'Export formats', free: 'PDF', professional: 'PDF + Word', enterprise: 'All formats' },
+  { feature: 'Sector analytics', free: false, professional: true, enterprise: true },
   { feature: 'Priority support', free: false, professional: true, enterprise: true },
   { feature: 'White-label exports', free: false, professional: false, enterprise: true },
   { feature: 'API access', free: false, professional: false, enterprise: true },
