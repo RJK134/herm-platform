@@ -142,12 +142,18 @@ describe('tenant isolation: persisted artefact reads/writes', () => {
       // The ordinary update() must never be called for cross-tenant PATCHes.
       expect(prismaMock.generatedDocument.update).not.toHaveBeenCalled();
       // And we must not re-read the row (which would expose existence).
+      // The re-read uses findFirst with institutionId scoping; if updateMany
+      // returns 0 we throw before reaching it, so neither read should fire.
+      expect(prismaMock.generatedDocument.findFirst).not.toHaveBeenCalled();
       expect(prismaMock.generatedDocument.findUnique).not.toHaveBeenCalled();
     });
 
-    it('PATCH against own id updates atomically and returns the row', async () => {
+    it('PATCH against own id updates atomically and re-reads with institutionId scope', async () => {
       prismaMock.generatedDocument.updateMany.mockResolvedValueOnce({ count: 1 });
-      prismaMock.generatedDocument.findUnique.mockResolvedValueOnce({
+      // Defense-in-depth: the re-read after updateMany also filters by
+      // institutionId — every Prisma read on a tenant-owned model must
+      // carry the institutionId filter.
+      prismaMock.generatedDocument.findFirst.mockResolvedValueOnce({
         id: 'doc-A1',
         institutionId: 'inst-A',
         title: 'renamed',
@@ -162,6 +168,10 @@ describe('tenant isolation: persisted artefact reads/writes', () => {
         where: { id: 'doc-A1', institutionId: 'inst-A' },
         data: expect.objectContaining({ title: 'renamed' }),
       });
+      expect(prismaMock.generatedDocument.findFirst).toHaveBeenCalledWith({
+        where: { id: 'doc-A1', institutionId: 'inst-A' },
+      });
+      expect(prismaMock.generatedDocument.findUnique).not.toHaveBeenCalled();
     });
 
     it('DELETE against another tenant\'s id returns 404 (no delete)', async () => {

@@ -458,9 +458,11 @@ export class DocumentsService {
     if (result.count === 0) throw new NotFoundError(`Document not found: ${id}`);
 
     // updateMany returns only `{ count }`. Re-read the row so the controller
-    // can echo the full updated document — the caller's institutionId scopes
-    // the read implicitly (we just wrote with that scope).
-    return prisma.generatedDocument.findUnique({ where: { id } });
+    // can echo the full updated document. Defense-in-depth: scope the read
+    // by `{ id, institutionId }` even though the row was just written under
+    // that scope — every Prisma query on a tenant-owned model carries the
+    // institutionId filter (matches `getDocument` and the project-wide rule).
+    return prisma.generatedDocument.findFirst({ where: { id, institutionId } });
   }
 
   async deleteDocument(id: string, institutionId: string) {
