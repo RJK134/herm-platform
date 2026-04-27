@@ -436,9 +436,6 @@ export class DocumentsService {
   }
 
   async updateDocument(id: string, institutionId: string, data: UpdateDocumentInput) {
-    const existing = await prisma.generatedDocument.findFirst({ where: { id, institutionId } });
-    if (!existing) throw new NotFoundError(`Document not found: ${id}`);
-
     const updateData: Record<string, unknown> = {};
     if (data.title) updateData.title = data.title;
     if (data.sections) {
@@ -448,7 +445,22 @@ export class DocumentsService {
     if (data.metadata) updateData.metadata = data.metadata;
     if (data.status) updateData.status = data.status;
 
-    return prisma.generatedDocument.update({ where: { id }, data: updateData });
+    // Atomic tenant-scoped update: updateMany takes a non-unique where so we
+    // can constrain by `{ id, institutionId }` in a single statement. count=0
+    // means either the row doesn't exist or belongs to a different tenant —
+    // both surface as 404, never confirming existence cross-tenant. This
+    // matches the deleteDocument pattern and closes the TOCTOU window that
+    // a findFirst-then-update sequence would otherwise leave open.
+    const result = await prisma.generatedDocument.updateMany({
+      where: { id, institutionId },
+      data: updateData,
+    });
+    if (result.count === 0) throw new NotFoundError(`Document not found: ${id}`);
+
+    // updateMany returns only `{ count }`. Re-read the row so the controller
+    // can echo the full updated document — the caller's institutionId scopes
+    // the read implicitly (we just wrote with that scope).
+    return prisma.generatedDocument.findUnique({ where: { id } });
   }
 
   async deleteDocument(id: string, institutionId: string) {

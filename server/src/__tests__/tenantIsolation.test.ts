@@ -29,7 +29,9 @@ const { prismaMock } = vi.hoisted(() => ({
     generatedDocument: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
+      findUnique: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       deleteMany: vi.fn(),
     },
     architectureAssessment: {
@@ -122,14 +124,44 @@ describe('tenant isolation: persisted artefact reads/writes', () => {
       expect(res.body.data.id).toBe('doc-A1');
     });
 
-    it('PATCH against another tenant\'s id returns 404 (no update)', async () => {
-      prismaMock.generatedDocument.findFirst.mockResolvedValueOnce(null);
+    it('PATCH against another tenant\'s id returns 404 (atomic where-scope, no update)', async () => {
+      // updateMany is the atomic tenant-scoped gate: { id, institutionId }
+      // returns count=0 when the row exists but belongs to a different
+      // tenant — same response as not-found. Closes the TOCTOU window
+      // that a findFirst-then-update sequence would leave open.
+      prismaMock.generatedDocument.updateMany.mockResolvedValueOnce({ count: 0 });
       const res = await request(buildApp())
         .patch('/api/documents/doc-belongs-to-B')
         .set('Authorization', `Bearer ${tokenFor('inst-A')}`)
         .send({ title: 'sneaky rename' });
       expect(res.status).toBe(404);
+      expect(prismaMock.generatedDocument.updateMany).toHaveBeenCalledWith({
+        where: { id: 'doc-belongs-to-B', institutionId: 'inst-A' },
+        data: expect.objectContaining({ title: 'sneaky rename' }),
+      });
+      // The ordinary update() must never be called for cross-tenant PATCHes.
       expect(prismaMock.generatedDocument.update).not.toHaveBeenCalled();
+      // And we must not re-read the row (which would expose existence).
+      expect(prismaMock.generatedDocument.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('PATCH against own id updates atomically and returns the row', async () => {
+      prismaMock.generatedDocument.updateMany.mockResolvedValueOnce({ count: 1 });
+      prismaMock.generatedDocument.findUnique.mockResolvedValueOnce({
+        id: 'doc-A1',
+        institutionId: 'inst-A',
+        title: 'renamed',
+      });
+      const res = await request(buildApp())
+        .patch('/api/documents/doc-A1')
+        .set('Authorization', `Bearer ${tokenFor('inst-A')}`)
+        .send({ title: 'renamed' });
+      expect(res.status).toBe(200);
+      expect(res.body.data.title).toBe('renamed');
+      expect(prismaMock.generatedDocument.updateMany).toHaveBeenCalledWith({
+        where: { id: 'doc-A1', institutionId: 'inst-A' },
+        data: expect.objectContaining({ title: 'renamed' }),
+      });
     });
 
     it('DELETE against another tenant\'s id returns 404 (no delete)', async () => {
