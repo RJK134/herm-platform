@@ -13,21 +13,21 @@ datasource db {
 // proprietary FHE Capability Framework by default.
 
 model Framework {
-  id               String   @id @default(cuid())
-  slug             String   @unique          // "herm-v3.1", "fhe-capability-framework"
-  name             String                    // "UCISA HERM v3.1"
-  version          String                    // "3.1"
-  publisher        String                    // "CAUDIT", "FHE"
-  description      String?
-  licenceType      String                    // "CC-BY-NC-SA-4.0", "PROPRIETARY"
-  licenceNotice    String?                   // Full attribution text
-  licenceUrl       String?                   // "https://creativecommons.org/licenses/by-nc-sa/4.0/"
-  isPublic         Boolean  @default(false)  // true = available on free tier
-  isDefault        Boolean  @default(false)  // true = default for paid tier
-  isActive         Boolean  @default(true)
-  domainCount      Int      @default(0)
-  capabilityCount  Int      @default(0)
-  metadata         Json?
+  id              String  @id @default(cuid())
+  slug            String  @unique // "herm-v3.1", "fhe-capability-framework"
+  name            String // "UCISA HERM v3.1"
+  version         String // "3.1"
+  publisher       String // "CAUDIT", "FHE"
+  description     String?
+  licenceType     String // "CC-BY-NC-SA-4.0", "PROPRIETARY"
+  licenceNotice   String? // Full attribution text
+  licenceUrl      String? // "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+  isPublic        Boolean @default(false) // true = available on free tier
+  isDefault       Boolean @default(false) // true = default for paid tier
+  isActive        Boolean @default(true)
+  domainCount     Int     @default(0)
+  capabilityCount Int     @default(0)
+  metadata        Json?
 
   domains          FrameworkDomain[]
   capabilities     Capability[]
@@ -35,29 +35,29 @@ model Framework {
   versionScores    VersionScore[]
   baskets          CapabilityBasket[]
   evaluations      EvaluationProject[]
-  mappingsAsSource FrameworkMapping[] @relation("MappingSource")
-  mappingsAsTarget FrameworkMapping[] @relation("MappingTarget")
+  mappingsAsSource FrameworkMapping[]  @relation("MappingSource")
+  mappingsAsTarget FrameworkMapping[]  @relation("MappingTarget")
 
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([isPublic])
   @@index([isDefault])
 }
 
 model FrameworkDomain {
-  id               String      @id @default(cuid())
-  frameworkId      String
-  framework        Framework   @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
-  code             String                    // "LT", "RE" for HERM; "DL", "SL" for FHE
-  name             String                    // "Learning & Teaching"
-  category         String
-  description      String?
-  sortOrder        Int
-  colour           String?                   // Hex colour for UI
-  capabilityCount  Int         @default(0)
+  id              String    @id @default(cuid())
+  frameworkId     String
+  framework       Framework @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+  code            String // "LT", "RE" for HERM; "DL", "SL" for FHE
+  name            String // "Learning & Teaching"
+  category        String
+  description     String?
+  sortOrder       Int
+  colour          String? // Hex colour for UI
+  capabilityCount Int       @default(0)
 
-  capabilities     Capability[]
+  capabilities      Capability[]
   domainAssignments EvaluationDomainAssignment[]
 
   @@unique([frameworkId, code])
@@ -65,23 +65,23 @@ model FrameworkDomain {
 }
 
 model Capability {
-  id            String          @id @default(cuid())
-  frameworkId   String
-  framework     Framework       @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
-  code          String                      // "BC001" for HERM; "FHE-DL-001" for FHE
-  name          String
-  description   String?
-  domainId      String
-  domain        FrameworkDomain @relation(fields: [domainId], references: [id], onDelete: Restrict)
-  sortOrder     Int
-  level         Int             @default(1)  // Hierarchy depth
-  parentId      String?                      // Self-ref for sub-capabilities
-  parent        Capability?     @relation("CapabilityHierarchy", fields: [parentId], references: [id])
-  children      Capability[]    @relation("CapabilityHierarchy")
+  id          String          @id @default(cuid())
+  frameworkId String
+  framework   Framework       @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+  code        String // "BC001" for HERM; "FHE-DL-001" for FHE
+  name        String
+  description String?
+  domainId    String
+  domain      FrameworkDomain @relation(fields: [domainId], references: [id], onDelete: Restrict)
+  sortOrder   Int
+  level       Int             @default(1) // Hierarchy depth
+  parentId    String? // Self-ref for sub-capabilities
+  parent      Capability?     @relation("CapabilityHierarchy", fields: [parentId], references: [id])
+  children    Capability[]    @relation("CapabilityHierarchy")
 
-  scores        CapabilityScore[]
-  basketItems   BasketItem[]
-  versionScores VersionScore[]
+  scores         CapabilityScore[]
+  basketItems    BasketItem[]
+  versionScores  VersionScore[]
   sourceMappings CapabilityMapping[] @relation("SourceCapabilityMapping")
   targetMappings CapabilityMapping[] @relation("TargetCapabilityMapping")
 
@@ -94,21 +94,21 @@ model Capability {
 // ── Platform Core ────────────────────────────────────────────────────────────
 
 model Institution {
-  id           String               @id @default(cuid())
-  name         String
-  slug         String               @unique
-  country      String
-  tier         String               @default("free")
-  logoUrl      String?
-  domain       String?
-  users        User[]
-  baskets      CapabilityBasket[]
-  projects     ProcurementProject[]
-  subscription        Subscription?
-  evaluationProjects  EvaluationProject[]
-  apiKeys      ApiKey[]
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
+  id                 String               @id @default(cuid())
+  name               String
+  slug               String               @unique
+  country            String
+  tier               String               @default("free")
+  logoUrl            String?
+  domain             String?
+  users              User[]
+  baskets            CapabilityBasket[]
+  projects           ProcurementProject[]
+  subscription       Subscription?
+  evaluationProjects EvaluationProject[]
+  apiKeys            ApiKey[]
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
 }
 
 model Subscription {
@@ -133,18 +133,19 @@ enum SubscriptionTier {
 }
 
 model User {
-  id            String      @id @default(cuid())
-  email         String      @unique
-  name          String
-  passwordHash  String      @default("")
-  role          UserRole    @default(VIEWER)
-  institutionId String
-  institution   Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
-  evaluationMemberships      EvaluationMember[]
-  domainAssignments          EvaluationDomainAssignment[] @relation("DomainAssignments")
-  notifications Notification[]
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  id                    String                       @id @default(cuid())
+  email                 String                       @unique
+  name                  String
+  passwordHash          String                       @default("")
+  role                  UserRole                     @default(VIEWER)
+  institutionId         String
+  institution           Institution                  @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  evaluationMemberships EvaluationMember[]
+  domainAssignments     EvaluationDomainAssignment[] @relation("DomainAssignments")
+  notifications         Notification[]
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+
   @@index([institutionId])
 }
 
@@ -161,16 +162,16 @@ enum UserRole {
 // ── Vendor Systems ───────────────────────────────────────────────────────────
 
 model VendorSystem {
-  id                   String                  @id @default(cuid())
-  name                 String
-  vendor               String
-  category             String
-  description          String?
-  regions              String[]
-  cloudNative          Boolean                 @default(false)
-  website              String?
-  logoUrl              String?
-  isOwnSystem          Boolean                 @default(false)
+  id                      String                   @id @default(cuid())
+  name                    String
+  vendor                  String
+  category                String
+  description             String?
+  regions                 String[]
+  cloudNative             Boolean                  @default(false)
+  website                 String?
+  logoUrl                 String?
+  isOwnSystem             Boolean                  @default(false)
   scores                  CapabilityScore[]
   profile                 VendorProfile?
   versions                VendorVersion[]
@@ -182,24 +183,25 @@ model VendorSystem {
   evaluations             ProcurementEvaluation[]
   vendorAccount           VendorAccount?
   evaluationEntries       EvaluationSystem[]
-  createdAt               DateTime                @default(now())
-  updatedAt               DateTime                @updatedAt
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
 }
 
 model CapabilityScore {
-  id           String         @id @default(cuid())
+  id           String       @id @default(cuid())
   frameworkId  String
-  framework    Framework      @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+  framework    Framework    @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
   systemId     String
-  system       VendorSystem   @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  system       VendorSystem @relation(fields: [systemId], references: [id], onDelete: Cascade)
   capabilityId String
-  capability   Capability     @relation(fields: [capabilityId], references: [id], onDelete: Restrict)
+  capability   Capability   @relation(fields: [capabilityId], references: [id], onDelete: Restrict)
   value        Int
   evidence     String?
   source       String?
-  version      Int            @default(1)
+  version      Int          @default(1)
   scoredBy     String?
-  scoredAt     DateTime       @default(now())
+  scoredAt     DateTime     @default(now())
+
   @@unique([frameworkId, systemId, capabilityId, version])
   @@index([frameworkId])
   @@index([systemId])
@@ -219,6 +221,7 @@ model CapabilityBasket {
   isTemplate    Boolean      @default(false)
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
+
   @@index([frameworkId])
   @@index([institutionId])
 }
@@ -232,29 +235,31 @@ model BasketItem {
   priority     String           @default("must")
   weight       Int              @default(1)
   notes        String?
+
   @@unique([basketId, capabilityId])
 }
 
 model ProcurementProject {
-  id               String      @id @default(cuid())
+  id               String                  @id @default(cuid())
   name             String
   description      String?
   institutionId    String
-  institution      Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
-  status           String      @default("draft")
+  institution      Institution             @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  status           String                  @default("draft")
   basketId         String?
-  jurisdiction     String      @default("UK")
-  estimatedValue   Decimal?    @db.Decimal(14, 2)
-  procurementRoute String?     @default("open")
+  jurisdiction     String                  @default("UK")
+  estimatedValue   Decimal?                @db.Decimal(14, 2)
+  procurementRoute String?                 @default("open")
   startDate        DateTime?
   targetAwardDate  DateTime?
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
   workflow         ProcurementWorkflow?
   shortlist        ShortlistEntry[]
   stages           ProcurementStage[]
   evaluations      ProcurementEvaluation[]
   complianceChecks ComplianceCheck[]
+
   @@index([institutionId])
 }
 
@@ -267,34 +272,37 @@ model AuditLog {
   changes    Json?
   ipAddress  String?
   createdAt  DateTime @default(now())
+
   @@index([entityType, entityId])
   @@index([userId])
 }
 
 model VendorVersion {
-  id           String         @id @default(cuid())
-  systemId     String
-  system       VendorSystem   @relation(fields: [systemId], references: [id], onDelete: Cascade)
-  versionName  String
-  releaseDate  DateTime?
-  endOfLife    DateTime?
-  changelog    String?
-  scores       VersionScore[]
-  createdAt    DateTime       @default(now())
+  id          String         @id @default(cuid())
+  systemId    String
+  system      VendorSystem   @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  versionName String
+  releaseDate DateTime?
+  endOfLife   DateTime?
+  changelog   String?
+  scores      VersionScore[]
+  createdAt   DateTime       @default(now())
+
   @@index([systemId])
 }
 
 model VersionScore {
-  id             String         @id @default(cuid())
+  id             String        @id @default(cuid())
   frameworkId    String
-  framework      Framework      @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+  framework      Framework     @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
   versionId      String
-  version        VendorVersion  @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  version        VendorVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
   capabilityId   String
-  capability     Capability     @relation(fields: [capabilityId], references: [id], onDelete: Restrict)
+  capability     Capability    @relation(fields: [capabilityId], references: [id], onDelete: Restrict)
   value          Int
   changeFromPrev Int?
   evidence       String?
+
   @@unique([frameworkId, versionId, capabilityId])
   @@index([frameworkId])
   @@index([versionId])
@@ -351,6 +359,7 @@ model ChatMessage {
   content   String
   context   Json?
   createdAt DateTime @default(now())
+
   @@index([sessionId])
   @@index([userId])
   @@index([sessionId, userId])
@@ -383,6 +392,7 @@ model TcoEstimate {
   createdById        String        @default("anonymous")
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
+
   @@index([systemId])
   @@index([institutionId])
 }
@@ -407,6 +417,7 @@ model WorkflowStage {
   completedAt DateTime?
   notes       String?
   outputs     Json?
+
   @@unique([workflowId, stageNumber])
   @@index([workflowId])
 }
@@ -426,7 +437,7 @@ model ShortlistEntry {
   // Decision workflow for an entry: 'pending' → 'approved' | 'rejected'.
   // `rationale` captures why the entry is included/excluded; `decidedBy` +
   // `decidedAt` are reviewer attribution when a decision is recorded.
-  decisionStatus String        @default("pending")
+  decisionStatus String    @default("pending")
   rationale      String?
   decidedBy      String?
   decidedAt      DateTime?
@@ -448,6 +459,7 @@ model IntegrationAssessment {
   createdById     String        @default("anonymous")
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
+
   @@index([targetSystemId])
   @@index([createdById])
   @@index([institutionId])
@@ -475,6 +487,7 @@ model ArchitectureAssessment {
   createdById         String        @default("anonymous")
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
+
   @@index([institutionId])
   @@index([createdById])
 }
@@ -519,6 +532,7 @@ model ValueAnalysis {
   createdById             String        @default("anonymous")
   createdAt               DateTime      @default(now())
   updatedAt               DateTime      @updatedAt
+
   @@index([systemId])
   @@index([institutionId])
 }
@@ -541,6 +555,7 @@ model GeneratedDocument {
   createdById     String         @default("anonymous")
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
+
   @@index([institutionId])
   @@index([projectId])
   @@index([createdById])
@@ -564,18 +579,18 @@ enum DocumentStatus {
 // ── Multi-Jurisdiction Procurement Engine ─────────────────────────────────────
 
 model ProcurementJurisdiction {
-  id                  String   @id @default(cuid())
-  code                String   @unique
-  name                String
-  legislation         String
-  thresholds          Json
-  minimumTimelines    Json
-  mandatoryStages     Json
-  noticeRequirements  Json
-  standstillPeriod    Int?
-  rules               Json
-  isActive            Boolean  @default(true)
-  updatedAt           DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  code               String   @unique
+  name               String
+  legislation        String
+  thresholds         Json
+  minimumTimelines   Json
+  mandatoryStages    Json
+  noticeRequirements Json
+  standstillPeriod   Int?
+  rules              Json
+  isActive           Boolean  @default(true)
+  updatedAt          DateTime @updatedAt
 }
 
 model ProcurementStage {
@@ -595,8 +610,9 @@ model ProcurementStage {
   documents        StageDocument[]
   approvals        StageApproval[]
   tasks            StageTask[]
-  @@index([projectId])
+
   @@unique([projectId, stageCode])
+  @@index([projectId])
 }
 
 enum StageStatus {
@@ -622,6 +638,7 @@ model StageTask {
   completedAt DateTime?
   completedBy String?
   sortOrder   Int
+
   @@index([stageId])
 }
 
@@ -635,6 +652,7 @@ model StageApproval {
   requestedAt  DateTime         @default(now())
   decidedAt    DateTime?
   comments     String?
+
   @@index([stageId])
 }
 
@@ -650,6 +668,7 @@ model StageDocument {
   generatedFromTemplate Boolean          @default(false)
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
+
   @@index([stageId])
 }
 
@@ -671,6 +690,7 @@ model ProcurementEvaluation {
   recommendation      String?
   notes               String?
   submittedAt         DateTime?
+
   @@unique([projectId, systemId, evaluatorId])
   @@index([projectId])
 }
@@ -687,6 +707,7 @@ model ComplianceCheck {
   evidence       String?
   checkedAt      DateTime?
   checkedBy      String?
+
   @@index([projectId])
 }
 
@@ -733,6 +754,7 @@ model VendorUser {
   passwordHash    String
   lastLogin       DateTime?
   createdAt       DateTime      @default(now())
+
   @@index([vendorAccountId])
 }
 
@@ -747,6 +769,7 @@ model VendorSubmission {
   reviewNotes     String?
   submittedAt     DateTime      @default(now())
   reviewedAt      DateTime?
+
   @@index([vendorAccountId])
 }
 
@@ -758,6 +781,7 @@ model VendorAnalytic {
   value           Int
   period          String
   createdAt       DateTime      @default(now())
+
   @@index([vendorAccountId, metric, period])
 }
 
@@ -778,6 +802,7 @@ model EvaluationProject {
   domainAssignments EvaluationDomainAssignment[]
   createdAt         DateTime                     @default(now())
   updatedAt         DateTime                     @updatedAt
+
   @@index([frameworkId])
   @@index([institutionId])
 }
@@ -788,6 +813,7 @@ model EvaluationSystem {
   project   EvaluationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
   systemId  String
   system    VendorSystem      @relation(fields: [systemId], references: [id], onDelete: Cascade)
+
   @@unique([projectId, systemId])
 }
 
@@ -799,21 +825,23 @@ model EvaluationMember {
   user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   role            String            @default("evaluator")
   assignedDomains String[]
+
   @@unique([projectId, userId])
 }
 
 model EvaluationDomainAssignment {
-  id           String            @id @default(cuid())
+  id           String                  @id @default(cuid())
   projectId    String
-  project      EvaluationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project      EvaluationProject       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   domainId     String
-  domain       FrameworkDomain   @relation(fields: [domainId], references: [id], onDelete: Restrict)
+  domain       FrameworkDomain         @relation(fields: [domainId], references: [id], onDelete: Restrict)
   assignedToId String
-  assignedTo   User              @relation("DomainAssignments", fields: [assignedToId], references: [id], onDelete: Cascade)
-  status       String            @default("pending")
+  assignedTo   User                    @relation("DomainAssignments", fields: [assignedToId], references: [id], onDelete: Cascade)
+  status       String                  @default("pending")
   score        Json?
   completedAt  DateTime?
   scores       EvaluationDomainScore[]
+
   @@unique([projectId, domainId])
 }
 
@@ -826,6 +854,7 @@ model EvaluationDomainScore {
   value        Int
   notes        String?
   scoredAt     DateTime                   @default(now())
+
   @@unique([assignmentId, systemId, capabilityId])
 }
 
@@ -840,6 +869,7 @@ model Payment {
   invoiceUrl      String?
   paidAt          DateTime?
   createdAt       DateTime     @default(now())
+
   @@index([subscriptionId])
 }
 
@@ -855,6 +885,7 @@ model Notification {
   link      String?
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
+
   @@index([userId, isRead])
 }
 
@@ -870,41 +901,44 @@ model ApiKey {
   expiresAt     DateTime?
   isActive      Boolean     @default(true)
   createdAt     DateTime    @default(now())
+
   @@index([institutionId])
 }
 
 // ── Framework Mapping (Enterprise tier) ──────────────────────────────────────
 
 model FrameworkMapping {
-  id                  String   @id @default(cuid())
-  sourceFrameworkId   String
-  sourceFramework     Framework @relation("MappingSource", fields: [sourceFrameworkId], references: [id], onDelete: Cascade)
-  targetFrameworkId   String
-  targetFramework     Framework @relation("MappingTarget", fields: [targetFrameworkId], references: [id], onDelete: Cascade)
-  name                String               // "HERM v3.1 → FHE v1.0"
-  description         String?
-  mappingType         String               // "official" | "community" | "custom"
-  createdBy           String
-  isActive            Boolean  @default(true)
-  items               CapabilityMapping[]
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                String              @id @default(cuid())
+  sourceFrameworkId String
+  sourceFramework   Framework           @relation("MappingSource", fields: [sourceFrameworkId], references: [id], onDelete: Cascade)
+  targetFrameworkId String
+  targetFramework   Framework           @relation("MappingTarget", fields: [targetFrameworkId], references: [id], onDelete: Cascade)
+  name              String // "HERM v3.1 → FHE v1.0"
+  description       String?
+  mappingType       String // "official" | "community" | "custom"
+  createdBy         String
+  isActive          Boolean             @default(true)
+  items             CapabilityMapping[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
   @@unique([sourceFrameworkId, targetFrameworkId, name])
   @@index([sourceFrameworkId])
   @@index([targetFrameworkId])
 }
 
 model CapabilityMapping {
-  id                  String   @id @default(cuid())
-  mappingId           String
-  mapping             FrameworkMapping @relation(fields: [mappingId], references: [id], onDelete: Cascade)
-  sourceCapabilityId  String
-  sourceCapability    Capability @relation("SourceCapabilityMapping", fields: [sourceCapabilityId], references: [id], onDelete: Cascade)
-  targetCapabilityId  String
-  targetCapability    Capability @relation("TargetCapabilityMapping", fields: [targetCapabilityId], references: [id], onDelete: Cascade)
-  strength            String   @default("partial")  // "exact" | "strong" | "partial" | "weak"
-  confidence          Int      @default(50)         // 0-100
-  notes               String?
+  id                 String           @id @default(cuid())
+  mappingId          String
+  mapping            FrameworkMapping @relation(fields: [mappingId], references: [id], onDelete: Cascade)
+  sourceCapabilityId String
+  sourceCapability   Capability       @relation("SourceCapabilityMapping", fields: [sourceCapabilityId], references: [id], onDelete: Cascade)
+  targetCapabilityId String
+  targetCapability   Capability       @relation("TargetCapabilityMapping", fields: [targetCapabilityId], references: [id], onDelete: Cascade)
+  strength           String           @default("partial") // "exact" | "strong" | "partial" | "weak"
+  confidence         Int              @default(50) // 0-100
+  notes              String?
+
   @@unique([mappingId, sourceCapabilityId, targetCapabilityId])
   @@index([mappingId])
   @@index([sourceCapabilityId])
