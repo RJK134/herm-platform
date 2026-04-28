@@ -95,6 +95,21 @@ jobs:
   prisma-validate:
     name: Validate Prisma schema
     runs-on: ubuntu-latest
+    services:
+      # Spin up a throwaway Postgres so we can apply migrations and detect
+      # schema/migration drift below. No application data lives here.
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: herm_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -106,3 +121,19 @@ jobs:
         run: npx prisma validate --schema=prisma/schema.prisma
       - name: Check schema formatting
         run: npx prisma format --schema=prisma/schema.prisma --check
+      # Apply every migration to the throwaway Postgres so we exercise the
+      # exact code path used in prod (`db:migrate:deploy`). If a migration
+      # is malformed or out-of-order, this step fails before the drift check.
+      - name: Apply migrations (deploy mode)
+        run: npm run db:migrate:deploy
+      # Drift check: compare the live schema (built from migrations above) to
+      # the datamodel declared in `prisma/schema.prisma`. If a contributor
+      # edited the schema file without committing a matching migration, the
+      # diff is non-empty and `--exit-code` returns 2 → CI fails.
+      - name: Detect schema/migration drift
+        run: |
+          npx prisma migrate diff \
+            --from-schema-datasource prisma/schema.prisma \
+            --to-schema-datamodel prisma/schema.prisma \
+            --exit-code \
+          || (echo "::error::Schema in prisma/schema.prisma drifted from migrations. Run 'npx prisma migrate dev --name <change>' to add a migration."; exit 1)

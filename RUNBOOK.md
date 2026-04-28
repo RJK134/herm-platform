@@ -24,10 +24,34 @@ SIGTERM directly.
 
 ## Database
 
-### Apply schema (non-destructive)
+### Apply schema (dev / test only — non-destructive but no migration history)
 ```bash
 npm run db:push
 ```
+
+`db:push` is the fast path used by local dev and the CI test job. It reconciles
+the live DB to match `prisma/schema.prisma` by running diffed DDL directly,
+**without** creating a migration record. Never use it against prod.
+
+### Apply migrations (prod / staging)
+```bash
+npm run db:migrate:deploy   # applies every migration in prisma/migrations/ in order
+npm run db:migrate:status   # show which migrations have been applied
+```
+
+This is the only supported path to change a prod schema. Workflow:
+
+1. Locally: edit `prisma/schema.prisma` then run
+   `npx prisma migrate dev --name <short_change_name>` — creates a new
+   timestamped folder under `prisma/migrations/` with the SQL Prisma
+   computed and applies it to your dev DB.
+2. Commit the new migration folder alongside the schema change. CI's
+   `Validate Prisma schema` job will fail the PR if the schema file
+   drifted from the migrations.
+3. On deploy: pipeline runs `npm run db:migrate:deploy` against prod
+   before the new app version starts taking traffic. Migrations are
+   forward-only; rollback uses a DB snapshot, not a reverse migration
+   (see "Rolling back a deploy" below).
 
 ### Generate the Prisma client (after schema changes)
 ```bash
@@ -47,10 +71,10 @@ npm run db:studio
 ```
 
 ### Connecting to prod
-Set `DATABASE_URL` to the production connection string; never run
-`db:push --force-reset`. For schema migrations in prod, use
-`prisma migrate deploy` (add this script when you introduce migrations;
-currently the project uses `db:push`).
+Set `DATABASE_URL` to the production connection string; **never run
+`db:push --force-reset` against prod**. For schema changes use the
+migration workflow described in "Apply migrations (prod / staging)"
+above — `db:push` is only for dev / CI test DBs that get torn down.
 
 ## Health checks
 
@@ -114,14 +138,16 @@ The app itself performs no backups — rely on the managed Postgres provider
 
 ```bash
 # 1. Point DATABASE_URL at the restore target.
-# 2. Apply the current schema:
-npm run db:push
+# 2. Apply migration history (forward-only; matches prod schema state):
+npm run db:migrate:deploy
 # 3. If needed, re-seed reference data (non-tenant):
 npm run db:seed
 ```
 
 Tenant data (users, baskets, projects) comes from the backup restore, not
-the seed.
+the seed. If the snapshot was taken at a schema state OLDER than the
+current migration history, restore the snapshot first then run
+`db:migrate:deploy` to bring it forward.
 
 ## Rolling back a deploy
 
