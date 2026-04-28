@@ -41,6 +41,24 @@ npm run db:migrate:status   # show which migrations have been applied
 
 This is the only supported path to change a prod schema. Workflow:
 
+> **First-time baseline (one-off, only for DBs bootstrapped via `db:push`)**
+>
+> Any DB that was created or kept in sync via `db:push` already has the
+> current schema shape but no rows in `_prisma_migrations`. Running
+> `migrate deploy` against it would try to re-create tables that already
+> exist and fail. For those DBs, run the baseline once:
+>
+> ```bash
+> for m in $(ls prisma/migrations | grep -v migration_lock); do
+>   npx prisma migrate resolve --applied "$m" --schema=prisma/schema.prisma
+> done
+> npm run db:migrate:status   # confirm "Database schema is up to date"
+> ```
+>
+> After this, future deploys use `db:migrate:deploy` normally. Fresh
+> Postgres instances (CI, new prod) skip the baseline — `migrate deploy`
+> applies every migration from scratch.
+
 1. Locally: edit `prisma/schema.prisma` then run
    `npx prisma migrate dev --name <short_change_name>` — creates a new
    timestamped folder under `prisma/migrations/` with the SQL Prisma
