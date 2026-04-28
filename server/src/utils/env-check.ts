@@ -51,6 +51,34 @@ export function checkEnvironment(): void {
     );
   }
 
+  // DB resilience: prisma.ts applies safe defaults (connection_limit=10,
+  // statement_timeout=15s via libpq `options=-c`). In production, surface
+  // a one-line nudge if the operator hasn't set these explicitly so they
+  // know which knobs exist. Silent in dev — defaults are fine there.
+  if (isProd) {
+    const dbUrl = process.env['DATABASE_URL'];
+    if (dbUrl) {
+      try {
+        const u = new URL(dbUrl);
+        const hasPoolLimit = u.searchParams.has('connection_limit');
+        const hasOptions = u.searchParams.has('options');
+        if (!hasPoolLimit || !hasOptions) {
+          const knobs = [
+            !hasPoolLimit ? 'connection_limit' : null,
+            !hasOptions ? 'options (e.g. -c statement_timeout=15000)' : null,
+          ]
+            .filter(Boolean)
+            .join(', ');
+          console.warn(
+            `[ENV] DATABASE_URL has no ${knobs}; relying on app defaults from prisma.ts. Override per environment by adding query params to DATABASE_URL.`,
+          );
+        }
+      } catch {
+        // env-check above already complained about an unparseable URL.
+      }
+    }
+  }
+
   if (missing.length > 0) {
     const header = isProd
       ? '[ENV] FATAL: required environment variables not set:'
