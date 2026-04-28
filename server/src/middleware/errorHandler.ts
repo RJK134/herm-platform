@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
 import { ZodError } from 'zod';
 import { logger } from '../lib/logger';
+import { captureServerError } from '../lib/sentry';
 import { AppError } from '../utils/errors';
 
 /**
@@ -28,6 +29,9 @@ export function errorHandler(
   _next: NextFunction,
 ): void {
   const requestId = req.id;
+  // pino-http types req.id as `ReqId` (string | number | object). Stringify
+  // for the Sentry capture context, which expects a tag value.
+  const requestIdStr = requestId !== undefined ? String(requestId) : undefined;
 
   if (err instanceof ZodError) {
     res.status(400).json({
@@ -65,6 +69,14 @@ export function errorHandler(
       { requestId, prismaCode: err.errorCode, path: req.path, method: req.method, err: err.message },
       'Database unreachable — check DATABASE_URL and that Postgres is running',
     );
+    // 503 is operational, not a user bug, but it's the kind of incident the
+    // ops team needs paging-grade visibility on. Capture it.
+    captureServerError(err, {
+      requestId: requestIdStr,
+      userId: req.user?.userId,
+      path: req.path,
+      method: req.method,
+    });
     // Prisma's message is a multi-line dump (query context + error). Pull out
     // the "Can't reach database server..." line specifically; fall back to
     // the last non-empty line so the dev still sees something useful.
@@ -93,6 +105,16 @@ export function errorHandler(
       { requestId, code: err.code, status: err.statusCode, path: req.path, method: req.method },
       err.message,
     );
+    // Only 5xx AppErrors are server bugs worth paging on; 4xx are user/route
+    // errors and don't belong in error-tracking.
+    if (err.statusCode >= 500) {
+      captureServerError(err, {
+        requestId: requestIdStr,
+        userId: req.user?.userId,
+        path: req.path,
+        method: req.method,
+      });
+    }
     res.status(err.statusCode).json({
       success: false,
       error: { code: err.code, message: err.message, requestId },
@@ -104,6 +126,14 @@ export function errorHandler(
     { requestId, err, path: req.path, method: req.method },
     'Unhandled server error',
   );
+  // Catch-all: an unmapped Error → 500. Always capture — these are unhandled
+  // bugs by definition.
+  captureServerError(err, {
+    requestId: requestIdStr,
+    userId: req.user?.userId,
+    path: req.path,
+    method: req.method,
+  });
   res.status(500).json({
     success: false,
     error: {
