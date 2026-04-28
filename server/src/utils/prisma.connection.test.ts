@@ -33,6 +33,22 @@ describe('applyConnectionDefaults', () => {
     expect(u.searchParams.get('options')).toBe('-c statement_timeout=15000');
   });
 
+  it('encodes spaces in options as %20 (not + per form-encoding) so libpq parses correctly', () => {
+    // URLSearchParams.toString() emits `+` for space (form-encoding); libpq's
+    // connection-string parser treats `+` as a literal plus, which would
+    // corrupt our `-c statement_timeout=…` flag into the unknown option name
+    // `-c+statement_timeout`. The Postgres GUC would silently never be set.
+    // Lock the wire format here so we can't regress it again.
+    const out = applyConnectionDefaults('postgresql://u:p@h:5432/d')!;
+    expect(out).toContain('options=-c%20statement_timeout%3D15000');
+    expect(out).not.toMatch(/options=-c\+/);
+  });
+
+  it('preserves credentials, host, and path when rebuilding the URL', () => {
+    const out = applyConnectionDefaults('postgresql://herm:s3cr3t@db.example.com:5433/herm_prod')!;
+    expect(out.startsWith('postgresql://herm:s3cr3t@db.example.com:5433/herm_prod?')).toBe(true);
+  });
+
   it('preserves an explicit connection_limit', () => {
     const out = applyConnectionDefaults('postgresql://user@host/db?connection_limit=25');
     const u = new URL(out!);
@@ -68,5 +84,16 @@ describe('applyConnectionDefaults', () => {
     expect(u.searchParams.get('sslmode')).toBe('require');
     expect(u.searchParams.get('connection_limit')).toBe('10');
     expect(u.searchParams.get('options')).toBe('-c statement_timeout=15000');
+  });
+
+  it('normalises an operator-supplied + in options to %20 (semantic value preserved)', () => {
+    // If an operator typed `+` in their existing options (e.g. via a misconfigured
+    // template), the URL parser decodes it to space; we then re-emit as %20. The
+    // semantic value libpq sees is unchanged, but the wire format is now safe.
+    const out = applyConnectionDefaults(
+      'postgresql://u@h/d?options=-c+application_name%3Dapp',
+    )!;
+    expect(out).toContain('options=-c%20application_name%3Dapp');
+    expect(out).not.toContain('options=-c+');
   });
 });
