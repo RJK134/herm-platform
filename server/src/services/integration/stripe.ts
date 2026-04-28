@@ -23,6 +23,16 @@ function getStripe() {
   return new Stripe(STRIPE_SECRET, { apiVersion: '2024-09-30.acacia' }) as import('stripe').default;
 }
 
+/**
+ * Health-probe accessor. Returns the Stripe client when configured, or
+ * `null` so the caller can skip the probe entirely. Kept separate from
+ * the internal `getStripe()` so the health controller doesn't depend on
+ * the rest of the billing service surface.
+ */
+export function getStripeForHealthCheck(): import('stripe').default | null {
+  return getStripe();
+}
+
 export interface CheckoutResult {
   url: string | null;
   configured: boolean;

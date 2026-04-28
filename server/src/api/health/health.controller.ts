@@ -1,6 +1,16 @@
 import type { Request, Response } from 'express';
 import prisma from '../../utils/prisma';
+import * as stripeService from '../../services/stripe';
 import { logger } from '../../lib/logger';
+
+const DB_TIMEOUT_MS = 2000;
+const STRIPE_TIMEOUT_MS = 2000;
+
+interface DependencyCheck {
+  ok: boolean;
+  durationMs: number;
+  message?: string;
+}
 
 export function liveness(_req: Request, res: Response): void {
   res.json({
@@ -14,33 +24,102 @@ export function liveness(_req: Request, res: Response): void {
 }
 
 /**
- * Readiness: is the server able to serve requests?
- * Checks DB connectivity. Returns 503 if any dependency is unhealthy.
- * Used by container orchestrators; not by the client.
+ * Wraps a probe promise with a hard timeout so a stuck dependency cannot
+ * hold the readiness response open. The timer is unref'd so it doesn't
+ * keep the process alive on shutdown.
+ */
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) => {
+      const t = setTimeout(() => reject(new Error(`${label} probe timed out after ${ms}ms`)), ms);
+      t.unref();
+    }),
+  ]);
+}
+
+async function probeDatabase(): Promise<DependencyCheck> {
+  const start = Date.now();
+  try {
+    await withTimeout(prisma.$queryRaw`SELECT 1`, DB_TIMEOUT_MS, 'database');
+    return { ok: true, durationMs: Date.now() - start };
+  } catch (err) {
+    return {
+      ok: false,
+      durationMs: Date.now() - start,
+      message: err instanceof Error ? err.message : 'unknown error',
+    };
+  }
+}
+
+/**
+ * Probes Stripe with a lightweight `balance.retrieve` call (account-scope,
+ * doesn't touch products or prices). Returns `null` when Stripe is not
+ * configured on this instance — there's no dependency to probe.
+ */
+async function probeStripe(): Promise<DependencyCheck | null> {
+  const stripe = stripeService.getStripeForHealthCheck();
+  if (!stripe) return null;
+  const start = Date.now();
+  try {
+    await withTimeout(stripe.balance.retrieve(), STRIPE_TIMEOUT_MS, 'stripe');
+    return { ok: true, durationMs: Date.now() - start };
+  } catch (err) {
+    return {
+      ok: false,
+      durationMs: Date.now() - start,
+      message: err instanceof Error ? err.message : 'unknown error',
+    };
+  }
+}
+
+/**
+ * Readiness: can this pod serve user traffic?
+ *
+ * Criticality model:
+ *   - DB failure → 503 (pod removed from load-balancer rotation).
+ *   - Stripe failure → 200 with `checks.stripe.ok=false` (informational).
+ *     A Stripe outage shouldn't drain pods serving HERM, capabilities,
+ *     procurement, or sector-analytics — only subscription-touching
+ *     routes need Stripe, and those already return 503 to their specific
+ *     callers from the controller. External monitoring/alerting can read
+ *     `checks.stripe.ok` to page the on-call without taking traffic away.
+ *
+ * Probes run in parallel so total response time = max(probe times) ≤ 2s.
  */
 export async function readiness(req: Request, res: Response): Promise<void> {
-  const checks: Record<string, unknown> = {};
-  let databaseOk = true;
-  let databaseMessage: string | undefined;
+  const [database, stripe] = await Promise.all([probeDatabase(), probeStripe()]);
 
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-  } catch (err) {
-    logger.warn({ requestId: req.id, err }, 'readiness: database check failed');
-    databaseOk = false;
-    databaseMessage = err instanceof Error ? err.message : 'unknown error';
+  const checks: Record<string, DependencyCheck | string> = {
+    database,
+    // Legacy short flag — kept for any external monitor that already parses
+    // `data.checks.db`. New consumers should read `data.checks.database.ok`.
+    db: database.ok ? 'ok' : 'fail',
+  };
+  if (stripe) checks['stripe'] = stripe;
+
+  const ready = database.ok;
+
+  if (!database.ok) {
+    logger.warn(
+      { requestId: req.id, err: database.message },
+      'readiness: database check failed',
+    );
+  }
+  if (stripe && !stripe.ok) {
+    // Logged as info — informational, not paging-grade. Sentry / alerting
+    // tooling can subscribe to checks.stripe.ok in the JSON response if it
+    // wants to escalate.
+    logger.info(
+      { requestId: req.id, err: stripe.message, durationMs: stripe.durationMs },
+      'readiness: stripe probe failed (informational, not removing pod from rotation)',
+    );
   }
 
-  checks['db'] = databaseOk ? 'ok' : 'fail';
-  checks['database'] = databaseMessage
-    ? { ok: databaseOk, message: databaseMessage }
-    : { ok: databaseOk };
-
-  const allOk = databaseOk;
-  res.status(allOk ? 200 : 503).json({
-    success: allOk,
+  res.status(ready ? 200 : 503).json({
+    success: ready,
     data: {
-      status: allOk ? 'ready' : 'not_ready',
+      status: ready ? 'ready' : 'not_ready',
       checks,
       timestamp: new Date().toISOString(),
     },
