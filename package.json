@@ -24,6 +24,8 @@
     "verify": "npm run lint && npm run typecheck && npm run test:ci && npm run build",
     "verify:strict": "npm run lint && npm run format:check && npm run typecheck && npm run test:ci && npm run build",
     "db:push": "npx prisma db push --schema=prisma/schema.prisma",
+    "db:migrate:deploy": "npx prisma migrate deploy --schema=prisma/schema.prisma",
+    "db:migrate:status": "npx prisma migrate status --schema=prisma/schema.prisma",
     "db:seed": "npx tsx prisma/seed.ts",
     "db:seed:demo": "npx tsx prisma/seeds/demo-user.ts",
     "db:studio": "npx prisma studio --schema=prisma/schema.prisma",
