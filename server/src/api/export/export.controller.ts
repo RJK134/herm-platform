@@ -31,8 +31,19 @@ function setProvenanceHeaders(req: Request, res: Response): void {
 
 // Exports are recorded as audit rows so a governance review can
 // reconstruct who downloaded what data and when. The audit row captures
-// the format, the framework scope, and a row count when available — the
-// raw export body itself is not stored.
+// the format, the framework scope, a row count when available, and the
+// caller's IP via the audit() helper — the raw export body itself is
+// not stored.
+//
+// DELIBERATE EXCEPTION to the project rule "persisted-data routes must
+// use authenticateJWT, not optionalJWT": these routes ARE persisted-data
+// routes (they write an AuditLog row), but they MUST stay reachable
+// anonymously because `/api/export/*` is HERM (CC-BY-NC-SA-4.0) content
+// and HERM access is free per HERM_COMPLIANCE.md "Public (no auth, free
+// tier)". For anonymous callers we record `userId: null` and tag the row
+// with `anonymous: true` so audit consumers can filter cleanly. The
+// ipAddress column on AuditLog (populated by the audit helper) is the
+// fallback identity for GDPR / abuse review.
 
 function rowsFromCsv(csv: string): number {
   const idx = csv.indexOf('\n');
@@ -53,7 +64,12 @@ export const leaderboardCsv = async (req: Request, res: Response, next: NextFunc
       action: 'export.csv',
       entityType: 'Export',
       userId: req.user?.userId ?? null,
-      changes: { surface: 'leaderboard', frameworkId: frameworkId ?? null, rows: rowsFromCsv(csv) },
+      changes: {
+        surface: 'leaderboard',
+        frameworkId: frameworkId ?? null,
+        rows: rowsFromCsv(csv),
+        anonymous: !req.user,
+      },
     });
     res.send(csv);
   } catch (err) {
@@ -72,7 +88,12 @@ export const heatmapCsv = async (req: Request, res: Response, next: NextFunction
       action: 'export.csv',
       entityType: 'Export',
       userId: req.user?.userId ?? null,
-      changes: { surface: 'heatmap', frameworkId: frameworkId ?? null, rows: rowsFromCsv(csv) },
+      changes: {
+        surface: 'heatmap',
+        frameworkId: frameworkId ?? null,
+        rows: rowsFromCsv(csv),
+        anonymous: !req.user,
+      },
     });
     res.send(csv);
   } catch (err) {
@@ -93,7 +114,11 @@ export const fullReportJson = async (req: Request, res: Response, next: NextFunc
       action: 'export.json',
       entityType: 'Export',
       userId: req.user?.userId ?? null,
-      changes: { surface: 'fullReport', frameworkId: frameworkId ?? null },
+      changes: {
+        surface: 'fullReport',
+        frameworkId: frameworkId ?? null,
+        anonymous: !req.user,
+      },
     });
     res.json(body);
   } catch (err) {
