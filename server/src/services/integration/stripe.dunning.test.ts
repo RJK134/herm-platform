@@ -65,8 +65,16 @@ vi.mock('../../utils/prisma', () => ({ default: prismaMock }));
 
 // Quiet logger.
 vi.mock('../../lib/logger', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
+
+// Mock the email sender so the dunning tests don't try to talk to a real
+// SMTP server. Each test asserts on `sendEmailMock` to confirm the
+// in-app + email split is actually firing both channels.
+const { sendEmailMock } = vi.hoisted(() => ({
+  sendEmailMock: vi.fn(async () => ({ sent: true })),
+}));
+vi.mock('../../lib/email', () => ({ sendEmail: sendEmailMock }));
 
 // Import AFTER mocks.
 import { handleWebhook, StripeWebhookSignatureError } from './stripe';
@@ -81,8 +89,10 @@ beforeEach(() => {
   prismaMock.payment.findFirst.mockReset();
   prismaMock.user.findMany.mockReset();
   prismaMock.notification.createMany.mockReset();
-  prismaMock.user.findMany.mockResolvedValue([{ id: 'admin-1' }]);
+  prismaMock.user.findMany.mockResolvedValue([{ id: 'admin-1', email: 'admin-1@inst.test' }]);
   prismaMock.notification.createMany.mockResolvedValue({ count: 1 });
+  sendEmailMock.mockClear();
+  sendEmailMock.mockResolvedValue({ sent: true });
 });
 
 describe('stripe webhook — signature verification', () => {
@@ -296,6 +306,96 @@ describe('stripe webhook — charge.dispute.created', () => {
     prismaMock.payment.findFirst.mockResolvedValueOnce(null);
     await handleWebhook(Buffer.from('payload'), 'sig');
     expect(prismaMock.subscription.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('stripe webhook — email fan-out alongside in-app notifications (Phase 10.2)', () => {
+  it('fires sendEmail once per admin with an email, alongside the in-app Notification row', async () => {
+    constructEvent.mockReturnValueOnce({
+      type: 'invoice.payment_failed',
+      data: {
+        object: {
+          subscription: 'sub_stripe_email',
+          amount_due: 5000,
+          currency: 'gbp',
+          payment_intent: 'pi_email_1',
+        },
+      },
+    });
+    prismaMock.subscription.findFirst.mockResolvedValueOnce({
+      id: 'sub_db_email',
+      institutionId: 'inst-email',
+    });
+    prismaMock.user.findMany.mockResolvedValueOnce([
+      { id: 'admin-a', email: 'a@inst-email.test' },
+      { id: 'admin-b', email: 'b@inst-email.test' },
+    ]);
+
+    await handleWebhook(Buffer.from('payload'), 'sig');
+
+    expect(prismaMock.notification.createMany).toHaveBeenCalledTimes(1);
+    expect(sendEmailMock).toHaveBeenCalledTimes(2);
+    type EmailCallArg = { to: string; subject: string; text: string; html: string };
+    const calls = sendEmailMock.mock.calls as unknown as Array<[EmailCallArg]>;
+    const recipients = calls.map((c) => c[0].to).sort();
+    expect(recipients).toEqual(['a@inst-email.test', 'b@inst-email.test']);
+    for (const [arg] of calls) {
+      expect(arg.subject).toBe('Payment failed');
+      expect(arg.text).toContain('unable to charge');
+      expect(arg.html).toContain('<h1');
+    }
+  });
+
+  it('skips email when the admin has no email address but still writes the in-app Notification', async () => {
+    constructEvent.mockReturnValueOnce({
+      type: 'invoice.payment_failed',
+      data: {
+        object: {
+          subscription: 'sub_stripe_no_email',
+          amount_due: 5000,
+          currency: 'gbp',
+          payment_intent: 'pi_no_email',
+        },
+      },
+    });
+    prismaMock.subscription.findFirst.mockResolvedValueOnce({
+      id: 'sub_db_no_email',
+      institutionId: 'inst-no-email',
+    });
+    prismaMock.user.findMany.mockResolvedValueOnce([
+      { id: 'admin-no-email', email: null },
+    ]);
+
+    await handleWebhook(Buffer.from('payload'), 'sig');
+
+    expect(prismaMock.notification.createMany).toHaveBeenCalledTimes(1);
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it('a thrown sendEmail does not abort the webhook — Notification row is still written', async () => {
+    constructEvent.mockReturnValueOnce({
+      type: 'charge.dispute.created',
+      data: {
+        object: {
+          payment_intent: 'pi_email_throws',
+          amount: 5000,
+          currency: 'gbp',
+        },
+      },
+    });
+    prismaMock.payment.findFirst.mockResolvedValueOnce({
+      subscription: { id: 'sub_db_throws', institutionId: 'inst-throws' },
+    });
+    sendEmailMock.mockRejectedValueOnce(new Error('relay timeout'));
+
+    const res = await handleWebhook(Buffer.from('payload'), 'sig');
+
+    expect(res).toEqual({ handled: true, event: 'charge.dispute.created' });
+    expect(prismaMock.subscription.update).toHaveBeenCalledWith({
+      where: { id: 'sub_db_throws' },
+      data: { dunningState: 'paused' },
+    });
+    expect(prismaMock.notification.createMany).toHaveBeenCalledTimes(1);
   });
 });
 

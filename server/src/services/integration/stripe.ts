@@ -1,6 +1,8 @@
 import Stripe from 'stripe';
 import prisma from '../../utils/prisma';
 import { logger } from '../../lib/logger';
+import { sendEmail } from '../../lib/email';
+import { renderBillingEmail } from '../../lib/email-templates';
 
 // Graceful no-op if Stripe not configured
 const STRIPE_SECRET = process.env['STRIPE_SECRET_KEY'];
@@ -102,6 +104,12 @@ export class StripeWebhookSignatureError extends Error {
  * Notify all INSTITUTION_ADMIN users of an institution about a billing event.
  * Best-effort — failure to write notifications must not abort webhook
  * processing (the webhook still needs to update DB state and ack to Stripe).
+ *
+ * Phase 10.2: also dispatch an email to each admin's address. The in-app
+ * Notification row remains the source of truth ("did the user get told"),
+ * email is the convenience channel that delivers the news while the admin
+ * is away from the platform. Email is no-op if SMTP is not configured —
+ * the in-app path still runs.
  */
 async function notifyInstitutionAdmins(
   institutionId: string,
@@ -110,7 +118,7 @@ async function notifyInstitutionAdmins(
   try {
     const admins = await prisma.user.findMany({
       where: { institutionId, role: 'INSTITUTION_ADMIN' },
-      select: { id: true },
+      select: { id: true, email: true },
     });
     if (admins.length === 0) return;
     await prisma.notification.createMany({
@@ -122,6 +130,24 @@ async function notifyInstitutionAdmins(
         link: notification.link ?? null,
       })),
     });
+
+    // Email each admin individually so a delivery failure to one address
+    // doesn't suppress the rest. sendEmail already swallows errors and
+    // returns { sent: false }, so awaiting in parallel is safe.
+    const emailRecipients = admins.map((a) => a.email).filter((e): e is string => Boolean(e));
+    if (emailRecipients.length > 0) {
+      const { text, html } = renderBillingEmail(notification);
+      await Promise.all(
+        emailRecipients.map((to) =>
+          sendEmail({
+            to,
+            subject: notification.title,
+            text,
+            html,
+          }),
+        ),
+      );
+    }
   } catch (err) {
     logger.warn(
       { institutionId, err: err instanceof Error ? err.message : String(err) },
