@@ -102,16 +102,26 @@ export const updateProfile = async (
   }
 };
 
-export const logout = async (req: Request, res: Response): Promise<void> => {
-  // Token invalidation is client-side only, but record the event so a
+export const logout = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  // Token invalidation is client-side only, but we record the event so a
   // security review can correlate session ends with subsequent activity.
-  if (req.user) {
+  // The route requires authenticateJWT, so req.user is guaranteed —
+  // anonymous / expired-token logout returns 401 from the middleware,
+  // which the client's axios interceptor maps to the same "clear token
+  // and redirect to /login" UX as a successful logout.
+  try {
     await audit(req, {
       action: 'auth.logout',
       entityType: 'User',
-      entityId: req.user.userId,
-      userId: req.user.userId,
+      entityId: req.user!.userId,
+      userId: req.user!.userId,
     });
+    res.json({ success: true, data: { message: 'Logged out successfully' } });
+  } catch (err) {
+    next(err);
   }
-  res.json({ success: true, data: { message: 'Logged out successfully' } });
 };

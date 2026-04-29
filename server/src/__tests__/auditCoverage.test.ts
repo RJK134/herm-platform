@@ -157,18 +157,25 @@ describe('audit coverage — auth', () => {
     expect(JSON.stringify(entry)).not.toMatch(/wrong-password/);
   });
 
-  it('logout writes auth.logout audit row when authenticated', async () => {
-    await request(buildApp())
+  it('authenticated logout writes auth.logout audit row', async () => {
+    const res = await request(buildApp())
       .post('/api/auth/logout')
       .set('Authorization', `Bearer ${tok()}`);
+    expect(res.status).toBe(200);
     expect(auditMock).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ action: 'auth.logout', entityId: 'user-1' }),
+      expect.objectContaining({ action: 'auth.logout', entityId: 'user-1', userId: 'user-1' }),
     );
   });
 
-  it('logout is silent when anonymous (no audit row)', async () => {
-    await request(buildApp()).post('/api/auth/logout');
+  it('anonymous logout returns 401 (no audit row; client clears token via interceptor)', async () => {
+    // Bugbot review on PR #42: routes that persist via prisma.* must use
+    // authenticateJWT, not optionalJWT. The route now requires a valid
+    // bearer; expired/missing token returns 401, which the client's axios
+    // interceptor maps to "clear token + redirect to /login" — same UX
+    // as a successful logout.
+    const res = await request(buildApp()).post('/api/auth/logout');
+    expect(res.status).toBe(401);
     expect(auditMock).not.toHaveBeenCalled();
   });
 
