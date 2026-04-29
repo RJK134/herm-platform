@@ -1,3 +1,9 @@
+// Sentry must initialise before anything else so the SDK's instrumentation
+// hooks are in place by the time prisma / app middleware loads. No-op when
+// SENTRY_DSN is unset, so dev / test paths are unaffected.
+import { initSentry, flushSentry } from './lib/sentry';
+initSentry();
+
 import prisma from './utils/prisma';
 import { createApp } from './app';
 import { PRODUCT } from './lib/branding';
@@ -48,6 +54,10 @@ const server = app.listen(PORT, () => {
 function shutdown(signal: string): void {
   logger.info({ signal }, 'shutting down gracefully');
   server.close(async () => {
+    // Drain Sentry before disconnecting from Postgres — once $disconnect
+    // resolves we may be killed at any moment, and queued exception events
+    // would otherwise be lost.
+    await flushSentry(2000);
     await prisma.$disconnect();
     logger.info('server and db connections closed');
     process.exit(0);
