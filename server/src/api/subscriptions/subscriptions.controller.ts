@@ -21,7 +21,20 @@ export const stripeWebhook = async (req: Request, res: Response, next: NextFunct
     const sig = req.headers['stripe-signature'] as string;
     const result = await stripeService.handleWebhook(req.body as Buffer, sig);
     res.json({ received: true, handled: result.handled });
-  } catch (err) { next(err); }
+  } catch (err) {
+    // Signature-verification failures must surface as a non-200 so Stripe
+    // retries the event with backoff. Previously this was swallowed (the
+    // service returned `{ handled: false }` and the controller responded
+    // 200), so a bad rotation or misconfigured webhook secret would lose
+    // every event without a peep. Map the sentinel to 400 (Stripe's docs
+    // say any 4xx triggers retries; 4xx is honest about "we rejected this
+    // request" vs 5xx "we crashed").
+    if (err instanceof stripeService.StripeWebhookSignatureError) {
+      res.status(400).json({ success: false, error: { code: 'STRIPE_SIGNATURE_INVALID', message: 'Stripe webhook signature verification failed' } });
+      return;
+    }
+    next(err);
+  }
 };
 
 export const getStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

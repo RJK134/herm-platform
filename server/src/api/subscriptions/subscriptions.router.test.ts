@@ -9,19 +9,31 @@ vi.mock('../../lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-const { stripeMock, prismaMock } = vi.hoisted(() => ({
-  stripeMock: {
-    createCheckoutSession: vi.fn(),
-    handleWebhook: vi.fn(),
-    cancelSubscription: vi.fn(),
-  },
-  prismaMock: {
-    subscription: {
-      findUnique: vi.fn(),
-      update: vi.fn(),
+const { stripeMock, prismaMock, StripeWebhookSignatureError } = vi.hoisted(() => {
+  // Match the real class so `instanceof` checks in the controller resolve.
+  // Re-declared locally in the mock instead of imported so the hoist works.
+  class StripeWebhookSignatureError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = 'StripeWebhookSignatureError';
+    }
+  }
+  return {
+    stripeMock: {
+      createCheckoutSession: vi.fn(),
+      handleWebhook: vi.fn(),
+      cancelSubscription: vi.fn(),
+      StripeWebhookSignatureError,
     },
-  },
-}));
+    prismaMock: {
+      subscription: {
+        findUnique: vi.fn(),
+        update: vi.fn(),
+      },
+    },
+    StripeWebhookSignatureError,
+  };
+});
 vi.mock('../../services/stripe', () => stripeMock);
 vi.mock('../../utils/prisma', () => ({ default: prismaMock }));
 
@@ -127,6 +139,24 @@ describe('subscriptions router auth', () => {
       .send({ id: 'evt_test', type: 'checkout.session.completed' });
     expect(res.status).toBe(200);
     expect(stripeMock.handleWebhook).toHaveBeenCalledOnce();
+  });
+
+  it('responds 400 STRIPE_SIGNATURE_INVALID when handleWebhook throws StripeWebhookSignatureError', async () => {
+    // Pre-fix, the service swallowed signature failures and returned
+    // `{ handled: false }` — the controller responded 200 and Stripe
+    // treated the event as ack'd. The new behaviour: handleWebhook
+    // throws StripeWebhookSignatureError, the controller maps it to
+    // 400 so Stripe retries with backoff.
+    stripeMock.handleWebhook.mockRejectedValueOnce(
+      new StripeWebhookSignatureError('Webhook signature verification failed'),
+    );
+    const res = await request(buildApp())
+      .post('/api/subscriptions/webhook')
+      .set('Content-Type', 'application/json')
+      .set('stripe-signature', 't=0,v1=fake')
+      .send({ id: 'evt_bad_sig', type: 'checkout.session.completed' });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('STRIPE_SIGNATURE_INVALID');
   });
 
   it('forwards an unparsed Buffer (not parsed JSON) to stripe.handleWebhook', async () => {
