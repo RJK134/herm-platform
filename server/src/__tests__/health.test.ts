@@ -122,6 +122,24 @@ describe('health endpoints', () => {
     expect(elapsed).toBeLessThan(180);
   });
 
+  it('Stripe probe handles a synchronous throw from getStripeForHealthCheck without crashing readiness', async () => {
+    // Regression: getStripeForHealthCheck() does a dynamic require('stripe')
+    // which can throw synchronously if the package is missing while
+    // STRIPE_SECRET_KEY is set. The whole probe — including client
+    // construction — must run inside the try block so any throw surfaces
+    // as ok=false, not an unhandled rejection that crashes /api/ready.
+    queryRaw.mockResolvedValueOnce([{ '?column?': 1 }]);
+    getStripeForHealthCheck.mockImplementationOnce(() => {
+      throw new Error("Cannot find module 'stripe'");
+    });
+    const res = await request(buildApp()).get('/api/ready');
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('ready');
+    expect(res.body.data.checks.database.ok).toBe(true);
+    expect(res.body.data.checks.stripe.ok).toBe(false);
+    expect(res.body.data.checks.stripe.message).toMatch(/Cannot find module 'stripe'/);
+  });
+
   it('Stripe probe times out at 2s and reports as failed (still 200 — informational)', async () => {
     queryRaw.mockResolvedValueOnce([{ '?column?': 1 }]);
     // Never-resolving Stripe call. The probe must time out and surface

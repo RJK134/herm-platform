@@ -56,12 +56,20 @@ async function probeDatabase(): Promise<DependencyCheck> {
  * Probes Stripe with a lightweight `balance.retrieve` call (account-scope,
  * doesn't touch products or prices). Returns `null` when Stripe is not
  * configured on this instance — there's no dependency to probe.
+ *
+ * The whole probe — including the client-construction step — runs inside
+ * the try block. `getStripeForHealthCheck()` calls a dynamic `require('stripe')`
+ * which can throw synchronously if the package is missing while
+ * `STRIPE_SECRET_KEY` is set. The criticality model guarantees a Stripe
+ * issue never crashes /api/ready, so any synchronous throw must surface
+ * as `ok: false` rather than propagate up through `Promise.all` as an
+ * unhandled rejection.
  */
 async function probeStripe(): Promise<DependencyCheck | null> {
-  const stripe = stripeService.getStripeForHealthCheck();
-  if (!stripe) return null;
   const start = Date.now();
   try {
+    const stripe = stripeService.getStripeForHealthCheck();
+    if (!stripe) return null;
     await withTimeout(stripe.balance.retrieve(), STRIPE_TIMEOUT_MS, 'stripe');
     return { ok: true, durationMs: Date.now() - start };
   } catch (err) {
