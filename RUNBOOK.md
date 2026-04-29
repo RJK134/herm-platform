@@ -17,10 +17,63 @@ npm run build
 node server/dist/index.js      # server only; serve client dist/ via any static host
 ```
 
+### Production container image
+
+```bash
+# Build (CI is the canonical builder; this command is for local verification)
+docker build -t herm-platform:$(git rev-parse --short HEAD) .
+
+# Run with the prod env-var matrix
+docker run --rm -p 3002:3002 \
+  -e NODE_ENV=production \
+  -e DATABASE_URL=postgresql://... \
+  -e JWT_SECRET=... \
+  -e FRONTEND_URL=https://app.example.com \
+  -e SENTRY_DSN=... \
+  -e STRIPE_SECRET_KEY=... \
+  -e STRIPE_WEBHOOK_SECRET=... \
+  herm-platform:<tag>
+
+# Apply migrations from inside the container (prefer this over running
+# from CI/CD so secrets stay scoped to the deployment context).
+docker run --rm \
+  -e DATABASE_URL=postgresql://... \
+  herm-platform:<tag> npm run db:migrate:deploy
+```
+
+The image is multi-stage:
+- `node:20-alpine` runtime (~150 MB final image).
+- Non-root user `node`.
+- Bundles compiled server (`server/dist`), the Prisma client (regenerated
+  in the runner stage so the engine binary matches the slim production
+  dep tree), `prisma/schema.prisma`, and `prisma/migrations/` for
+  `db:migrate:deploy` from inside the container.
+- **Excludes** the client SPA (served separately), test files, source
+  TypeScript, and seed scripts (seed scripts need `tsx` which is a
+  devDependency; run them from a separate one-off container if needed).
+- Built-in `HEALTHCHECK` probes `/api/health` every 30 s.
+
+#### Env-var matrix
+
+| Var | Required | Notes |
+|---|---|---|
+| `NODE_ENV` | yes | `production` flips strict env-check + hides internal error details |
+| `DATABASE_URL` | yes | Postgres connection string (consider `?connection_limit=10&options=-c statement_timeout=15000`) |
+| `JWT_SECRET` | yes | ≥ 32 chars; 64+ recommended |
+| `FRONTEND_URL` | yes | Origin for CORS |
+| `SENTRY_DSN` | optional | Error reporting; no-op when unset |
+| `SENTRY_ENVIRONMENT` | optional | Defaults to `NODE_ENV` |
+| `SENTRY_TRACES_SAMPLE_RATE` | optional | 0–1; default 0 (errors only) |
+| `STRIPE_SECRET_KEY` | optional | If set, **`STRIPE_WEBHOOK_SECRET` must also be set** (env-check is fatal otherwise) |
+| `STRIPE_WEBHOOK_SECRET` | optional | Required when `STRIPE_SECRET_KEY` is set |
+| `ANTHROPIC_API_KEY` | optional | AI assistant |
+| `RATE_LIMIT_*` | optional | Per-tier ceilings (`ANONYMOUS`, `FREE`, `PROFESSIONAL`, `ENTERPRISE`, `API_KEY`); see `middleware/security.ts` for defaults |
+
 ### Graceful shutdown
-SIGTERM/SIGINT → close HTTP listener → `prisma.$disconnect()` → exit 0.
+SIGTERM/SIGINT → close HTTP listener → flush Sentry → `prisma.$disconnect()` → exit 0.
 Force-exit at 10 s if shutdown stalls. Kubernetes / PM2 / systemd can send
-SIGTERM directly.
+SIGTERM directly. The Dockerfile uses exec-form `CMD ["node", ...]` so
+SIGTERM reaches Node directly without a wrapping shell process.
 
 ## Database
 

@@ -1,0 +1,46 @@
+# Production image excludes everything not needed at runtime. The Dockerfile
+# explicitly COPYs the directories it does need; this file just stops the
+# build context from being bloated by source artefacts that would force
+# rebuilds on every test edit.
+
+# VCS / IDE
+.git
+.gitignore
+.github
+.editorconfig
+.cursor
+.claude
+
+# Local dev / runtime artefacts
+.env
+.env.*
+!.env.example
+node_modules
+*/node_modules
+**/dist
+**/build
+**/coverage
+*.log
+
+# Tests + spec sources (production image runs the compiled bundle only)
+**/__tests__
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+
+# Client app — served separately (CDN / static host), not from the server image
+client
+
+# Misc
+.DS_Store
+Thumbs.db
+docker-compose.yml
+docker-compose.*.yml
+Dockerfile
+.dockerignore
+README.md
+RUNBOOK.md
+*.md
+docs
+progress
