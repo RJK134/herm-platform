@@ -36,6 +36,7 @@ import frameworkMappingsRouter from './api/framework-mappings/framework-mappings
 import { frameworkContext } from './middleware/framework-context';
 import { tierGate } from './middleware/tier-gate';
 import { optionalJWT } from './middleware/auth';
+import { apiKeyAuth } from './middleware/api-key-auth';
 
 checkEnvironment();
 
@@ -58,6 +59,19 @@ export function createApp(): Express {
 
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true }));
+
+  // Auth-context resolution for the rate limiter.
+  // The tier-aware limiter (apiRateLimiter, see middleware/security.ts) needs
+  // to know which tier the caller belongs to in order to pick the right
+  // ceiling. Two parallel paths populate that context:
+  //   - apiKeyAuth checks for a herm_pk_… bearer; resolves req.apiUser
+  //   - optionalJWT checks for a JWT bearer; resolves req.user
+  // Both are no-ops for anonymous callers (default to the lowest ceiling).
+  // Per-route auth (`authenticateJWT`) still runs further down the chain
+  // and re-validates the JWT — these app-level decoders just establish
+  // the rate-limit context.
+  app.use('/api', apiKeyAuth);
+  app.use('/api', optionalJWT);
   app.use('/api', apiRateLimiter);
 
   app.use('/api', healthRouter);
