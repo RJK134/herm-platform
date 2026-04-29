@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { authenticateJWT } from '../../middleware/auth';
 import { requirePaidTier } from '../../middleware/require-paid-tier';
 import prisma from '../../utils/prisma';
+import { audit } from '../../lib/audit';
 
 const router = Router();
 
@@ -36,6 +37,19 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
         permissions: data.permissions,
         expiresAt: data.expiresAt ? new Date(data.expiresAt) : undefined,
         isActive: true,
+      },
+    });
+    await audit(req, {
+      action: 'keys.create',
+      entityType: 'ApiKey',
+      entityId: apiKey.id,
+      userId: req.user!.userId,
+      changes: {
+        name: apiKey.name,
+        keyPrefix: apiKey.keyPrefix,
+        permissions: apiKey.permissions,
+        expiresAt: apiKey.expiresAt?.toISOString() ?? null,
+        institutionId,
       },
     });
     res.status(201).json({
@@ -91,6 +105,13 @@ router.delete('/:id', async (req: Request, res: Response, next: NextFunction) =>
       });
       return;
     }
+    await audit(req, {
+      action: 'keys.revoke',
+      entityType: 'ApiKey',
+      entityId: req.params['id'],
+      userId: req.user!.userId,
+      changes: { institutionId },
+    });
     res.json({ success: true, data: { revoked: true } });
   } catch (err) { next(err); }
 });

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticateJWT } from '../../middleware/auth';
+import { authenticateJWT, optionalJWT } from '../../middleware/auth';
 import { register, login, me, updateProfile, logout } from './auth.controller';
 
 const router = Router();
@@ -16,7 +16,10 @@ router.get('/me', authenticateJWT, me);
 /** PATCH /api/auth/me — update display name */
 router.patch('/me', authenticateJWT, updateProfile);
 
-/** POST /api/auth/logout — client-side logout confirmation */
-router.post('/logout', logout);
+/** POST /api/auth/logout — client-side logout confirmation. `optionalJWT`
+ *  so we can write an `auth.logout` audit row when the caller is still
+ *  carrying a valid token. Anonymous logout (or expired-token logout) is
+ *  silent. */
+router.post('/logout', optionalJWT, logout);
 
 export default router;

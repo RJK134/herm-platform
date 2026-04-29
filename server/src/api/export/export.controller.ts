@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { ExportService } from './export.service';
 import { buildProvenance } from '../../lib/provenance';
+import { audit } from '../../lib/audit';
 
 const service = new ExportService();
 
@@ -28,12 +29,32 @@ function setProvenanceHeaders(req: Request, res: Response): void {
   if (framework.licence.url) res.setHeader('x-framework-licence-url', framework.licence.url);
 }
 
+// Exports are recorded as audit rows so a governance review can
+// reconstruct who downloaded what data and when. The audit row captures
+// the format, the framework scope, and a row count when available — the
+// raw export body itself is not stored.
+
+function rowsFromCsv(csv: string): number {
+  const idx = csv.indexOf('\n');
+  if (idx < 0) return 0;
+  // Subtract 1 for the header row; floor at 0 in case of empty body.
+  const lines = csv.slice(idx + 1).split('\n').filter((l) => l.length > 0);
+  return lines.length;
+}
+
 export const leaderboardCsv = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const csv = await service.leaderboardCsv(extractFrameworkId(req));
+    const frameworkId = extractFrameworkId(req);
+    const csv = await service.leaderboardCsv(frameworkId);
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="capability-leaderboard.csv"');
     setProvenanceHeaders(req, res);
+    await audit(req, {
+      action: 'export.csv',
+      entityType: 'Export',
+      userId: req.user?.userId ?? null,
+      changes: { surface: 'leaderboard', frameworkId: frameworkId ?? null, rows: rowsFromCsv(csv) },
+    });
     res.send(csv);
   } catch (err) {
     next(err);
@@ -42,10 +63,17 @@ export const leaderboardCsv = async (req: Request, res: Response, next: NextFunc
 
 export const heatmapCsv = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const csv = await service.heatmapCsv(extractFrameworkId(req));
+    const frameworkId = extractFrameworkId(req);
+    const csv = await service.heatmapCsv(frameworkId);
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="capability-heatmap.csv"');
     setProvenanceHeaders(req, res);
+    await audit(req, {
+      action: 'export.csv',
+      entityType: 'Export',
+      userId: req.user?.userId ?? null,
+      changes: { surface: 'heatmap', frameworkId: frameworkId ?? null, rows: rowsFromCsv(csv) },
+    });
     res.send(csv);
   } catch (err) {
     next(err);
@@ -54,12 +82,19 @@ export const heatmapCsv = async (req: Request, res: Response, next: NextFunction
 
 export const fullReportJson = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const report = await service.fullReportJson(extractFrameworkId(req));
+    const frameworkId = extractFrameworkId(req);
+    const report = await service.fullReportJson(frameworkId);
     const provenance = buildProvenance(req);
     const body = provenance ? { ...report, provenance } : report;
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', 'attachment; filename="capability-report.json"');
     setProvenanceHeaders(req, res);
+    await audit(req, {
+      action: 'export.json',
+      entityType: 'Export',
+      userId: req.user?.userId ?? null,
+      changes: { surface: 'fullReport', frameworkId: frameworkId ?? null },
+    });
     res.json(body);
   } catch (err) {
     next(err);
