@@ -117,6 +117,13 @@ model Subscription {
   institution          Institution      @relation(fields: [institutionId], references: [id], onDelete: Cascade)
   tier                 SubscriptionTier @default(FREE)
   status               String           @default("active")
+  // Dunning state — independent of `status`. `status` says "is this a
+  // paying subscription?" (active / cancelled). `dunningState` says "are
+  // we successfully collecting payments?" (active / past_due / paused /
+  // cancelled). Stripe's invoice.payment_failed and charge.dispute.created
+  // events flip this to past_due / paused; a successful subsequent charge
+  // resets it to active.
+  dunningState         DunningState     @default(active)
   stripeCustomerId     String?
   stripeSubscriptionId String?
   currentPeriodStart   DateTime?
@@ -130,6 +137,13 @@ enum SubscriptionTier {
   FREE
   PROFESSIONAL
   ENTERPRISE
+}
+
+enum DunningState {
+  active
+  past_due
+  paused
+  cancelled
 }
 
 model User {

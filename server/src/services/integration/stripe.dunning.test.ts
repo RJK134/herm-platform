@@ -1,0 +1,335 @@
+/**
+ * Tests for the new Stripe webhook event handlers added in Workstream G:
+ *   - invoice.payment_failed   → dunningState=past_due + Payment(status=failed) + admin notification
+ *   - customer.subscription.updated → tier reconciliation from price ID + admin notification
+ *   - charge.refunded          → Payment(status=refunded) + admin notification
+ *   - charge.dispute.created   → dunningState=paused + admin notification
+ *   - signature failure        → throws StripeWebhookSignatureError (was silently swallowed)
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// Set env BEFORE the service imports — the service captures STRIPE_SECRET_KEY
+// and STRIPE_WEBHOOK_SECRET into module-level consts at import time, so they
+// must be present when the import runs. vi.hoisted runs before vi.mock and
+// before regular module evaluation.
+const { constructEvent } = vi.hoisted(() => {
+  process.env['STRIPE_SECRET_KEY'] = 'sk_test_xxx';
+  process.env['STRIPE_WEBHOOK_SECRET'] = 'whsec_xxx';
+  process.env['STRIPE_PRICE_INST_PRO'] = 'price_pro';
+  process.env['STRIPE_PRICE_INST_ENT'] = 'price_ent';
+  return { constructEvent: vi.fn() };
+});
+
+// Mock the stripe SDK BEFORE importing the service. The service does a
+// dynamic `require('stripe')` inside getStripe(), so this mock intercepts
+// every call site. We control `webhooks.constructEvent` per-test to drive
+// each event type without real signature verification.
+vi.mock('stripe', () => {
+  function MockStripe() {
+    return {
+      webhooks: { constructEvent: (...args: unknown[]) => constructEvent(...args) },
+      checkout: { sessions: { create: vi.fn() } },
+      subscriptions: { list: vi.fn(), cancel: vi.fn() },
+      invoices: { list: vi.fn() },
+    };
+  }
+  return { default: MockStripe };
+});
+
+// Mock prisma.
+const { prismaMock } = vi.hoisted(() => ({
+  prismaMock: {
+    subscription: {
+      findFirst: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
+    },
+    payment: {
+      create: vi.fn(),
+      updateMany: vi.fn(),
+      findFirst: vi.fn(),
+    },
+    user: {
+      findMany: vi.fn(),
+    },
+    notification: {
+      createMany: vi.fn(),
+    },
+    vendorAccount: {
+      findFirst: vi.fn(),
+      update: vi.fn(),
+    },
+  },
+}));
+vi.mock('../../utils/prisma', () => ({ default: prismaMock }));
+
+// Quiet logger.
+vi.mock('../../lib/logger', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
+// Import AFTER mocks.
+import { handleWebhook, StripeWebhookSignatureError } from './stripe';
+
+beforeEach(() => {
+  constructEvent.mockReset();
+  prismaMock.subscription.findFirst.mockReset();
+  prismaMock.subscription.findUnique.mockReset();
+  prismaMock.subscription.update.mockReset();
+  prismaMock.payment.create.mockReset();
+  prismaMock.payment.updateMany.mockReset();
+  prismaMock.payment.findFirst.mockReset();
+  prismaMock.user.findMany.mockReset();
+  prismaMock.notification.createMany.mockReset();
+  prismaMock.user.findMany.mockResolvedValue([{ id: 'admin-1' }]);
+  prismaMock.notification.createMany.mockResolvedValue({ count: 1 });
+});
+
+describe('stripe webhook — signature verification', () => {
+  it('throws StripeWebhookSignatureError when constructEvent throws (controller turns into non-200)', async () => {
+    // Pre-fix, this case silently returned `{ handled: false }` and the
+    // controller responded 200. Stripe would treat the event as ack'd and
+    // stop retrying. The bug fix in this PR is the throw — let's lock it.
+    constructEvent.mockImplementationOnce(() => {
+      throw new Error('Webhook signature verification failed');
+    });
+    await expect(
+      handleWebhook(Buffer.from('payload'), 't=0,v1=fake'),
+    ).rejects.toBeInstanceOf(StripeWebhookSignatureError);
+  });
+
+  // Note: the "STRIPE_WEBHOOK_SECRET unset → graceful no-op" path is not
+  // unit-tested here because the service captures env into module-level
+  // consts at import time. That path is covered indirectly by env-check
+  // (which now fails the boot when STRIPE_SECRET_KEY is set without
+  // STRIPE_WEBHOOK_SECRET in production, and warns in development).
+});
+
+describe('stripe webhook — invoice.payment_failed', () => {
+  it('flips dunningState to past_due + writes a failed Payment + notifies admins', async () => {
+    constructEvent.mockReturnValueOnce({
+      type: 'invoice.payment_failed',
+      data: {
+        object: {
+          subscription: 'sub_stripe_1',
+          amount_due: 5000,
+          currency: 'gbp',
+          payment_intent: 'pi_failed_1',
+        },
+      },
+    });
+    prismaMock.subscription.findFirst.mockResolvedValueOnce({
+      id: 'sub_db_1',
+      institutionId: 'inst-1',
+    });
+
+    const res = await handleWebhook(Buffer.from('payload'), 'sig');
+
+    expect(res).toEqual({ handled: true, event: 'invoice.payment_failed' });
+    expect(prismaMock.subscription.update).toHaveBeenCalledWith({
+      where: { id: 'sub_db_1' },
+      data: { dunningState: 'past_due' },
+    });
+    expect(prismaMock.payment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          subscriptionId: 'sub_db_1',
+          amount: 50,
+          currency: 'GBP',
+          status: 'failed',
+          stripePaymentId: 'pi_failed_1',
+          paidAt: null,
+        }),
+      }),
+    );
+    expect(prismaMock.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { institutionId: 'inst-1', role: 'INSTITUTION_ADMIN' } }),
+    );
+    expect(prismaMock.notification.createMany).toHaveBeenCalled();
+  });
+
+  it('is a no-op when the subscription id does not match a row (unknown remote)', async () => {
+    constructEvent.mockReturnValueOnce({
+      type: 'invoice.payment_failed',
+      data: { object: { subscription: 'sub_unknown', amount_due: 5000, currency: 'gbp' } },
+    });
+    prismaMock.subscription.findFirst.mockResolvedValueOnce(null);
+    await handleWebhook(Buffer.from('payload'), 'sig');
+    expect(prismaMock.subscription.update).not.toHaveBeenCalled();
+    expect(prismaMock.payment.create).not.toHaveBeenCalled();
+    expect(prismaMock.notification.createMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('stripe webhook — customer.subscription.updated', () => {
+  it('reconciles tier upward when Stripe price ID maps to a higher tier', async () => {
+    constructEvent.mockReturnValueOnce({
+      type: 'customer.subscription.updated',
+      data: {
+        object: {
+          id: 'sub_stripe_2',
+          items: { data: [{ price: { id: 'price_ent' } }] },
+        },
+      },
+    });
+    prismaMock.subscription.findFirst.mockResolvedValueOnce({
+      id: 'sub_db_2',
+      institutionId: 'inst-2',
+      tier: 'PROFESSIONAL',
+    });
+
+    await handleWebhook(Buffer.from('payload'), 'sig');
+
+    expect(prismaMock.subscription.update).toHaveBeenCalledWith({
+      where: { id: 'sub_db_2' },
+      data: { tier: 'ENTERPRISE' },
+    });
+    expect(prismaMock.notification.createMany).toHaveBeenCalled();
+  });
+
+  it('is a no-op when the new price ID equals the current tier', async () => {
+    constructEvent.mockReturnValueOnce({
+      type: 'customer.subscription.updated',
+      data: {
+        object: {
+          id: 'sub_stripe_3',
+          items: { data: [{ price: { id: 'price_pro' } }] },
+        },
+      },
+    });
+    prismaMock.subscription.findFirst.mockResolvedValueOnce({
+      id: 'sub_db_3',
+      institutionId: 'inst-3',
+      tier: 'PROFESSIONAL',
+    });
+    await handleWebhook(Buffer.from('payload'), 'sig');
+    expect(prismaMock.subscription.update).not.toHaveBeenCalled();
+  });
+
+  it('is a no-op for an unrecognised price ID (e.g. one-off charge)', async () => {
+    constructEvent.mockReturnValueOnce({
+      type: 'customer.subscription.updated',
+      data: {
+        object: {
+          id: 'sub_stripe_4',
+          items: { data: [{ price: { id: 'price_unknown' } }] },
+        },
+      },
+    });
+    prismaMock.subscription.findFirst.mockResolvedValueOnce({
+      id: 'sub_db_4',
+      institutionId: 'inst-4',
+      tier: 'PROFESSIONAL',
+    });
+    await handleWebhook(Buffer.from('payload'), 'sig');
+    expect(prismaMock.subscription.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('stripe webhook — charge.refunded', () => {
+  it('marks the matching Payment row as refunded + notifies admins', async () => {
+    constructEvent.mockReturnValueOnce({
+      type: 'charge.refunded',
+      data: {
+        object: {
+          payment_intent: 'pi_charge_1',
+          amount_refunded: 5000,
+          currency: 'gbp',
+        },
+      },
+    });
+    prismaMock.payment.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.payment.findFirst.mockResolvedValueOnce({
+      subscription: { institutionId: 'inst-5' },
+    });
+
+    await handleWebhook(Buffer.from('payload'), 'sig');
+
+    expect(prismaMock.payment.updateMany).toHaveBeenCalledWith({
+      where: { stripePaymentId: 'pi_charge_1' },
+      data: { status: 'refunded' },
+    });
+    expect(prismaMock.notification.createMany).toHaveBeenCalled();
+  });
+
+  it('is a no-op when the payment_intent matches no row', async () => {
+    constructEvent.mockReturnValueOnce({
+      type: 'charge.refunded',
+      data: { object: { payment_intent: 'pi_unknown', amount_refunded: 5000, currency: 'gbp' } },
+    });
+    prismaMock.payment.updateMany.mockResolvedValueOnce({ count: 0 });
+    await handleWebhook(Buffer.from('payload'), 'sig');
+    expect(prismaMock.notification.createMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('stripe webhook — charge.dispute.created', () => {
+  it('flips dunningState to paused + notifies admins', async () => {
+    constructEvent.mockReturnValueOnce({
+      type: 'charge.dispute.created',
+      data: {
+        object: {
+          payment_intent: 'pi_disputed_1',
+          amount: 5000,
+          currency: 'gbp',
+        },
+      },
+    });
+    prismaMock.payment.findFirst.mockResolvedValueOnce({
+      subscription: { id: 'sub_db_6', institutionId: 'inst-6' },
+    });
+
+    await handleWebhook(Buffer.from('payload'), 'sig');
+
+    expect(prismaMock.subscription.update).toHaveBeenCalledWith({
+      where: { id: 'sub_db_6' },
+      data: { dunningState: 'paused' },
+    });
+    expect(prismaMock.notification.createMany).toHaveBeenCalled();
+  });
+
+  it('is a no-op when the payment_intent matches no Payment row', async () => {
+    constructEvent.mockReturnValueOnce({
+      type: 'charge.dispute.created',
+      data: { object: { payment_intent: 'pi_unknown', amount: 5000, currency: 'gbp' } },
+    });
+    prismaMock.payment.findFirst.mockResolvedValueOnce(null);
+    await handleWebhook(Buffer.from('payload'), 'sig');
+    expect(prismaMock.subscription.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('stripe webhook — checkout.session.completed (regression: dunningState reset)', () => {
+  it('resets dunningState to active on a fresh checkout', async () => {
+    constructEvent.mockReturnValueOnce({
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          metadata: {
+            tier: 'institutionProfessional',
+            isVendor: 'false',
+            institutionId: 'inst-7',
+          },
+          customer: 'cus_1',
+          subscription: 'sub_stripe_7',
+          amount_total: 250000,
+          currency: 'gbp',
+          payment_intent: 'pi_ok_7',
+        },
+      },
+    });
+    prismaMock.subscription.findUnique.mockResolvedValueOnce({ id: 'sub_db_7' });
+
+    await handleWebhook(Buffer.from('payload'), 'sig');
+
+    expect(prismaMock.subscription.update).toHaveBeenCalledWith({
+      where: { id: 'sub_db_7' },
+      data: expect.objectContaining({
+        tier: 'PROFESSIONAL',
+        status: 'active',
+        dunningState: 'active',
+      }),
+    });
+    expect(prismaMock.payment.create).toHaveBeenCalled();
+  });
+});

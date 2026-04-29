@@ -43,6 +43,19 @@ export function checkEnvironment(): void {
     else warnings.push(msg);
   }
 
+  // Stripe: if billing is configured (STRIPE_SECRET_KEY) but the webhook
+  // secret is missing, every webhook delivery silently no-ops (the
+  // service short-circuits without verifying signatures). That state is
+  // unsafe — Stripe will think the events were ack'd and stop retrying,
+  // and our DB will diverge from the source of truth. Fail loudly so the
+  // operator notices before real customers transact.
+  if (process.env['STRIPE_SECRET_KEY'] && !process.env['STRIPE_WEBHOOK_SECRET']) {
+    const msg =
+      '  STRIPE_SECRET_KEY is set but STRIPE_WEBHOOK_SECRET is not — webhook signature verification cannot run, and every Stripe event will silently no-op. Set STRIPE_WEBHOOK_SECRET (from https://dashboard.stripe.com/webhooks).';
+    if (isProd) missing.push(msg);
+    else warnings.push(msg);
+  }
+
   // Shout if the pre-billing tier-unlock flag is set in production.
   // Not fatal — there are legitimate staging-as-production uses — but loud.
   if (isProd && process.env['DEV_UNLOCK_ALL_TIERS'] === 'true') {
