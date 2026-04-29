@@ -90,10 +90,17 @@ COPY client/package.json client/
 # devDependency (so `npm ci --omit=dev` would prune it), but the runner
 # image legitimately needs it for `db:migrate:deploy` from inside the
 # container — and we must not have it download at runtime in air-gapped
-# or network-restricted environments. Pin the version to the same major
-# the @prisma/client expects to keep the engine handshake stable.
-ARG PRISMA_VERSION=5.22.0
+# or network-restricted environments.
+#
+# Version comes FROM the lockfile (the resolved @prisma/client version)
+# rather than a hardcoded ARG, so a routine `npm update` that bumps
+# @prisma/client (e.g. 5.22.0 → 5.25.0) keeps the CLI and client in
+# lockstep — Prisma requires the CLI and client to agree on the engine
+# binary, and a mismatch produces incompatible engines that only surface
+# as runtime errors in the production image.
 RUN npm ci --omit=dev --no-audit --no-fund \
+ && PRISMA_VERSION=$(node -p "require('./package-lock.json').packages['node_modules/@prisma/client'].version") \
+ && echo "[runner] installing prisma CLI ${PRISMA_VERSION} (matched to lockfile @prisma/client)" \
  && npm install -g --no-audit --no-fund "prisma@${PRISMA_VERSION}" \
  && npm cache clean --force
 
@@ -125,8 +132,13 @@ EXPOSE 3002
 # will hit /api/health independently, but a Docker HEALTHCHECK covers the
 # `docker run` / docker-compose case (and gives `docker ps` visibility).
 # 30s interval, 5s timeout, 3 fails → unhealthy.
+#
+# Uses ${PORT} (not the hardcoded 3002) so an operator who overrides
+# `-e PORT=8080` at runtime gets a probe that follows the server. The
+# CMD here is shell-form, so the variable is expanded by /bin/sh
+# inside the container at probe time, after PORT has been set.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget --quiet --spider --tries=1 http://localhost:3002/api/health || exit 1
+  CMD wget --quiet --spider --tries=1 "http://localhost:${PORT:-3002}/api/health" || exit 1
 
 # Entry point. We don't shell-form the command (no `npm start`) because that
 # adds a wrapping process that intercepts SIGTERM, breaking graceful
