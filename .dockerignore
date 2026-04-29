@@ -29,8 +29,14 @@ node_modules
 **/*.spec.ts
 **/*.spec.tsx
 
-# Client app — served separately (CDN / static host), not from the server image
+# Client app — served separately (CDN / static host), not from the server
+# image. We must keep `client/package.json` in the build context though:
+# the root package.json declares `"workspaces": ["client", "server"]`, so
+# `npm ci` needs both workspace manifests to validate the lockfile and
+# resolve the workspace tree. Excluding the manifest would fail npm with
+# a workspace-resolution error.
 client
+!client/package.json
 
 # Misc
 .DS_Store

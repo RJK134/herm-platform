@@ -76,9 +76,25 @@ ENV NODE_ENV=production \
 # Re-install ONLY production dependencies in the runtime image. This shrinks
 # the image dramatically vs. copying the whole node_modules tree from `deps`
 # (which carries vitest, eslint, tsx, etc.).
+#
+# IMPORTANT: the root package.json declares `"workspaces": ["client",
+# "server"]`, so npm needs BOTH workspace manifests to validate the
+# lockfile and resolve the workspace tree — even though we don't ship
+# any client artefacts at runtime. Excluding `client/package.json` here
+# fails npm with a workspace-resolution error.
 COPY package.json package-lock.json ./
 COPY server/package.json server/
+COPY client/package.json client/
+
+# Install production deps + a pinned `prisma` CLI. The CLI is normally a
+# devDependency (so `npm ci --omit=dev` would prune it), but the runner
+# image legitimately needs it for `db:migrate:deploy` from inside the
+# container — and we must not have it download at runtime in air-gapped
+# or network-restricted environments. Pin the version to the same major
+# the @prisma/client expects to keep the engine handshake stable.
+ARG PRISMA_VERSION=5.22.0
 RUN npm ci --omit=dev --no-audit --no-fund \
+ && npm install -g --no-audit --no-fund "prisma@${PRISMA_VERSION}" \
  && npm cache clean --force
 
 # Copy the compiled server, the migration directory, and the schema. Schema
@@ -93,8 +109,9 @@ COPY prisma/migrations ./prisma/migrations
 # Re-generate the Prisma client in the runner. We can't simply copy node_modules
 # from `deps` because `npm ci --omit=dev` above pruned the tree to production
 # only — running `prisma generate` here repopulates the engine binary against
-# the slimmer dependency set.
-RUN npx prisma generate --schema=prisma/schema.prisma
+# the slimmer dependency set. Uses the globally-installed `prisma` CLI so
+# this step also works at runtime under the `node` user.
+RUN prisma generate --schema=prisma/schema.prisma
 
 # Drop privileges. The `node` user (uid 1000) is part of the base image; we
 # ensure the working directory and all artefacts are owned by it before

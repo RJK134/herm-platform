@@ -35,10 +35,13 @@ docker run --rm -p 3002:3002 \
   herm-platform:<tag>
 
 # Apply migrations from inside the container (prefer this over running
-# from CI/CD so secrets stay scoped to the deployment context).
+# from CI/CD so secrets stay scoped to the deployment context). The
+# `prisma` CLI is installed globally in the runner stage, pinned to
+# the same major as @prisma/client, so this works air-gapped without
+# an at-runtime npm registry round-trip.
 docker run --rm \
   -e DATABASE_URL=postgresql://... \
-  herm-platform:<tag> npm run db:migrate:deploy
+  herm-platform:<tag> prisma migrate deploy --schema=prisma/schema.prisma
 ```
 
 The image is multi-stage:
