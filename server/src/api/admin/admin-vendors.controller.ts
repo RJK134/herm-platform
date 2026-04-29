@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import prisma from '../../utils/prisma';
 import type { VendorTier } from '@prisma/client';
+import { audit } from '../../lib/audit';
 
 const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
@@ -67,6 +68,13 @@ export const updateVendorAccount = async (req: Request, res: Response, next: Nex
         approvedBy: status === 'approved' ? (req.user?.userId ?? 'admin') : undefined,
       },
     });
+    await audit(req, {
+      action: 'admin.vendor.update',
+      entityType: 'VendorAccount',
+      entityId: data.id,
+      userId: req.user?.userId ?? null,
+      changes: { status, systemId, tier },
+    });
     res.json({ success: true, data });
   } catch (err) { next(err); }
 };
@@ -120,6 +128,13 @@ export const reviewSubmission = async (req: Request, res: Response, next: NextFu
         reviewedBy: req.user?.userId ?? 'admin',
         reviewedAt: new Date(),
       },
+    });
+    await audit(req, {
+      action: 'admin.submission.review',
+      entityType: 'VendorSubmission',
+      entityId: data.id,
+      userId: req.user?.userId ?? null,
+      changes: { status, reviewNotes: reviewNotes ?? null },
     });
     res.json({ success: true, data });
   } catch (err) { next(err); }

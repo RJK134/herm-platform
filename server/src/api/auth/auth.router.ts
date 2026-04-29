@@ -16,7 +16,11 @@ router.get('/me', authenticateJWT, me);
 /** PATCH /api/auth/me — update display name */
 router.patch('/me', authenticateJWT, updateProfile);
 
-/** POST /api/auth/logout — client-side logout confirmation */
-router.post('/logout', logout);
+/** POST /api/auth/logout — record an `auth.logout` audit row and confirm
+ *  client-side token disposal. `authenticateJWT` (not optionalJWT) because
+ *  the route persists an audit row keyed to req.user.userId. Anonymous /
+ *  expired-token logout returns 401, which the client's axios interceptor
+ *  maps to the same "clear token and redirect to /login" UX as success. */
+router.post('/logout', authenticateJWT, logout);
 
 export default router;

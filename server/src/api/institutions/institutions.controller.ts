@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { InstitutionsService } from './institutions.service';
+import { audit } from '../../lib/audit';
 
 const service = new InstitutionsService();
 
@@ -68,12 +69,20 @@ export const updateUserRole = async (
 ): Promise<void> => {
   try {
     const { role } = updateRoleSchema.parse(req.body);
+    const targetUserId = req.params['userId'] as string;
     const user = await service.updateUserRole(
       req.user!.institutionId,
-      req.params['userId'] as string,
+      targetUserId,
       role,
       req.user!.userId
     );
+    await audit(req, {
+      action: 'institutions.role.change',
+      entityType: 'User',
+      entityId: targetUserId,
+      userId: req.user!.userId,
+      changes: { newRole: role, institutionId: req.user!.institutionId },
+    });
     res.json({ success: true, data: user });
   } catch (err) {
     next(err);
