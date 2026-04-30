@@ -68,7 +68,14 @@ export const me = async (
 ): Promise<void> => {
   try {
     const user = await service.getMe(req.user!.userId);
-    res.json({ success: true, data: user });
+    // Phase 10.3: surface the impersonator claim so the client can render
+    // the "You are viewing the platform as <customer>" banner. The claim
+    // already lives on the JWT — getMe doesn't reload it from the DB.
+    const impersonator = req.user?.impersonator;
+    res.json({
+      success: true,
+      data: impersonator ? { ...user, impersonator } : user,
+    });
   } catch (err) {
     next(err);
   }
