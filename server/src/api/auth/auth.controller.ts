@@ -49,11 +49,6 @@ export const login = async (
       // reconstruct credential-stuffing or account-targeting attacks. We
       // intentionally don't log the password — only the email tried.
       if (loginErr instanceof AccountLockedError) {
-        // Do not emit `auth.lockout.engaged` here because this controller
-        // cannot distinguish a newly engaged lockout from an attempt made
-        // while the account is already locked. Record it as a failed login
-        // with lockout context instead, so audit trails remain accurate
-        // without inflating lockout-engaged counts.
         await audit(req, {
           action: 'auth.login.fail',
           entityType: 'User',
@@ -63,9 +58,23 @@ export const login = async (
             retryAfterSeconds: loginErr.retryAfterSeconds,
           },
         });
+        // On the boundary attempt that first engaged the lockout, emit a
+        // dedicated audit event so a security review can distinguish the
+        // lockout trigger from subsequent attempts against an already-locked
+        // account. `newlyEngaged` is only true on the attempt that crossed
+        // the threshold — not on every subsequent locked request.
+        if (loginErr.newlyEngaged) {
+          await audit(req, {
+            action: 'auth.lockout.engaged',
+            entityType: 'User',
+            changes: {
+              emailTried: data.email.toLowerCase(),
+              retryAfterSeconds: loginErr.retryAfterSeconds,
+            },
+          });
+        }
         // RFC-7231 Retry-After header so clients (and humans reading
-        // network panels) know when to try again without parsing the
-        // body.
+        // network panels) know when to try again without parsing the body.
         res.setHeader('Retry-After', String(loginErr.retryAfterSeconds));
       } else if (loginErr instanceof AppError && loginErr.statusCode === 401) {
         await audit(req, {

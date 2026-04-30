@@ -51,9 +51,17 @@ let maxStoreSizeCap = MAX_STORE_SIZE;
  *
  * Translates to HTTP 429 + the standard `Retry-After` header at the
  * controller boundary; the client renders a specific lockout message.
+ *
+ * `newlyEngaged` is true only when this attempt is the one that caused
+ * the lockout to engage (the boundary attempt). Subsequent attempts
+ * against an already-locked account set this to false so the controller
+ * can emit `auth.lockout.engaged` exactly once per lockout event.
  */
 export class AccountLockedError extends AppError {
-  constructor(public readonly retryAfterSeconds: number) {
+  constructor(
+    public readonly retryAfterSeconds: number,
+    public readonly newlyEngaged: boolean = false,
+  ) {
     super(
       429,
       'AUTH_LOCKED',

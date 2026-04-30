@@ -9,8 +9,8 @@
  *   - Successful login clears the counter.
  *   - While locked, more failures don't extend the timer (DoS resist).
  *   - Email key is case-insensitive + trim-normalised.
- *   - Login controller emits `auth.login.fail` with lockout context
- *     (locked: true, retryAfterSeconds) + Retry-After header on the 429.
+ *   - Login controller emits `auth.lockout.engaged` audit event +
+ *     Retry-After header on the 429.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
@@ -216,7 +216,7 @@ describe('login route — lockout integration', () => {
     expect(bcryptCompare).toHaveBeenCalledTimes(LOCKOUT_CONFIG.MAX_FAILS);
   });
 
-  it('emits auth.login.fail with lockout context when account becomes locked', async () => {
+  it('emits auth.lockout.engaged audit event on the lockout boundary', async () => {
     prismaMock.user.findUnique.mockResolvedValue({
       id: 'u-1',
       email: 'a@b.test',
@@ -236,14 +236,11 @@ describe('login route — lockout integration', () => {
     const calls = prismaMock.auditLog.create.mock.calls as unknown as Array<[{ data: { action: string; changes?: Record<string, unknown> } }]>;
     const actions = calls.map((c) => c[0].data.action);
     expect(actions).toContain('auth.login.fail');
-    // On lockout, auth.login.fail is emitted with locked:true and retryAfterSeconds.
-    const lockoutCall = calls.find(
-      (c) => c[0].data.action === 'auth.login.fail' && c[0].data.changes?.locked === true,
-    );
+    expect(actions).toContain('auth.lockout.engaged');
+    const lockoutCall = calls.find((c) => c[0].data.action === 'auth.lockout.engaged');
     expect(lockoutCall?.[0].data.changes).toEqual(
       expect.objectContaining({
         emailTried: 'a@b.test',
-        locked: true,
         retryAfterSeconds: expect.any(Number),
       }),
     );
