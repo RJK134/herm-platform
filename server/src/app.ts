@@ -33,6 +33,7 @@ import notificationsRouter from './api/notifications/notifications.router';
 import keysRouter from './api/keys/keys.router';
 import frameworksRouter from './api/frameworks/frameworks.router';
 import frameworkMappingsRouter from './api/framework-mappings/framework-mappings.router';
+import gdprRouter from './api/gdpr/gdpr.router';
 import { frameworkContext } from './middleware/framework-context';
 import { tierGate } from './middleware/tier-gate';
 import { optionalJWT } from './middleware/auth';
@@ -111,6 +112,10 @@ export function createApp(): Express {
 
   app.use('/api/frameworks', frameworksRouter);
   app.use('/api/framework-mappings', frameworkMappingsRouter);
+
+  // Phase 10.8 — GDPR data-subject rights (data export, erasure).
+  // Mounted at /me because they're personal rights, not admin actions.
+  app.use('/api/me', gdprRouter);
 
   app.use((req, res) => {
     res.status(404).json({
