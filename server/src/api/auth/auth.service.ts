@@ -121,6 +121,18 @@ export class AuthService {
     }
 
     const valid = await bcrypt.compare(data.password, user.passwordHash);
+
+    // Phase 10.10 (Q3): password login is disabled on accounts that
+    // have been linked to an SSO IdP. The user must use the SSO flow.
+    // We return the SAME generic 401 as a wrong password — leaking
+    // "you have SSO" via this endpoint isn't a real PII concern but
+    // erodes the principle of giving credential probes a single
+    // failure mode. The SSO discovery endpoint is the right place
+    // for the client to learn this.
+    if (user.passwordLoginDisabled) {
+      throw new AppError(401, 'AUTHENTICATION_ERROR', 'Invalid email or password');
+    }
+
     if (!valid) {
       const post = await recordFailure(data.email);
       if (post.locked) {

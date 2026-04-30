@@ -210,6 +210,13 @@ model User {
   // the secret is the deployment's responsibility (Postgres TDE).
   mfaSecret             String?
   mfaEnabledAt          DateTime?
+  // Phase 10.10 — Q3 SSO account collision policy. When a user signed up
+  // via password and their institution later enables SSO, the first SSO
+  // login links the IdP identity to this row by email and flips this
+  // flag to true so subsequent password logins are rejected. The
+  // password hash stays in the row so support can audit; we just refuse
+  // to validate against it. Null/false on every other account.
+  passwordLoginDisabled Boolean                      @default(false)
   evaluationMemberships EvaluationMember[]
   domainAssignments     EvaluationDomainAssignment[] @relation("DomainAssignments")
   notifications         Notification[]

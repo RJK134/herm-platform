@@ -11,6 +11,7 @@ import { Sidebar } from './components/layout/Sidebar';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { RequireTier } from './components/auth/RequireTier';
 import { Login } from './pages/Login';
+import { SsoCallback } from './pages/SsoCallback';
 import { Register } from './pages/Register';
 import { Leaderboard } from './pages/Leaderboard';
 import { RadarComparison } from './pages/RadarComparison';
@@ -95,6 +96,7 @@ export default function App() {
             <FrameworkProvider>
               <Routes>
                 <Route path="/login" element={<Login />} />
+                <Route path="/login/sso" element={<SsoCallback />} />
                 <Route path="/register" element={<Register />} />
 
                 <Route
