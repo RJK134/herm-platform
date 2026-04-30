@@ -139,7 +139,11 @@ export function createApp(): Express {
 
   // Phase 10.8 — GDPR data-subject rights (data export, erasure).
   // Mounted at /me because they're personal rights, not admin actions.
-  app.use('/api/me', gdprRouter);
+  // Keep them available under both `/api/*` and `/api/v1/*` to match
+  // the public-route mounting contract above.
+  for (const base of ['/api', '/api/v1'] as const) {
+    app.use(`${base}/me`, gdprRouter);
+  }
 
   app.use((req, res) => {
     res.status(404).json({
