@@ -16,13 +16,14 @@
  *     deferred until we wire one. Replay is bounded by the assertion's
  *     own expiry window in the meantime.
  *
- * AuthnRequests are UNSIGNED in v1 — sufficient for IdPs that accept
- * unsigned requests over HTTP-Redirect. UKAMF-compliant deployments
- * will need to add `privateKey` + `publicCert` from a per-deployment
- * X.509 keypair; deferred.
+ * AuthnRequests are signed when the SP keypair is configured via
+ * `SP_SIGNING_KEY` + `SP_SIGNING_CERT` (Phase 11.3). Without the keypair
+ * the request is unsigned — sufficient for permissive IdPs but rejected
+ * by federation-grade IdPs (UKAMF). See `lib/sp-signing.ts`.
  */
 import { SAML, ValidateInResponseTo, type SamlConfig } from '@node-saml/node-saml';
 import { getSamlAcsUrl, getSpEntityId } from '../../lib/sso-config';
+import { getSpSigningMaterial } from '../../lib/sp-signing';
 
 export interface TenantSamlConfig {
   /** IdP's entityID (e.g. `https://idp.example.ac.uk/saml/idp`). */
@@ -46,6 +47,14 @@ function buildSaml(institutionSlug: string, idp: TenantSamlConfig): SAML {
     validateInResponseTo: ValidateInResponseTo.never,
     acceptedClockSkewMs: 5000,
   };
+
+  // Phase 11.3 — sign AuthnRequests when the SP keypair is configured.
+  // Without the keypair the request goes out unsigned (legacy default).
+  const signing = getSpSigningMaterial();
+  if (signing) {
+    config.privateKey = signing.privateKey;
+    config.publicCert = signing.publicCert;
+  }
   return new SAML(config);
 }
 

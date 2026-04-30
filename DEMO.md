@@ -147,8 +147,13 @@ These are **deliberately deferred** — call them out if asked, do not paper ove
   plaintext in Postgres. Contract is "DB-level encryption is the deployment's
   responsibility (Postgres TDE / managed-DB equivalent)". App-level envelope
   encryption is a clean follow-up PR.
-- **UKAMF compliance** — needs an SP X.509 keypair to sign AuthnRequests + SP
-  metadata. Today's SAML flow is unsigned (works with permissive IdPs only).
+- **UKAMF compliance** — SP-side AuthnRequest signing + signed SP metadata
+  are now wired (Phase 11.3). Set `SP_SIGNING_KEY` + `SP_SIGNING_CERT`
+  (inline PEM or `file:/path/to.pem`) and `/api/sso/sp-metadata.xml` plus
+  every outgoing AuthnRequest is signed with the configured keypair. Without
+  the env pair the flow stays on the legacy unsigned path. Federation
+  enrolment (uploading the signed SP metadata to UKAMF) and per-deployment
+  cert-rotation tooling remain operator tasks.
 - **No admin UI for `SsoIdentityProvider`** — operators provision IdP rows via
   raw Prisma today.
 - **No live IdP integration tests** — `node-saml` and `openid-client` are

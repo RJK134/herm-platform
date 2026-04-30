@@ -71,6 +71,8 @@ The image is multi-stage:
 | `FRONTEND_URL` | yes (prod) | Browser-facing origin used for CORS **and** the post-SSO redirect (which carries the session JWT). `checkEnvironment()` refuses to boot in prod without it. |
 | `SP_BASE_URL` | yes (prod) | API origin used for SAML ACS + OIDC callback URLs (Phase 10.10). Without it, IdPs would be told to redirect to localhost. `checkEnvironment()` refuses to boot in prod without it. |
 | `SP_ENTITY_ID` | optional | SAML entity ID. Defaults to `<SP_BASE_URL>/api/sso/sp`; override only when an IdP admin (e.g. UKAMF) assigns one. |
+| `SP_SIGNING_KEY` | optional (req'd for UKAMF) | PEM private key used to sign SAML AuthnRequests + SP metadata. Pair with `SP_SIGNING_CERT` — both set or both unset. Inline PEM (literal `\n` allowed) or `file:/abs/path.pem`. Generate a self-signed pair with `openssl req -x509 -newkey rsa:2048 -nodes -days 730 -keyout sp-signing.key -out sp-signing.crt -subj /CN=herm-sp`. |
+| `SP_SIGNING_CERT` | optional (req'd for UKAMF) | PEM X.509 certificate matching `SP_SIGNING_KEY`. Same accepted forms. |
 | `REDIS_URL` | optional | Enables shared lockout state + the SSO OIDC PKCE flow store + Redis readiness probe. Without it, lockout falls back to in-memory (per-pod). Required for multi-pod deployments. |
 | `SENTRY_DSN` | optional | Error reporting; no-op when unset |
 | `SENTRY_ENVIRONMENT` | optional | Defaults to `NODE_ENV` |

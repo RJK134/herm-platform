@@ -22,7 +22,7 @@
  *   - Auth login refuses passwordLoginDisabled accounts with the
  *     generic 401 (no info leak).
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
@@ -489,6 +489,111 @@ describe('GET /api/sso/sp-metadata.xml', () => {
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/application\/xml/);
     expect(res.text).toContain('EntityDescriptor');
+  });
+});
+
+// ── UKAMF SP signing keypair (Phase 11.3) ──────────────────────────────────
+
+describe('SAML SP signing keypair', () => {
+  const FAKE_KEY = '-----BEGIN PRIVATE KEY-----\nfake-private-key\n-----END PRIVATE KEY-----';
+  const FAKE_CERT = '-----BEGIN CERTIFICATE-----\nfake-certificate\n-----END CERTIFICATE-----';
+
+  let savedKey: string | undefined;
+  let savedCert: string | undefined;
+
+  beforeEach(async () => {
+    savedKey = process.env['SP_SIGNING_KEY'];
+    savedCert = process.env['SP_SIGNING_CERT'];
+    delete process.env['SP_SIGNING_KEY'];
+    delete process.env['SP_SIGNING_CERT'];
+    const { _resetSpSigningCache } = await import('../lib/sp-signing');
+    _resetSpSigningCache();
+  });
+
+  afterEach(async () => {
+    if (savedKey === undefined) delete process.env['SP_SIGNING_KEY'];
+    else process.env['SP_SIGNING_KEY'] = savedKey;
+    if (savedCert === undefined) delete process.env['SP_SIGNING_CERT'];
+    else process.env['SP_SIGNING_CERT'] = savedCert;
+    const { _resetSpSigningCache } = await import('../lib/sp-signing');
+    _resetSpSigningCache();
+  });
+
+  it('AuthnRequest path threads SP keypair into node-saml SamlConfig when configured', async () => {
+    process.env['SP_SIGNING_KEY'] = FAKE_KEY;
+    process.env['SP_SIGNING_CERT'] = FAKE_CERT;
+
+    const { SAML } = await import('@node-saml/node-saml');
+    const samlCtor = SAML as unknown as ReturnType<typeof vi.fn>;
+    samlCtor.mockClear();
+
+    prismaMock.institution.findUnique.mockResolvedValue(enterpriseInstitutionWithSamlIdp());
+    samlInstance.getAuthorizeUrlAsync.mockResolvedValueOnce(
+      'https://idp.uni.test/saml/sso?SAMLRequest=base64',
+    );
+
+    const res = await request(buildApp()).get('/api/sso/uni-1/login');
+    expect(res.status).toBe(302);
+    expect(samlCtor).toHaveBeenCalled();
+    const config = samlCtor.mock.calls[0]?.[0] as
+      | { privateKey?: string; publicCert?: string }
+      | undefined;
+    expect(config?.privateKey).toBe(FAKE_KEY);
+    expect(config?.publicCert).toBe(FAKE_CERT);
+  });
+
+  it('AuthnRequest path leaves SamlConfig unsigned when keypair is unset (back-compat)', async () => {
+    const { SAML } = await import('@node-saml/node-saml');
+    const samlCtor = SAML as unknown as ReturnType<typeof vi.fn>;
+    samlCtor.mockClear();
+
+    prismaMock.institution.findUnique.mockResolvedValue(enterpriseInstitutionWithSamlIdp());
+    samlInstance.getAuthorizeUrlAsync.mockResolvedValueOnce(
+      'https://idp.uni.test/saml/sso?SAMLRequest=base64',
+    );
+
+    await request(buildApp()).get('/api/sso/uni-1/login');
+    const config = samlCtor.mock.calls[0]?.[0] as
+      | { privateKey?: string; publicCert?: string }
+      | undefined;
+    expect(config?.privateKey).toBeUndefined();
+    expect(config?.publicCert).toBeUndefined();
+  });
+
+  it('SP metadata path passes signMetadata + privateKey + publicCerts when keypair is set', async () => {
+    process.env['SP_SIGNING_KEY'] = FAKE_KEY;
+    process.env['SP_SIGNING_CERT'] = FAKE_CERT;
+
+    const { generateServiceProviderMetadata } = await import('@node-saml/node-saml');
+    const metaFn = generateServiceProviderMetadata as unknown as ReturnType<typeof vi.fn>;
+    metaFn.mockClear();
+    metaFn.mockReturnValueOnce(
+      '<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata"><Signature/></EntityDescriptor>',
+    );
+
+    const res = await request(buildApp()).get('/api/sso/sp-metadata.xml');
+    expect(res.status).toBe(200);
+    expect(metaFn).toHaveBeenCalled();
+    const params = metaFn.mock.calls[0]?.[0] as
+      | { signMetadata?: boolean; privateKey?: string; publicCerts?: string[] }
+      | undefined;
+    expect(params?.signMetadata).toBe(true);
+    expect(params?.privateKey).toBe(FAKE_KEY);
+    expect(params?.publicCerts).toEqual([FAKE_CERT]);
+  });
+
+  it('SP metadata path omits signMetadata when keypair is unset (back-compat)', async () => {
+    const { generateServiceProviderMetadata } = await import('@node-saml/node-saml');
+    const metaFn = generateServiceProviderMetadata as unknown as ReturnType<typeof vi.fn>;
+    metaFn.mockClear();
+    metaFn.mockReturnValueOnce('<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata"/>');
+
+    await request(buildApp()).get('/api/sso/sp-metadata.xml');
+    const params = metaFn.mock.calls[0]?.[0] as
+      | { signMetadata?: boolean; privateKey?: string }
+      | undefined;
+    expect(params?.signMetadata).toBeUndefined();
+    expect(params?.privateKey).toBeUndefined();
   });
 });
 
