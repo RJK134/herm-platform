@@ -143,10 +143,12 @@ Restart the server. Every logged-in user is then issued a JWT carrying
 
 These are **deliberately deferred** — call them out if asked, do not paper over:
 
-- **At-rest encryption of `oidcClientSecret` / `samlCert`** — currently
-  plaintext in Postgres. Contract is "DB-level encryption is the deployment's
-  responsibility (Postgres TDE / managed-DB equivalent)". App-level envelope
-  encryption is a clean follow-up PR.
+- **At-rest encryption of `oidcClientSecret` / `samlCert`** — application-level
+  envelope encryption (AES-256-GCM) is now implemented (Phase 11.2). Set
+  `SSO_SECRET_KEY` (`openssl rand -hex 32`) and any newly-written SSO secret
+  is stored as `enc:v1:...` ciphertext. Legacy plaintext rows still resolve
+  (back-compat). Per-row key rotation and a one-shot encryption migration
+  script remain follow-ups.
 - **UKAMF compliance** — needs an SP X.509 keypair to sign AuthnRequests + SP
   metadata. Today's SAML flow is unsigned (works with permissive IdPs only).
 - **No admin UI for `SsoIdentityProvider`** — operators provision IdP rows via
