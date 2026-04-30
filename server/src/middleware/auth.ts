@@ -92,7 +92,18 @@ export function optionalJWT(req: Request, _res: Response, next: NextFunction): v
   const token = extractToken(req);
   if (token) {
     try {
-      req.user = jwt.verify(token, JWT_SECRET) as JwtPayload;
+      const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload & { purpose?: string };
+      // Phase 10.8 follow-up: purpose-tagged tokens (MFA challenge,
+      // future flows) carry a `purpose` claim and lack the session
+      // fields (role / institutionId / tier / etc). authenticateJWT
+      // already rejects them; optionalJWT must do the same. Otherwise
+      // the app-level optionalJWT in app.ts decodes them and sets
+      // req.user to a partial object whose downstream consumers
+      // (rate-limiter key, tierGate, frameworkContext) operate on
+      // undefined — a real defence-in-depth gap.
+      if (!decoded.purpose) {
+        req.user = decoded;
+      }
     } catch {
       // proceed as anonymous
     }

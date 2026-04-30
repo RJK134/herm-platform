@@ -439,4 +439,33 @@ describe('challenge token rejected at session-auth boundary', () => {
 
     expect(res.status).toBe(401);
   });
+
+  it('optionalJWT does NOT set req.user from a challenge token', async () => {
+    // Bugbot-flagged regression: optionalJWT runs at app level for all
+    // /api requests (rate-limiter context). Without the `purpose`
+    // guard, a valid challenge token would decode and set req.user to
+    // a partial object where role / institutionId / tier are undefined,
+    // and downstream middleware would silently operate on those.
+    //
+    // We exercise the default exported `optionalAuth = optionalJWT`
+    // through a scratch route that just returns whatever req.user is.
+    const { optionalAuth } = await import('../middleware/auth');
+    const app = express();
+    app.use(requestId);
+    app.use(express.json());
+    app.get('/scratch', optionalAuth, (req, res) => {
+      res.json({ user: req.user ?? null });
+    });
+    app.use(errorHandler);
+
+    const challenge = jwt.sign({ purpose: 'mfa_challenge', userId: 'u-1' }, SECRET, {
+      expiresIn: 60,
+    });
+    const res = await request(app)
+      .get('/scratch')
+      .set('Authorization', `Bearer ${challenge}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.user).toBeNull();
+  });
 });
