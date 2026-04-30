@@ -15,6 +15,7 @@ const ENV_VARS: EnvVar[] = [
   { name: 'JWT_SECRET',            required: true,  description: 'JWT signing secret (min 32 chars recommended)' },
   { name: 'FRONTEND_URL',          required: false, description: 'Browser-facing origin (CORS + SSO post-login redirect). REQUIRED in production — see prod-only check below.' },
   { name: 'SP_BASE_URL',           required: false, description: 'API origin used for SAML ACS + OIDC callback URLs (Phase 10.10). REQUIRED in production — see prod-only check below.' },
+  { name: 'SSO_SECRET_KEY',        required: false, description: 'Master key (32 bytes; 64 hex chars or base64) used to envelope-encrypt SsoIdentityProvider.samlCert + .oidcClientSecret at rest. Required when SSO is in use; warned-on in production when missing.' },
   { name: 'ANTHROPIC_API_KEY',     required: false, description: 'Anthropic API key for AI chat feature' },
   { name: 'STRIPE_SECRET_KEY',     required: false, description: 'Stripe secret key for subscription billing' },
   { name: 'STRIPE_WEBHOOK_SECRET', required: false, description: 'Stripe webhook secret for payment event verification' },
@@ -98,6 +99,17 @@ export function checkEnvironment(): void {
   if (isProd && !process.env['SP_BASE_URL']) {
     missing.push(
       '  SP_BASE_URL is required in production. Without it the SAML ACS + OIDC callback URLs sent to IdPs would point at localhost:3002 — IdPs would redirect users to an unreachable origin and SSO would silently break. Set to the public API origin (e.g. https://api.example.ac.uk).',
+    );
+  }
+
+  // SSO_SECRET_KEY: warn-only at boot. Not fatal even in production —
+  // a deployment that does not use SSO at all has no rows to encrypt
+  // and runs fine without the key. The encrypt/decrypt helpers throw
+  // at runtime when an actual SSO row is read or written without the
+  // key, which is the right place to fail (per-tenant, not at boot).
+  if (isProd && !process.env['SSO_SECRET_KEY']) {
+    console.warn(
+      '[ENV] SSO_SECRET_KEY is not set. Any encrypted SsoIdentityProvider row will fail to load, and the SSO admin write path will refuse to persist new secrets in plaintext. Generate one with: openssl rand -hex 32',
     );
   }
 

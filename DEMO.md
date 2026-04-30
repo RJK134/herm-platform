@@ -161,14 +161,19 @@ Restart the server. Every logged-in user is then issued a JWT carrying
 
 These are **deliberately deferred** — call them out if asked, do not paper over:
 
-- **At-rest encryption of `oidcClientSecret` / `samlCert`** — currently
-  plaintext in Postgres. Contract is "DB-level encryption is the deployment's
-  responsibility (Postgres TDE / managed-DB equivalent)". App-level envelope
-  encryption is a clean follow-up PR.
+- **At-rest encryption of `oidcClientSecret` / `samlCert`** — application-level
+  envelope encryption (AES-256-GCM) is now implemented (Phase 11.2). Set
+  `SSO_SECRET_KEY` (`openssl rand -hex 32`) and any newly-written SSO secret
+  is stored as `enc:v1:...` ciphertext. Legacy plaintext rows still resolve
+  (back-compat). Per-row key rotation and a one-shot encryption migration
+  script remain follow-ups.
 - **UKAMF compliance** — needs an SP X.509 keypair to sign AuthnRequests + SP
   metadata. Today's SAML flow is unsigned (works with permissive IdPs only).
-- **No admin UI for `SsoIdentityProvider`** — operators provision IdP rows via
-  raw Prisma today.
+- **Admin UI for `SsoIdentityProvider`** — Phase 11.4 ships an
+  INSTITUTION_ADMIN page at `/admin/sso` for creating, editing, and
+  deleting the institution's IdP row (SAML or OIDC). Secret fields use
+  "stored — leave blank to keep" semantics; writes go through the
+  envelope-encryption helper from Phase 11.2. (Closed.)
 - **No live IdP integration tests** — `node-saml` and `openid-client` are
   mocked in the test suite. End-to-end against `saml-test-idp` /
   `oauth2-mock-server` is a deferred follow-up.

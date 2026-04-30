@@ -22,7 +22,7 @@
  *   - Auth login refuses passwordLoginDisabled accounts with the
  *     generic 401 (no info leak).
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
@@ -83,6 +83,8 @@ import { errorHandler } from '../middleware/errorHandler';
 import { requestId } from '../middleware/requestId';
 import { __resetFlowStoreForTests, putFlowState } from '../api/sso/flow-store';
 import { __resetLockoutForTests } from '../lib/lockout';
+import { encryptSecret, _resetCipherKeyCache } from '../lib/secret-cipher';
+import { __resetOidcConfigCacheForTests } from '../api/sso/oidc';
 
 const SECRET = process.env['JWT_SECRET'] ?? 'test-jwt-secret-do-not-use-in-prod';
 
@@ -478,6 +480,109 @@ describe('GET /api/sso/:slug/oidc/callback', () => {
     );
     expect(res.status).toBe(302);
     expect(res.headers['location']).toMatch(/\/login\?error=sso_failed/);
+  });
+});
+
+// ── At-rest envelope encryption (Phase 11.2) ───────────────────────────────
+
+describe('SSO secret-at-rest encryption', () => {
+  // Deterministic low-entropy test keys — NOT secrets. Repeating-byte form
+  // avoids tripping secret scanners (GitGuardian etc.) on a 64-hex literal.
+  const TEST_KEY_HEX = '42'.repeat(32);
+  let originalKey: string | undefined;
+
+  beforeEach(() => {
+    originalKey = process.env['SSO_SECRET_KEY'];
+    process.env['SSO_SECRET_KEY'] = TEST_KEY_HEX;
+    _resetCipherKeyCache();
+    // The OIDC config cache is keyed by issuer URL and would otherwise
+    // short-circuit `oidc.discovery` for the second+ test that hits the
+    // same issuer. Reset it so each call asserts the secret it sees.
+    __resetOidcConfigCacheForTests();
+  });
+
+  afterEach(() => {
+    if (originalKey === undefined) delete process.env['SSO_SECRET_KEY'];
+    else process.env['SSO_SECRET_KEY'] = originalKey;
+    _resetCipherKeyCache();
+  });
+
+  it('decrypts oidcClientSecret before passing it to openid-client.discovery', async () => {
+    const inst = enterpriseInstitutionWithOidcIdp();
+    const plaintextSecret = inst.ssoProvider.oidcClientSecret as string;
+    inst.ssoProvider.oidcClientSecret = encryptSecret(plaintextSecret);
+    expect(inst.ssoProvider.oidcClientSecret.startsWith('enc:v1:')).toBe(true);
+
+    prismaMock.institution.findUnique.mockResolvedValue(inst);
+    oidcMock.discovery.mockResolvedValueOnce({} as unknown);
+    oidcMock.buildAuthorizationUrl.mockReturnValueOnce(
+      new URL('https://idp.uni.test/authorize?state=state-test'),
+    );
+
+    const res = await request(buildApp()).get('/api/sso/uni-1/login');
+    expect(res.status).toBe(302);
+    // The third positional argument to openid-client.discovery is the
+    // client secret; it must be the plaintext, not the enc:v1: blob.
+    expect(oidcMock.discovery).toHaveBeenCalled();
+    const call = oidcMock.discovery.mock.calls[0] as unknown as [URL, string, string];
+    expect(call[2]).toBe(plaintextSecret);
+    expect(call[2].startsWith('enc:v1:')).toBe(false);
+  });
+
+  it('decrypts samlCert before passing it to node-saml SAML(...)', async () => {
+    const { SAML } = await import('@node-saml/node-saml');
+    const samlCtor = SAML as unknown as ReturnType<typeof vi.fn>;
+    samlCtor.mockClear();
+
+    const inst = enterpriseInstitutionWithSamlIdp();
+    const plaintextCert = inst.ssoProvider.samlCert as string;
+    inst.ssoProvider.samlCert = encryptSecret(plaintextCert);
+    expect(inst.ssoProvider.samlCert.startsWith('enc:v1:')).toBe(true);
+
+    prismaMock.institution.findUnique.mockResolvedValue(inst);
+    samlInstance.getAuthorizeUrlAsync.mockResolvedValueOnce(
+      'https://idp.uni.test/saml/sso?SAMLRequest=base64',
+    );
+
+    const res = await request(buildApp()).get('/api/sso/uni-1/login');
+    expect(res.status).toBe(302);
+    expect(samlCtor).toHaveBeenCalled();
+    const config = samlCtor.mock.calls[0]?.[0] as { idpCert: string } | undefined;
+    expect(config?.idpCert).toBe(plaintextCert);
+    expect(config?.idpCert?.startsWith('enc:v1:')).toBe(false);
+  });
+
+  it('legacy plaintext rows still resolve when SSO_SECRET_KEY is set (back-compat)', async () => {
+    // Row written before this PR shipped: oidcClientSecret stored as plaintext.
+    const inst = enterpriseInstitutionWithOidcIdp();
+    const plaintextSecret = inst.ssoProvider.oidcClientSecret as string;
+    expect(plaintextSecret.startsWith('enc:v1:')).toBe(false);
+
+    prismaMock.institution.findUnique.mockResolvedValue(inst);
+    oidcMock.discovery.mockResolvedValueOnce({} as unknown);
+    oidcMock.buildAuthorizationUrl.mockReturnValueOnce(
+      new URL('https://idp.uni.test/authorize?state=state-test'),
+    );
+
+    const res = await request(buildApp()).get('/api/sso/uni-1/login');
+    expect(res.status).toBe(302);
+    const call = oidcMock.discovery.mock.calls[0] as unknown as [URL, string, string];
+    expect(call[2]).toBe(plaintextSecret);
+  });
+
+  it('returns the opaque 404 when an encrypted row cannot be decrypted (wrong key)', async () => {
+    const inst = enterpriseInstitutionWithOidcIdp();
+    inst.ssoProvider.oidcClientSecret = encryptSecret(inst.ssoProvider.oidcClientSecret as string);
+    prismaMock.institution.findUnique.mockResolvedValue(inst);
+
+    // Rotate the master key to a different (also-low-entropy, not-a-secret)
+    // value so the auth tag fails verification.
+    process.env['SSO_SECRET_KEY'] = '99'.repeat(32);
+    _resetCipherKeyCache();
+
+    const res = await request(buildApp()).get('/api/sso/uni-1/login');
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('SSO_NOT_CONFIGURED');
   });
 });
 

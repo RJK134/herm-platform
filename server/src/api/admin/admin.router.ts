@@ -8,6 +8,7 @@ import {
   reviewSubmission,
 } from './admin-vendors.controller';
 import { startImpersonation, endImpersonation } from './impersonation.controller';
+import { readMe as readSsoMe, upsertMe as upsertSsoMe, deleteMe as deleteSsoMe } from './admin-sso.controller';
 
 const router = Router();
 
@@ -30,5 +31,13 @@ router.patch('/vendors/:id', updateVendorAccount);
 router.get('/vendors/:id/submissions', getVendorSubmissions);
 router.get('/submissions', listAllSubmissions);
 router.patch('/submissions/:id', reviewSubmission);
+
+// Phase 11.4 — SsoIdentityProvider admin (the operator was previously
+// expected to write rows via raw Prisma). Scoped to the caller's
+// institution; the existing INSTITUTION_ADMIN / SUPER_ADMIN guard
+// applies.
+router.get('/sso/me', readSsoMe);
+router.put('/sso/me', upsertSsoMe);
+router.delete('/sso/me', deleteSsoMe);
 
 export default router;
