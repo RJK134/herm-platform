@@ -33,11 +33,25 @@ export function getSpBaseUrl(): string {
 
 /**
  * Browser-facing origin (where the SPA is served). Used for the
- * post-SSO redirect and any other user-agent navigation. Falls back
- * to the dev SPA port — never to the SP/API origin.
+ * post-SSO redirect and any other user-agent navigation.
+ *
+ * In local development we fall back to the dev SPA port. In production,
+ * this must be configured explicitly so authentication tokens are never
+ * redirected to a localhost origin due to misconfiguration.
  */
 export function getFrontendBaseUrl(): string {
-  return process.env['FRONTEND_URL'] ?? DEFAULT_FRONTEND_URL;
+  const frontendUrl = process.env['FRONTEND_URL'];
+  if (frontendUrl) {
+    return frontendUrl;
+  }
+
+  if (process.env['NODE_ENV'] !== 'production') {
+    return DEFAULT_FRONTEND_URL;
+  }
+
+  throw new Error(
+    'FRONTEND_URL must be set in production for SSO redirects; refusing to fall back to localhost.',
+  );
 }
 
 export function getSpEntityId(): string {
