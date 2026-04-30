@@ -211,7 +211,31 @@ export const openApiSpec = {
         summary: 'Liveness probe — process is up.',
         security: [],
         responses: {
-          '200': { description: 'Live.', content: { 'application/json': { schema: { $ref: '#/components/schemas/HealthStatus' } } } },
+          '200': {
+            description: 'Live.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['success', 'data'],
+                  properties: {
+                    success: { type: 'boolean', const: true },
+                    data: {
+                      type: 'object',
+                      additionalProperties: false,
+                      required: ['status', 'timestamp', 'version'],
+                      properties: {
+                        status: { type: 'string', example: 'ok' },
+                        timestamp: { type: 'string', format: 'date-time' },
+                        version: { type: 'string', example: '1.0.0' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       },
     },
