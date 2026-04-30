@@ -6,15 +6,17 @@
  * — the identity HERM presents to every IdP it talks to. There is one
  * SP per deployment, not per tenant.
  *
- * Three env vars (all optional with sensible dev defaults):
+ * Three env vars control the SP identity/config. They have sensible
+ * development defaults, but `FRONTEND_URL` is required in production:
  *   SP_BASE_URL    Public origin of the API (e.g. https://api.example.ac.uk).
  *                  Used for SAML ACS + OIDC callback URLs. Defaults to
  *                  the dev API port (:3002).
  *   FRONTEND_URL   Public origin of the SPA (where the browser lands).
  *                  Used for the post-SSO redirect carrying the session
- *                  token. Defaults to the dev SPA port (:5173) — NEVER
- *                  to the API origin, which would deliver the user to
- *                  a backend route the SPA doesn't render.
+ *                  token. Defaults to the dev SPA port (:5173) in local
+ *                  development, but must be set explicitly in production.
+ *                  NEVER point this at the API origin, which would deliver
+ *                  the user to a backend route the SPA doesn't render.
  *   SP_ENTITY_ID   SAML entity ID. Defaults to `<SP_BASE_URL>/api/sso/sp`.
  *                  Override only if the IdP admin requires a specific
  *                  URI (UKAMF assigns a fixed entityID per registered SP).
