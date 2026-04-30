@@ -17,7 +17,7 @@ const ENV_VARS: EnvVar[] = [
   { name: 'ANTHROPIC_API_KEY',     required: false, description: 'Anthropic API key for AI chat feature' },
   { name: 'STRIPE_SECRET_KEY',     required: false, description: 'Stripe secret key for subscription billing' },
   { name: 'STRIPE_WEBHOOK_SECRET', required: false, description: 'Stripe webhook secret for payment event verification' },
-  { name: 'REDIS_URL',             required: false, description: 'Redis connection string (e.g. redis://localhost:6379) — enables shared rate-limit / session state when set' },
+  { name: 'REDIS_URL',             required: false, description: 'Redis connection string (e.g. redis://localhost:6379) — enables the Redis readiness probe when set; shared rate-limit / session state is not yet implemented' },
   { name: 'SMTP_HOST',             required: false, description: 'SMTP server host for outbound email (billing notifications etc.)' },
   { name: 'SMTP_FROM',             required: false, description: 'Default From: address for outbound email (e.g. "HERM <noreply@example.com>")' },
 ];
