@@ -107,8 +107,53 @@ model Institution {
   subscription       Subscription?
   evaluationProjects EvaluationProject[]
   apiKeys            ApiKey[]
+  ssoProvider        SsoIdentityProvider?
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
+}
+
+// Phase 10.7 (scaffold): per-institution SSO identity-provider config.
+// One row per institution that has SSO enabled — institutions without a
+// row authenticate via password.  The actual SAML/OIDC flows are not
+// yet implemented; this model captures the contract so the discovery
+// endpoint and the upcoming auth flows have a stable shape to read
+// from.  See docs/adr/0001-sso-architecture.md for the design and the
+// open questions for the implementing engineer.
+model SsoIdentityProvider {
+  id            String      @id @default(cuid())
+  institutionId String      @unique
+  institution   Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  // SAML or OIDC. The flow paths in /api/sso branch on this column.
+  protocol      SsoProtocol
+  // Display label shown on the discovery page ("Sign in with <displayName>").
+  displayName   String
+  // SAML-specific. Null for OIDC providers.
+  samlEntityId  String?
+  samlSsoUrl    String?
+  // PEM-encoded x509 cert used to verify SAML assertions. Stored as TEXT
+  // (multi-line). Rotation is operator-driven for now — see ADR.
+  samlCert      String?
+  // OIDC-specific. Null for SAML providers.
+  oidcIssuer    String?
+  oidcClientId  String?
+  // Encrypted at rest: see ADR. The application layer is responsible for
+  // encryption/decryption at the edges; the column is opaque from the
+  // DB's perspective.
+  oidcClientSecret String?
+  // JIT-provisioning policy: when `true`, an unknown user from the IdP
+  // is created on first login. When `false`, the login fails and an
+  // INSTITUTION_ADMIN must pre-provision the user. Default: true.
+  jitProvisioning Boolean   @default(true)
+  // Default role assigned to JIT-provisioned users.
+  defaultRole   UserRole    @default(VIEWER)
+  enabled       Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+enum SsoProtocol {
+  SAML
+  OIDC
 }
 
 model Subscription {
