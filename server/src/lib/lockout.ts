@@ -22,9 +22,10 @@
  *     attempts do NOT extend the timer (otherwise an attacker can
  *     keep an account locked indefinitely as a DoS).
  *   - SUPER_ADMIN-driven manual unlock can land in a follow-up; for
- *     now operators can exec into a pod and call `clear()`.
+ *     now operators can exec into a pod and call `clearFailures()`
+ *     for a specific email.
  *
- * Test hooks: `__resetLockoutForTests()` and `__overrideLockoutClock()`.
+ * Test hooks: `__resetLockoutForTests()`.
  */
 import { logger } from './logger';
 import { AppError } from '../utils/errors';
