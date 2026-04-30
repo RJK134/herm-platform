@@ -7,9 +7,14 @@ configured `.env` (see `.env.example`).
 
 ### Local dev
 ```bash
-docker-compose up -d           # Postgres + Redis
+cp .env.example .env           # ports already aligned to docker-compose
+docker compose up -d           # Postgres + Redis
+npm run demo:bootstrap         # install + prisma generate/push + full seed
 npm run dev                    # concurrent client (5173) + server (3002)
 ```
+
+Or use the one-shot helpers (Linux/macOS): `./start.sh` / `./stop.sh`.
+For the colleague-review walkthrough see [DEMO.md](DEMO.md).
 
 ### Local production-like
 ```bash
@@ -63,14 +68,24 @@ The image is multi-stage:
 | `NODE_ENV` | yes | `production` flips strict env-check + hides internal error details |
 | `DATABASE_URL` | yes | Postgres connection string (consider `?connection_limit=10&options=-c statement_timeout=15000`) |
 | `JWT_SECRET` | yes | ≥ 32 chars; 64+ recommended |
-| `FRONTEND_URL` | yes | Origin for CORS |
+| `FRONTEND_URL` | yes (prod) | Browser-facing origin used for CORS **and** the post-SSO redirect (which carries the session JWT). `checkEnvironment()` refuses to boot in prod without it. |
+| `SP_BASE_URL` | yes (prod) | API origin used for SAML ACS + OIDC callback URLs (Phase 10.10). Without it, IdPs would be told to redirect to localhost. `checkEnvironment()` refuses to boot in prod without it. |
+| `SP_ENTITY_ID` | optional | SAML entity ID. Defaults to `<SP_BASE_URL>/api/sso/sp`; override only when an IdP admin (e.g. UKAMF) assigns one. |
+| `REDIS_URL` | optional | Enables shared lockout state + the SSO OIDC PKCE flow store + Redis readiness probe. Without it, lockout falls back to in-memory (per-pod). Required for multi-pod deployments. |
 | `SENTRY_DSN` | optional | Error reporting; no-op when unset |
 | `SENTRY_ENVIRONMENT` | optional | Defaults to `NODE_ENV` |
 | `SENTRY_TRACES_SAMPLE_RATE` | optional | 0–1; default 0 (errors only) |
 | `STRIPE_SECRET_KEY` | optional | If set, **`STRIPE_WEBHOOK_SECRET` must also be set** (env-check is fatal otherwise) |
 | `STRIPE_WEBHOOK_SECRET` | optional | Required when `STRIPE_SECRET_KEY` is set |
 | `ANTHROPIC_API_KEY` | optional | AI assistant |
+| `SMTP_HOST` | optional | SMTP relay host. When set, `SMTP_FROM` (or `SMTP_USER`) must also be set or env-check fails — outbound email would otherwise silently no-op. |
+| `SMTP_PORT` | optional | 1–65535; STARTTLS on 587 by default |
+| `SMTP_SECURE` | optional | `"true"` for SMTPS (port 465); leave unset for STARTTLS |
+| `SMTP_USER` / `SMTP_PASSWORD` | optional | Relay credentials |
+| `SMTP_FROM` | optional (req'd with `SMTP_HOST`) | RFC-5322 mailbox, e.g. `"HERM <noreply@example.com>"` |
 | `RATE_LIMIT_*` | optional | Per-tier ceilings (`ANONYMOUS`, `FREE`, `PROFESSIONAL`, `ENTERPRISE`, `API_KEY`); see `middleware/security.ts` for defaults |
+| `DEV_UNLOCK_ALL_TIERS` | optional | Pre-billing escape hatch — every logged-in user gets `tier="enterprise"`. Env-check shouts loudly if set in prod. Useful for demos before subscriptions land. |
+| `DEMO_PASSWORD` | optional | Overrides the seed-default demo user password (`demo12345`). Leave unset for documented demos — the Login page demo-credentials hint is hard-coded to the default. |
 
 ### Graceful shutdown
 SIGTERM/SIGINT → close HTTP listener → flush Sentry → `prisma.$disconnect()` → exit 0.
@@ -154,10 +169,12 @@ above — `db:push` is only for dev / CI test DBs that get torn down.
 
 ```bash
 curl -i http://localhost:3002/api/health      # liveness
-curl -i http://localhost:3002/api/readiness   # db ping
+curl -i http://localhost:3002/api/readiness   # db ping (also at /api/ready)
+npm run demo:validate                         # all of the above + demo login
 ```
 
-Expect 200 for both. `readiness` flips to 503 on DB loss.
+Expect 200 for both. `readiness` flips to 503 on DB (or, when `REDIS_URL` is
+set, Redis) loss.
 
 ## Logs
 

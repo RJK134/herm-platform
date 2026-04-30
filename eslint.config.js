@@ -14,6 +14,7 @@ export default [
       '**/coverage/**',
       'client/public/**',
       'prisma/migrations/**',
+      'scripts/**',
     ],
   },
   js.configs.recommended,
