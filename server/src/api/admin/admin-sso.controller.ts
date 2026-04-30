@@ -389,7 +389,16 @@ export const upsertByInstitution = async (
       throw new AppError(404, 'NOT_FOUND', 'Institution not found');
     }
     const data = await upsertForInstitution(req, institutionId, req.body);
-    res.json({ success: true, data });
+    // Return the enriched shape (matching readAll / readByInstitution) so
+    // the SUPER_ADMIN edit page keeps the institutionName/Slug after a
+    // save or secret-clear. Prefer this over re-querying the row with an
+    // include — `inst` is already in hand from the existence check above.
+    const enrichedData: IdpListEntry = {
+      ...data,
+      institutionName: inst.name,
+      institutionSlug: inst.slug,
+    };
+    res.json({ success: true, data: enrichedData });
   } catch (err) {
     next(err);
   }
