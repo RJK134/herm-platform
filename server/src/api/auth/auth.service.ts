@@ -5,6 +5,12 @@ import { AppError, ConflictError } from '../../utils/errors';
 import type { RegisterInput, LoginInput } from './auth.schema';
 import { checkLockout, recordFailure, clearFailures, AccountLockedError } from '../../lib/lockout';
 
+// Pre-computed bcrypt hash used when the email doesn't exist in the database.
+// Running bcrypt.compare against this dummy hash ensures the response time for
+// non-existent emails matches the time for existing emails with a wrong password,
+// preventing an attacker from enumerating valid addresses by measuring latency.
+const DUMMY_HASH = '$2a$10$HMZm49nwfBLvO2Omv16KtuM8SGCKi5p.9aY6icgaOFJ5rFeJKQFRS';
+
 function buildSlug(name: string): string {
   return (
     name
@@ -102,9 +108,12 @@ export class AuthService {
     });
 
     if (!user) {
-      // Record a failure even when the email doesn't exist — this
-      // prevents an attacker from probing for valid emails (different
-      // response timings would otherwise leak existence).
+      // Run a dummy bcrypt comparison to match the response time of a
+      // wrong-password attempt against an existing account. Without this,
+      // an attacker can discover valid email addresses by measuring how much
+      // faster the "email not found" path responds compared to the bcrypt
+      // path. The result is discarded — we always return 401 here.
+      await bcrypt.compare(data.password, DUMMY_HASH);
       recordFailure(data.email);
       throw new AppError(401, 'AUTHENTICATION_ERROR', 'Invalid email or password');
     }
