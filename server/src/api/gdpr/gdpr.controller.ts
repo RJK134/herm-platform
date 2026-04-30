@@ -170,7 +170,7 @@ export const eraseMyAccount = async (req: Request, res: Response, next: NextFunc
         notes: [
           'Your User record and personal Notifications have been deleted.',
           'Audit log entries reference your former user ID and are retained under Article 17(3)(b)/(e) for legal-compliance and dispute purposes.',
-          'Your access token will reject on the next authenticated call.',
+          'If you still hold an access token, it may remain valid until it expires unless it is separately revoked by the authentication layer.',
         ],
       },
     });
