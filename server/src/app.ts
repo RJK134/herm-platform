@@ -111,7 +111,11 @@ export function createApp(): Express {
 
     app.use(`${base}/vendor-portal`, ...frameworkScoped, vendorPortalRouter);
     app.use(`${base}/evaluations`, evaluationsRouter);
-    app.use(`${base}/subscriptions`, subscriptionsRouter);
+    // Keep subscriptions unversioned so the Stripe webhook continues to use
+    // the dedicated raw-body handling registered for /api/subscriptions/webhook.
+    if (base === '/api') {
+      app.use(`${base}/subscriptions`, subscriptionsRouter);
+    }
     app.use(`${base}/admin`, adminRouter);
 
     app.use(`${base}/sector/analytics`, sectorAnalyticsRouter);
