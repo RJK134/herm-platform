@@ -345,7 +345,39 @@ export const openApiSpec = {
         tags: ['Auth'],
         summary: 'Return the authenticated user\'s profile + tier.',
         responses: {
-          '200': { description: 'OK.', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, data: { $ref: '#/components/schemas/User' } } } } } },
+          '200': {
+            description: 'OK.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: {
+                      allOf: [
+                        { $ref: '#/components/schemas/User' },
+                        {
+                          type: 'object',
+                          properties: {
+                            subscription: {
+                              type: 'object',
+                              description: 'Authenticated user subscription/tier details.',
+                              additionalProperties: true,
+                            },
+                            institution: {
+                              type: 'object',
+                              description: 'Institution associated with the authenticated user.',
+                              additionalProperties: true,
+                            },
+                          },
+                        },
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+          },
           '401': ERROR_RESPONSES['401'],
         },
       },
