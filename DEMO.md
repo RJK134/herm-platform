@@ -151,8 +151,11 @@ These are **deliberately deferred** — call them out if asked, do not paper ove
   script remain follow-ups.
 - **UKAMF compliance** — needs an SP X.509 keypair to sign AuthnRequests + SP
   metadata. Today's SAML flow is unsigned (works with permissive IdPs only).
-- **No admin UI for `SsoIdentityProvider`** — operators provision IdP rows via
-  raw Prisma today.
+- **Admin UI for `SsoIdentityProvider`** — Phase 11.4 ships an
+  INSTITUTION_ADMIN page at `/admin/sso` for creating, editing, and
+  deleting the institution's IdP row (SAML or OIDC). Secret fields use
+  "stored — leave blank to keep" semantics; writes go through the
+  envelope-encryption helper from Phase 11.2. (Closed.)
 - **No live IdP integration tests** — `node-saml` and `openid-client` are
   mocked in the test suite. End-to-end against `saml-test-idp` /
   `oauth2-mock-server` is a deferred follow-up.
