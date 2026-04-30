@@ -120,22 +120,22 @@ model Institution {
 // from.  See docs/adr/0001-sso-architecture.md for the design and the
 // open questions for the implementing engineer.
 model SsoIdentityProvider {
-  id            String      @id @default(cuid())
-  institutionId String      @unique
-  institution   Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  id               String      @id @default(cuid())
+  institutionId    String      @unique
+  institution      Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
   // SAML or OIDC. The flow paths in /api/sso branch on this column.
-  protocol      SsoProtocol
+  protocol         SsoProtocol
   // Display label shown on the discovery page ("Sign in with <displayName>").
-  displayName   String
+  displayName      String
   // SAML-specific. Null for OIDC providers.
-  samlEntityId  String?
-  samlSsoUrl    String?
+  samlEntityId     String?
+  samlSsoUrl       String?
   // PEM-encoded x509 cert used to verify SAML assertions. Stored as TEXT
   // (multi-line). Rotation is operator-driven for now — see ADR.
-  samlCert      String?
+  samlCert         String?
   // OIDC-specific. Null for SAML providers.
-  oidcIssuer    String?
-  oidcClientId  String?
+  oidcIssuer       String?
+  oidcClientId     String?
   // Encrypted at rest: see ADR. The application layer is responsible for
   // encryption/decryption at the edges; the column is opaque from the
   // DB's perspective.
@@ -143,12 +143,12 @@ model SsoIdentityProvider {
   // JIT-provisioning policy: when `true`, an unknown user from the IdP
   // is created on first login. When `false`, the login fails and an
   // INSTITUTION_ADMIN must pre-provision the user. Default: true.
-  jitProvisioning Boolean   @default(true)
+  jitProvisioning  Boolean     @default(true)
   // Default role assigned to JIT-provisioned users.
-  defaultRole   UserRole    @default(VIEWER)
-  enabled       Boolean     @default(false)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  defaultRole      UserRole    @default(VIEWER)
+  enabled          Boolean     @default(false)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 }
 
 enum SsoProtocol {
