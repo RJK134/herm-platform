@@ -3,6 +3,13 @@ import prisma from '../../utils/prisma';
 import { generateToken, type JwtPayload } from '../../middleware/auth';
 import { AppError, ConflictError } from '../../utils/errors';
 import type { RegisterInput, LoginInput } from './auth.schema';
+import { checkLockout, recordFailure, clearFailures, AccountLockedError } from '../../lib/lockout';
+
+// Pre-computed bcrypt hash used when the email doesn't exist in the database.
+// Running bcrypt.compare against this dummy hash ensures the response time for
+// non-existent emails matches the time for existing emails with a wrong password,
+// preventing an attacker from enumerating valid addresses by measuring latency.
+const DUMMY_HASH = '$2a$10$HMZm49nwfBLvO2Omv16KtuM8SGCKi5p.9aY6icgaOFJ5rFeJKQFRS';
 
 function buildSlug(name: string): string {
   return (
@@ -80,6 +87,17 @@ export class AuthService {
   }
 
   async login(data: LoginInput) {
+    // Phase 10.5: lockout check FIRST, before the DB read and bcrypt
+    // comparison. Both are expensive (bcrypt is intentionally so), and
+    // an attacker hammering a locked account shouldn't burn CPU per
+    // attempt. The check is O(1) — Map lookup + a couple of timestamp
+    // comparisons. Keyed by lower-cased email so case variations don't
+    // bypass the counter.
+    const lockState = checkLockout(data.email);
+    if (lockState.locked) {
+      throw new AccountLockedError(Math.ceil(lockState.retryAfterMs / 1000));
+    }
+
     const user = await prisma.user.findUnique({
       where: { email: data.email.toLowerCase() },
       include: {
@@ -90,13 +108,27 @@ export class AuthService {
     });
 
     if (!user) {
+      // Run a dummy bcrypt comparison to match the response time of a
+      // wrong-password attempt against an existing account. Without this,
+      // an attacker can discover valid email addresses by measuring how much
+      // faster the "email not found" path responds compared to the bcrypt
+      // path. The result is discarded — we always return 401 here.
+      await bcrypt.compare(data.password, DUMMY_HASH);
+      recordFailure(data.email);
       throw new AppError(401, 'AUTHENTICATION_ERROR', 'Invalid email or password');
     }
 
     const valid = await bcrypt.compare(data.password, user.passwordHash);
     if (!valid) {
+      const post = recordFailure(data.email);
+      if (post.locked) {
+        throw new AccountLockedError(Math.ceil(post.retryAfterMs / 1000), true);
+      }
       throw new AppError(401, 'AUTHENTICATION_ERROR', 'Invalid email or password');
     }
+
+    // Successful login — clear any prior failure history.
+    clearFailures(data.email);
 
     const tier = resolveEffectiveTier(
       user.institution.subscription?.tier?.toLowerCase() ?? 'free',
