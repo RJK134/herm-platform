@@ -33,6 +33,7 @@ import notificationsRouter from './api/notifications/notifications.router';
 import keysRouter from './api/keys/keys.router';
 import frameworksRouter from './api/frameworks/frameworks.router';
 import frameworkMappingsRouter from './api/framework-mappings/framework-mappings.router';
+import openApiRouter from './api/openapi/openapi.router';
 import ssoRouter from './api/sso/sso.router';
 import { frameworkContext } from './middleware/framework-context';
 import { tierGate } from './middleware/tier-gate';
@@ -71,47 +72,64 @@ export function createApp(): Express {
   // Per-route auth (`authenticateJWT`) still runs further down the chain
   // and re-validates the JWT — these app-level decoders just establish
   // the rate-limit context.
-  app.use('/api', apiKeyAuth);
-  app.use('/api', optionalJWT);
-  app.use('/api', apiRateLimiter);
+  // Applied to both /api and /api/v1 so the alias shares the same
+  // auth-context and rate-limit enforcement.
+  for (const base of ['/api', '/api/v1'] as const) {
+    app.use(base, apiKeyAuth);
+    app.use(base, optionalJWT);
+    app.use(base, apiRateLimiter);
+  }
 
-  app.use('/api', healthRouter);
-  app.get('/api/ready', readiness);
-
-  app.use('/api/auth', authRateLimiter, authRouter);
-  app.use('/api/institutions', institutionsRouter);
-
+  // Mount every public route under both `/api` (legacy alias) and
+  // `/api/v1` (versioned base). Future breaking changes ship as
+  // `/api/v2/*` — the unversioned `/api/*` will eventually be retired
+  // with a deprecation window. Until then, every existing client keeps
+  // working untouched, while new integrators can pin to `/api/v1` for a
+  // stable contract. (Phase 10.4)
   const frameworkScoped = [optionalJWT, frameworkContext, tierGate] as const;
-  app.use('/api/systems', ...frameworkScoped, systemsRouter);
-  app.use('/api/capabilities', ...frameworkScoped, capabilitiesRouter);
-  app.use('/api/scores', ...frameworkScoped, scoresRouter);
-  app.use('/api/export', ...frameworkScoped, exportRouter);
+  for (const base of ['/api', '/api/v1'] as const) {
+    app.use(base, healthRouter);
+    app.get(`${base}/ready`, readiness);
+    app.use(base, openApiRouter);
 
-  app.use('/api/vendors', vendorsRouter);
-  app.use('/api/research', researchRouter);
-  app.use('/api/scoring', scoringRouter);
-  app.use('/api/chat', chatRouter);
+    app.use(`${base}/auth`, authRateLimiter, authRouter);
+    app.use(`${base}/institutions`, institutionsRouter);
 
-  app.use('/api/baskets', basketsRouter);
-  app.use('/api/tco', tcoRouter);
-  app.use('/api/procurement', procurementRouter);
-  app.use('/api/integration', integrationRouter);
+    app.use(`${base}/systems`, ...frameworkScoped, systemsRouter);
+    app.use(`${base}/capabilities`, ...frameworkScoped, capabilitiesRouter);
+    app.use(`${base}/scores`, ...frameworkScoped, scoresRouter);
+    app.use(`${base}/export`, ...frameworkScoped, exportRouter);
 
-  app.use('/api/architecture', architectureRouter);
-  app.use('/api/value', valueRouter);
-  app.use('/api/documents', documentsRouter);
+    app.use(`${base}/vendors`, vendorsRouter);
+    app.use(`${base}/research`, researchRouter);
+    app.use(`${base}/scoring`, scoringRouter);
+    app.use(`${base}/chat`, chatRouter);
 
-  app.use('/api/vendor-portal', ...frameworkScoped, vendorPortalRouter);
-  app.use('/api/evaluations', evaluationsRouter);
-  app.use('/api/subscriptions', subscriptionsRouter);
-  app.use('/api/admin', adminRouter);
+    app.use(`${base}/baskets`, basketsRouter);
+    app.use(`${base}/tco`, tcoRouter);
+    app.use(`${base}/procurement`, procurementRouter);
+    app.use(`${base}/integration`, integrationRouter);
 
-  app.use('/api/sector/analytics', sectorAnalyticsRouter);
-  app.use('/api/notifications', notificationsRouter);
-  app.use('/api/keys', keysRouter);
+    app.use(`${base}/architecture`, architectureRouter);
+    app.use(`${base}/value`, valueRouter);
+    app.use(`${base}/documents`, documentsRouter);
 
-  app.use('/api/frameworks', frameworksRouter);
-  app.use('/api/framework-mappings', frameworkMappingsRouter);
+    app.use(`${base}/vendor-portal`, ...frameworkScoped, vendorPortalRouter);
+    app.use(`${base}/evaluations`, evaluationsRouter);
+    // Keep subscriptions unversioned so the Stripe webhook continues to use
+    // the dedicated raw-body handling registered for /api/subscriptions/webhook.
+    if (base === '/api') {
+      app.use(`${base}/subscriptions`, subscriptionsRouter);
+    }
+    app.use(`${base}/admin`, adminRouter);
+
+    app.use(`${base}/sector/analytics`, sectorAnalyticsRouter);
+    app.use(`${base}/notifications`, notificationsRouter);
+    app.use(`${base}/keys`, keysRouter);
+
+    app.use(`${base}/frameworks`, frameworksRouter);
+    app.use(`${base}/framework-mappings`, frameworkMappingsRouter);
+  }
 
   // Phase 10.7 — SSO discovery (scaffold). Anonymous endpoint that
   // tells the frontend whether SSO is available for an institution.
