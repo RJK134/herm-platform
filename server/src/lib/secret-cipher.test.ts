@@ -7,8 +7,11 @@ import {
   _resetCipherKeyCache,
 } from './secret-cipher';
 
-const TEST_KEY_HEX = '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff';
-const OTHER_KEY_HEX = 'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899';
+// Deterministic low-entropy test keys — NOT secrets. Built from a repeating
+// byte pattern so secret-scanners (GitGuardian, trufflehog) don't flag them.
+// Each is 32 bytes / 64 hex chars, the size aes-256-gcm requires.
+const TEST_KEY_HEX = '42'.repeat(32);
+const OTHER_KEY_HEX = '99'.repeat(32);
 
 describe('secret-cipher', () => {
   let originalKey: string | undefined;

@@ -486,7 +486,9 @@ describe('GET /api/sso/:slug/oidc/callback', () => {
 // ── At-rest envelope encryption (Phase 11.2) ───────────────────────────────
 
 describe('SSO secret-at-rest encryption', () => {
-  const TEST_KEY_HEX = '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff';
+  // Deterministic low-entropy test keys — NOT secrets. Repeating-byte form
+  // avoids tripping secret scanners (GitGuardian etc.) on a 64-hex literal.
+  const TEST_KEY_HEX = '42'.repeat(32);
   let originalKey: string | undefined;
 
   beforeEach(() => {
@@ -573,9 +575,9 @@ describe('SSO secret-at-rest encryption', () => {
     inst.ssoProvider.oidcClientSecret = encryptSecret(inst.ssoProvider.oidcClientSecret as string);
     prismaMock.institution.findUnique.mockResolvedValue(inst);
 
-    // Rotate the master key to something different.
-    process.env['SSO_SECRET_KEY'] =
-      'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899';
+    // Rotate the master key to a different (also-low-entropy, not-a-secret)
+    // value so the auth tag fails verification.
+    process.env['SSO_SECRET_KEY'] = '99'.repeat(32);
     _resetCipherKeyCache();
 
     const res = await request(buildApp()).get('/api/sso/uni-1/login');
