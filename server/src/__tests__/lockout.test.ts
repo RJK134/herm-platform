@@ -41,6 +41,8 @@ import {
   clearFailures,
   __resetLockoutForTests,
   __overrideLockoutClock,
+  __overrideMaxStoreSizeForTests,
+  __getStoreSizeForTests,
   LOCKOUT_CONFIG,
 } from '../lib/lockout';
 import { errorHandler } from '../middleware/errorHandler';
@@ -143,6 +145,34 @@ describe('lockout — pure module behaviour', () => {
     expect(checkLockout('mixed.case@example.test').locked).toBe(true);
     clearFailures('MIXED.CASE@example.test');
     expect(checkLockout('mixed.case@example.test').locked).toBe(false);
+  });
+
+  it('checkLockout removes stale empty+unlocked entries from the store', () => {
+    let t = 0;
+    __overrideLockoutClock(() => t);
+    // Record one failure so an entry exists in the store.
+    recordFailure('stale@example.test');
+    expect(__getStoreSizeForTests()).toBe(1);
+    // Jump past the window so the attempt expires.
+    t += LOCKOUT_CONFIG.WINDOW_MS + 1;
+    // checkLockout should prune the empty record and delete the entry.
+    checkLockout('stale@example.test');
+    expect(__getStoreSizeForTests()).toBe(0);
+  });
+
+  it('store never exceeds MAX_STORE_SIZE — oldest entry is evicted on overflow', () => {
+    __overrideMaxStoreSizeForTests(3);
+    recordFailure('first@example.test');
+    recordFailure('second@example.test');
+    recordFailure('third@example.test');
+    expect(__getStoreSizeForTests()).toBe(3);
+    // A 4th unique email should evict the oldest entry, keeping the size at 3.
+    recordFailure('fourth@example.test');
+    expect(__getStoreSizeForTests()).toBe(3);
+    // The evicted entry (first) is no longer tracked; the newest is.
+    expect(checkLockout('first@example.test').attemptsRemaining).toBe(LOCKOUT_CONFIG.MAX_FAILS);
+    // fourth was just inserted, so it has 1 failure outstanding.
+    expect(checkLockout('fourth@example.test').attemptsRemaining).toBe(LOCKOUT_CONFIG.MAX_FAILS - 1);
   });
 });
 

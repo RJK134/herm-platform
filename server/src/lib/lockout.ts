@@ -34,6 +34,15 @@ const MAX_FAILS = 5;
 const WINDOW_MS = 15 * 60 * 1000;
 const LOCK_MS = 30 * 60 * 1000;
 
+// Maximum number of distinct email keys held in the store at any one time.
+// When the store reaches this limit, the oldest (first-inserted) entry is
+// evicted before a new one is added. This bounds the memory an attacker can
+// consume by flooding the login endpoint with unique email addresses.
+const MAX_STORE_SIZE = 10_000;
+// Runtime cap — equals MAX_STORE_SIZE in production; lowered only by the
+// __overrideMaxStoreSizeForTests() test hook.
+let maxStoreSizeCap = MAX_STORE_SIZE;
+
 /**
  * Sentinel error thrown when the email is locked out due to repeated
  * failed login attempts. Lives in the lockout module (not in auth.service)
@@ -118,6 +127,10 @@ export function checkLockout(email: string): LockoutState {
   }
 
   pruneAttempts(record, t);
+  // Remove entries that carry no active state to keep the store bounded.
+  if (record.attempts.length === 0 && !record.lockedUntil) {
+    store.delete(k);
+  }
   return {
     locked: false,
     retryAfterMs: 0,
@@ -133,7 +146,17 @@ export function checkLockout(email: string): LockoutState {
 export function recordFailure(email: string): LockoutState {
   const k = key(email);
   const t = now();
+  const isNew = !store.has(k);
   const record = store.get(k) ?? { attempts: [], lockedUntil: null };
+
+  // Evict the oldest (first-inserted) entry when the store is full and a new
+  // key is about to be added. This caps memory under a unique-email flood.
+  if (isNew && store.size >= maxStoreSizeCap) {
+    const oldest = store.keys().next().value;
+    if (oldest !== undefined) {
+      store.delete(oldest);
+    }
+  }
   store.set(k, record);
 
   // Already locked: don't extend the timer (DoS resistance).
@@ -180,6 +203,7 @@ export function clearFailures(email: string): void {
 export function __resetLockoutForTests(): void {
   store.clear();
   clockFn = Date.now;
+  maxStoreSizeCap = MAX_STORE_SIZE;
 }
 
 /** Test hook: pin the clock so window/lock arithmetic is deterministic. */
@@ -187,5 +211,15 @@ export function __overrideLockoutClock(fn: () => number): void {
   clockFn = fn;
 }
 
+/** Test hook: lower the store cap so memory-bound tests don't need 10k entries. */
+export function __overrideMaxStoreSizeForTests(n: number): void {
+  maxStoreSizeCap = n;
+}
+
+/** Returns the current number of entries in the store. For tests only. */
+export function __getStoreSizeForTests(): number {
+  return store.size;
+}
+
 /** Tunables exposed for tests + audit messages. */
-export const LOCKOUT_CONFIG = { MAX_FAILS, WINDOW_MS, LOCK_MS } as const;
+export const LOCKOUT_CONFIG = { MAX_FAILS, WINDOW_MS, LOCK_MS, MAX_STORE_SIZE } as const;
