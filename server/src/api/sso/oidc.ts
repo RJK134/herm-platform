@@ -37,10 +37,21 @@ async function getConfig(idp: TenantOidcConfig): Promise<oidc.Configuration> {
   if (hit && Date.now() - hit.fetchedAt < TTL_MS) {
     return hit.config;
   }
+  const issuerUrl = new URL(idp.oidcIssuer);
+  // openid-client v6 rejects HTTP issuers by default. Production is
+  // always HTTPS, but local dev (`oauth2-mock-server` in tests, the
+  // occasional staging IdP behind a local tunnel) needs the opt-in.
+  // We only relax this when (a) we're explicitly outside production
+  // AND (b) the issuer URL itself is http: — so a misconfigured prod
+  // deploy can't accidentally talk to a plaintext IdP.
+  const allowInsecure =
+    process.env['NODE_ENV'] !== 'production' && issuerUrl.protocol === 'http:';
   const config = await oidc.discovery(
-    new URL(idp.oidcIssuer),
+    issuerUrl,
     idp.oidcClientId,
     idp.oidcClientSecret,
+    undefined,
+    allowInsecure ? { execute: [oidc.allowInsecureRequests] } : undefined,
   );
   configCache.set(idp.oidcIssuer, { config, fetchedAt: Date.now() });
   return config;
