@@ -194,7 +194,7 @@ export async function completeSsoSignIn(
         action: 'auth.sso.cross_institution_blocked',
         entityType: 'User',
         entityId: existing.id,
-        userId: existing.id,
+        userId: null,
         changes: {
           email,
           existingInstitutionId: existing.institutionId,
