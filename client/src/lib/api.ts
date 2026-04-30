@@ -40,6 +40,11 @@ export interface SsoIdpReadShape {
   updatedAt: string;
 }
 
+export interface SsoIdpListEntry extends SsoIdpReadShape {
+  institutionName: string;
+  institutionSlug: string;
+}
+
 export interface SsoIdpUpsertPayload {
   protocol?: 'SAML' | 'OIDC';
   displayName?: string;
@@ -138,6 +143,21 @@ export const api = {
     client.put<ApiResponse<SsoIdpReadShape>>('/admin/sso/me', data),
   deleteSsoIdp: () =>
     client.delete('/admin/sso/me'),
+
+  // Phase 11.8 — SUPER_ADMIN cross-institution panel.
+  listAllSsoIdps: () =>
+    client.get<ApiResponse<SsoIdpListEntry[]>>('/admin/sso/all'),
+  getSsoIdpForInstitution: (institutionId: string) =>
+    client.get<ApiResponse<SsoIdpListEntry | null>>(
+      `/admin/sso/institutions/${encodeURIComponent(institutionId)}`,
+    ),
+  upsertSsoIdpForInstitution: (institutionId: string, data: SsoIdpUpsertPayload) =>
+    client.put<ApiResponse<SsoIdpListEntry>>(
+      `/admin/sso/institutions/${encodeURIComponent(institutionId)}`,
+      data,
+    ),
+  deleteSsoIdpForInstitution: (institutionId: string) =>
+    client.delete(`/admin/sso/institutions/${encodeURIComponent(institutionId)}`),
 
   // Phase 10.8 — MFA (TOTP)
   getMfaStatus: () =>
