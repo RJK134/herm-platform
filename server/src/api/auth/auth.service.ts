@@ -95,7 +95,7 @@ export class AuthService {
     // attempt. The check is O(1) — Map lookup + a couple of timestamp
     // comparisons. Keyed by lower-cased email so case variations don't
     // bypass the counter.
-    const lockState = checkLockout(data.email);
+    const lockState = await checkLockout(data.email);
     if (lockState.locked) {
       throw new AccountLockedError(Math.ceil(lockState.retryAfterMs / 1000));
     }
@@ -116,13 +116,13 @@ export class AuthService {
       // faster the "email not found" path responds compared to the bcrypt
       // path. The result is discarded — we always return 401 here.
       await bcrypt.compare(data.password, DUMMY_HASH);
-      recordFailure(data.email);
+      await recordFailure(data.email);
       throw new AppError(401, 'AUTHENTICATION_ERROR', 'Invalid email or password');
     }
 
     const valid = await bcrypt.compare(data.password, user.passwordHash);
     if (!valid) {
-      const post = recordFailure(data.email);
+      const post = await recordFailure(data.email);
       if (post.locked) {
         throw new AccountLockedError(Math.ceil(post.retryAfterMs / 1000), true);
       }
@@ -135,7 +135,7 @@ export class AuthService {
     // can't trigger the password lockout, otherwise an attacker who
     // correctly guessed the password could DoS the account by spamming
     // bad TOTP codes).
-    clearFailures(data.email);
+    await clearFailures(data.email);
 
     const tier = resolveEffectiveTier(
       user.institution.subscription?.tier?.toLowerCase() ?? 'free',
