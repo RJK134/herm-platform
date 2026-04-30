@@ -136,17 +136,15 @@ describe('POST /api/admin/impersonate — start', () => {
       .set(
         'Authorization',
         `Bearer ${tokenFor({
-          userId: 'u-target',
-          role: 'VIEWER',
+          userId: 'u-super-acting',
+          role: 'SUPER_ADMIN',
           impersonator: { userId: 'u-super', email: 's@example.test', name: 's' },
         })}`,
       )
       .send({ userId: 'u-other' });
-    // The first guard checks role !== SUPER_ADMIN — a target user is not
-    // a SUPER_ADMIN, so we get 403 (the chained check is belt-and-braces
-    // for the SUPER_ADMIN-impersonating-SUPER_ADMIN-then-trying-again
-    // edge case).
-    expect(res.status).toBe(403);
+    // Use a SUPER_ADMIN token so the request passes the role check and
+    // actually exercises the explicit chained-impersonation guard.
+    expect(res.status).toBe(400);
   });
 
   it('issues a 1-hour token whose payload represents the TARGET + carries the SUPER_ADMIN as impersonator', async () => {
