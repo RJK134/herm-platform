@@ -180,7 +180,7 @@ These are **deliberately deferred** — call them out if asked, do not paper ove
   "stored — leave blank to keep" semantics; writes go through the
   envelope-encryption helper from Phase 11.2. Phase 11.8 adds a
   SUPER_ADMIN cross-institution panel at `/admin/sso/all` and a
-  per-institution deep-link at `/admin/sso/institutions/:id` so a
+  per-institution deep-link at `/admin/sso/institutions/:institutionId` so a
   SUPER_ADMIN can administer any tenant without impersonating first.
   (Closed.)
 - **Live IdP integration tests** — Phase 11.6 added in-process live IdPs:

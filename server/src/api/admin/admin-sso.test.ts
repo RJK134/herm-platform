@@ -344,6 +344,7 @@ describe('PUT /api/admin/sso/institutions/:id', () => {
       prismaMock.institution.findUnique.mockResolvedValue({
         id: 'inst-2',
         name: 'College Two',
+        slug: 'college-two',
       });
       prismaMock.ssoIdentityProvider.findUnique.mockResolvedValue(null);
       prismaMock.ssoIdentityProvider.upsert.mockResolvedValue({
@@ -373,6 +374,16 @@ describe('PUT /api/admin/sso/institutions/:id', () => {
       const auditData = (createCall as unknown as [{ data: { action: string; changes: { institutionId: string } } }])[0].data;
       expect(auditData.action).toBe('admin.sso.create');
       expect(auditData.changes.institutionId).toBe('inst-2');
+      // Response shape pin (Copilot review feedback): the SUPER_ADMIN
+      // upsert response must be the enriched IdpListEntry — institution
+      // metadata included, hasX flags surfaced, sensitive fields still
+      // suppressed. Otherwise the edit page would lose institutionName
+      // after every save.
+      expect(res.body.data.institutionName).toBe('College Two');
+      expect(res.body.data.institutionSlug).toBe('college-two');
+      expect(res.body.data.hasOidcClientSecret).toBe(true);
+      expect(res.body.data.oidcClientSecret).toBeUndefined();
+      expect(res.body.data.samlCert).toBeUndefined();
     } finally {
       if (originalKey === undefined) delete process.env['SSO_SECRET_KEY'];
       else process.env['SSO_SECRET_KEY'] = originalKey;
