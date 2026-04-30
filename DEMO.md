@@ -162,11 +162,11 @@ Restart the server. Every logged-in user is then issued a JWT carrying
 These are **deliberately deferred** — call them out if asked, do not paper over:
 
 - **At-rest encryption of `oidcClientSecret` / `samlCert`** — application-level
-  envelope encryption (AES-256-GCM) is now implemented (Phase 11.2). Set
-  `SSO_SECRET_KEY` (`openssl rand -hex 32`) and any newly-written SSO secret
-  is stored as `enc:v1:...` ciphertext. Legacy plaintext rows still resolve
-  (back-compat). Per-row key rotation and a one-shot encryption migration
-  script remain follow-ups.
+  envelope encryption (AES-256-GCM) is implemented (Phase 11.2), and a
+  one-shot migration script (`npm run db:encrypt-sso`, Phase 11.5) brings
+  legacy plaintext rows to the encrypted form on existing deployments.
+  Run with `--dry-run` first to preview. Per-row key rotation tooling
+  remains a follow-up.
 - **UKAMF compliance** — SP-side AuthnRequest signing + signed SP metadata
   are now wired (Phase 11.3). Set `SP_SIGNING_KEY` + `SP_SIGNING_CERT`
   (inline PEM or `file:/path/to.pem`) and `/api/sso/sp-metadata.xml` plus
