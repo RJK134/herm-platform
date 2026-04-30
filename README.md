@@ -18,16 +18,17 @@ Higher-education procurement intelligence: score, compare and shortlist SIS/LMS/
 ## Quick start
 
 ```bash
+npm run demo                    # one-shot: docker up + bootstrap + seed + dev
+```
+
+`npm run demo` dispatches to `demo.sh` (Linux/macOS) or `demo.bat` (Windows).
+Step-by-step alternative if you prefer:
+
+```bash
 cp .env.example .env            # ports already aligned to docker-compose
 docker compose up -d            # local Postgres + Redis
 npm run demo:bootstrap          # install + prisma generate/push + full seed
 npm run dev                     # client + server concurrently
-```
-
-Or, on Linux/macOS, the same flow as a one-shot:
-
-```bash
-./start.sh
 ```
 
 Open `http://localhost:5173`. Demo credentials and the colleague-review

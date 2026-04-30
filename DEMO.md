@@ -26,7 +26,34 @@ and `6380` so the stack does not collide with anything you may already have
 running on `5432`/`6379`. `.env.example` is already aligned to those ports;
 `cp .env.example .env` is the only env step you need for the demo.
 
-## Five-minute demo bootstrap
+## One-shot bootstrap (recommended)
+
+From a clean clone with Node 20+ and Docker installed:
+
+```bash
+npm run demo                        # cross-platform: dispatches to demo.sh / demo.bat
+```
+
+That single command:
+1. Verifies Node + Docker are on PATH.
+2. Copies `.env.example` → `.env` if missing.
+3. Brings up PostgreSQL + Redis via `docker compose`.
+4. Waits for Postgres to become healthy.
+5. Runs `npm run demo:bootstrap` (install + Prisma generate + db push + full seed).
+6. Prints demo credentials and runs `npm run dev` (foreground; Ctrl+C to stop).
+
+Equivalent direct invocations: `./demo.sh` (Linux/macOS) or `demo.bat` (Windows).
+
+When you are done:
+
+```bash
+./stop.sh                           # docker compose down (data volume is preserved)
+```
+
+### Manual / step-by-step alternative
+
+If you'd rather run each step yourself (or the one-shot fails partway and you
+want to resume):
 
 ```bash
 cp .env.example .env                # ports already aligned to docker-compose
@@ -35,17 +62,8 @@ npm run demo:bootstrap              # install deps + prisma generate/push + full
 npm run dev                         # starts client (5173) + server (3002)
 ```
 
-Or, on Linux/macOS, the same flow as a one-shot script:
-
-```bash
-./start.sh                          # writes .env, brings docker up, seeds, starts servers
-```
-
-When you are done:
-
-```bash
-./stop.sh                           # docker compose down (data volume is preserved)
-```
+`./start.sh` is a shorter daily-use variant — it skips `npm install` and the
+seed (assumes you've already bootstrapped) and just brings the stack back up.
 
 ## Validate the demo is up
 
