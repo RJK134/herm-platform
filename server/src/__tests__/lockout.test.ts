@@ -9,8 +9,8 @@
  *   - Successful login clears the counter.
  *   - While locked, more failures don't extend the timer (DoS resist).
  *   - Email key is case-insensitive + trim-normalised.
- *   - Login controller emits `auth.lockout.engaged` audit event +
- *     Retry-After header on the 429.
+ *   - Login controller emits `auth.login.fail` with lockout context
+ *     (locked: true, retryAfterSeconds) + Retry-After header on the 429.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
@@ -216,7 +216,7 @@ describe('login route — lockout integration', () => {
     expect(bcryptCompare).toHaveBeenCalledTimes(LOCKOUT_CONFIG.MAX_FAILS);
   });
 
-  it('emits auth.lockout.engaged audit event on the lockout boundary', async () => {
+  it('emits auth.login.fail with lockout context when account becomes locked', async () => {
     prismaMock.user.findUnique.mockResolvedValue({
       id: 'u-1',
       email: 'a@b.test',
