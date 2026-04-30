@@ -57,122 +57,122 @@ beforeEach(() => {
   bcryptCompare.mockReset();
 });
 
-describe('lockout — pure module behaviour', () => {
-  it('is open by default for an unseen email', () => {
-    const state = checkLockout('a@b.test');
+describe('lockout — pure module behaviour (in-memory backend)', () => {
+  it('is open by default for an unseen email', async () => {
+    const state = await checkLockout('a@b.test');
     expect(state.locked).toBe(false);
     expect(state.attemptsRemaining).toBe(LOCKOUT_CONFIG.MAX_FAILS);
   });
 
-  it('engages lockout after MAX_FAILS failures within the window', () => {
+  it('engages lockout after MAX_FAILS failures within the window', async () => {
     let t = 1_700_000_000_000;
     __overrideLockoutClock(() => t);
 
     for (let i = 0; i < LOCKOUT_CONFIG.MAX_FAILS - 1; i += 1) {
-      const s = recordFailure('a@b.test');
+      const s = await recordFailure('a@b.test');
       expect(s.locked).toBe(false);
       t += 1000;
     }
-    const final = recordFailure('a@b.test');
+    const final = await recordFailure('a@b.test');
     expect(final.locked).toBe(true);
     expect(final.retryAfterMs).toBe(LOCKOUT_CONFIG.LOCK_MS);
 
-    expect(checkLockout('a@b.test').locked).toBe(true);
+    expect((await checkLockout('a@b.test')).locked).toBe(true);
   });
 
-  it('expires the lock after LOCK_MS and resets the counter', () => {
+  it('expires the lock after LOCK_MS and resets the counter', async () => {
     let t = 0;
     __overrideLockoutClock(() => t);
     for (let i = 0; i < LOCKOUT_CONFIG.MAX_FAILS; i += 1) {
-      recordFailure('a@b.test');
+      await recordFailure('a@b.test');
       t += 1000;
     }
-    expect(checkLockout('a@b.test').locked).toBe(true);
+    expect((await checkLockout('a@b.test')).locked).toBe(true);
 
     // Jump past the lock window.
     t += LOCKOUT_CONFIG.LOCK_MS + 1;
-    const state = checkLockout('a@b.test');
+    const state = await checkLockout('a@b.test');
     expect(state.locked).toBe(false);
     expect(state.attemptsRemaining).toBe(LOCKOUT_CONFIG.MAX_FAILS);
   });
 
-  it('does NOT extend the lock timer on additional failures while locked', () => {
+  it('does NOT extend the lock timer on additional failures while locked', async () => {
     let t = 0;
     __overrideLockoutClock(() => t);
     for (let i = 0; i < LOCKOUT_CONFIG.MAX_FAILS; i += 1) {
-      recordFailure('a@b.test');
+      await recordFailure('a@b.test');
       t += 1000;
     }
-    const lockedAt = checkLockout('a@b.test');
+    const lockedAt = await checkLockout('a@b.test');
     expect(lockedAt.locked).toBe(true);
     const initialRetry = lockedAt.retryAfterMs;
 
     // Additional failures while locked.
     t += 60_000;
-    recordFailure('a@b.test');
-    recordFailure('a@b.test');
-    const state = checkLockout('a@b.test');
+    await recordFailure('a@b.test');
+    await recordFailure('a@b.test');
+    const state = await checkLockout('a@b.test');
     expect(state.locked).toBe(true);
     // retryAfterMs should have decreased (clock advanced) — proving the
     // lockedUntil ceiling didn't get pushed further out.
     expect(state.retryAfterMs).toBeLessThan(initialRetry);
   });
 
-  it('prunes failures older than WINDOW_MS so isolated attempts never lock', () => {
+  it('prunes failures older than WINDOW_MS so isolated attempts never lock', async () => {
     let t = 0;
     __overrideLockoutClock(() => t);
     // 4 failures spaced just outside the window — never accumulates to MAX.
     for (let i = 0; i < 10; i += 1) {
-      recordFailure('a@b.test');
+      await recordFailure('a@b.test');
       t += LOCKOUT_CONFIG.WINDOW_MS + 1000;
     }
-    expect(checkLockout('a@b.test').locked).toBe(false);
+    expect((await checkLockout('a@b.test')).locked).toBe(false);
   });
 
-  it('clearFailures resets the counter on successful login', () => {
+  it('clearFailures resets the counter on successful login', async () => {
     for (let i = 0; i < LOCKOUT_CONFIG.MAX_FAILS - 1; i += 1) {
-      recordFailure('a@b.test');
+      await recordFailure('a@b.test');
     }
-    clearFailures('a@b.test');
-    const state = checkLockout('a@b.test');
+    await clearFailures('a@b.test');
+    const state = await checkLockout('a@b.test');
     expect(state.attemptsRemaining).toBe(LOCKOUT_CONFIG.MAX_FAILS);
   });
 
-  it('treats the email key as case-insensitive + trimmed', () => {
+  it('treats the email key as case-insensitive + trimmed', async () => {
     for (let i = 0; i < LOCKOUT_CONFIG.MAX_FAILS; i += 1) {
-      recordFailure('  Mixed.Case@Example.Test  ');
+      await recordFailure('  Mixed.Case@Example.Test  ');
     }
-    expect(checkLockout('mixed.case@example.test').locked).toBe(true);
-    clearFailures('MIXED.CASE@example.test');
-    expect(checkLockout('mixed.case@example.test').locked).toBe(false);
+    expect((await checkLockout('mixed.case@example.test')).locked).toBe(true);
+    await clearFailures('MIXED.CASE@example.test');
+    expect((await checkLockout('mixed.case@example.test')).locked).toBe(false);
   });
 
-  it('checkLockout removes stale empty+unlocked entries from the store', () => {
+  it('checkLockout removes stale empty+unlocked entries from the store', async () => {
     let t = 0;
     __overrideLockoutClock(() => t);
     // Record one failure so an entry exists in the store.
-    recordFailure('stale@example.test');
+    await recordFailure('stale@example.test');
     expect(__getStoreSizeForTests()).toBe(1);
     // Jump past the window so the attempt expires.
     t += LOCKOUT_CONFIG.WINDOW_MS + 1;
     // checkLockout should prune the empty record and delete the entry.
-    checkLockout('stale@example.test');
+    await checkLockout('stale@example.test');
     expect(__getStoreSizeForTests()).toBe(0);
   });
 
-  it('store never exceeds MAX_STORE_SIZE — oldest entry is evicted on overflow', () => {
+  it('store never exceeds MAX_STORE_SIZE — oldest entry is evicted on overflow', async () => {
     __overrideMaxStoreSizeForTests(3);
-    recordFailure('first@example.test');
-    recordFailure('second@example.test');
-    recordFailure('third@example.test');
+    await recordFailure('first@example.test');
+    await recordFailure('second@example.test');
+    await recordFailure('third@example.test');
     expect(__getStoreSizeForTests()).toBe(3);
     // A 4th unique email should evict the oldest entry, keeping the size at 3.
-    recordFailure('fourth@example.test');
+    await recordFailure('fourth@example.test');
     expect(__getStoreSizeForTests()).toBe(3);
     // The evicted entry (first) is no longer tracked; the newest is.
-    expect(checkLockout('first@example.test').attemptsRemaining).toBe(LOCKOUT_CONFIG.MAX_FAILS);
+    expect((await checkLockout('first@example.test')).attemptsRemaining).toBe(LOCKOUT_CONFIG.MAX_FAILS);
     // fourth was just inserted, so it has 1 failure outstanding.
-    expect(checkLockout('fourth@example.test').attemptsRemaining).toBe(LOCKOUT_CONFIG.MAX_FAILS - 1);
+    expect((await checkLockout('fourth@example.test')).attemptsRemaining).toBe(LOCKOUT_CONFIG.MAX_FAILS - 1);
   });
 });
 
@@ -252,7 +252,7 @@ describe('login route — lockout integration', () => {
     for (let i = 0; i < LOCKOUT_CONFIG.MAX_FAILS; i += 1) {
       await request(app).post('/api/auth/login').send({ email: 'ghost@example.test', password: 'x' });
     }
-    expect(checkLockout('ghost@example.test').locked).toBe(true);
+    expect((await checkLockout('ghost@example.test')).locked).toBe(true);
   });
 
   it('successful login clears the failure history', async () => {
@@ -276,7 +276,7 @@ describe('login route — lockout integration', () => {
     const ok = await request(app).post('/api/auth/login').send({ email: 'a@b.test', password: 'right' });
     expect(ok.status).toBe(200);
 
-    const state = checkLockout('a@b.test');
+    const state = await checkLockout('a@b.test');
     expect(state.attemptsRemaining).toBe(LOCKOUT_CONFIG.MAX_FAILS);
   });
 });

@@ -1,62 +1,51 @@
 /**
- * Account lockout — credential-stuffing defence (Phase 10.5).
+ * Account lockout — credential-stuffing defence.
  *
- * After {MAX_FAILS} consecutive failed logins for a given email within
- * {WINDOW_MS}, the account is locked for {LOCK_MS}. The lockout check
- * runs BEFORE bcrypt.compare so a locked account doesn't burn CPU on
- * every attacker attempt — the lock check is O(1).
+ * Phase 10.5 introduced the in-memory implementation: 5 failed attempts
+ * within 15 minutes engages a 30-minute lockout, with O(1) checks and
+ * an LRU-bounded store. Phase 10.9 (this revision) swaps the backing
+ * store to Redis when `REDIS_URL` is configured — multi-instance
+ * deployments share a single counter, so an attacker can't rotate
+ * across pods to evade the limit.
  *
- * Storage: in-process Map for now. Single-instance deployments
- * (current state) are fully covered. As soon as we run multi-instance
- * pods, this MUST move behind a shared store (Redis) — otherwise an
- * attacker can rotate IPs and hit different instances to evade the
- * counter. P10.6 brings Redis online for the readiness probe; a
- * follow-up swaps this module's backing store.
+ * Backing-store selection is per-call. If `getRedis()` returns a client,
+ * the public API dispatches to the Redis implementation; otherwise it
+ * falls back to the in-process Map. Local dev (no `REDIS_URL`) and
+ * single-instance prod continue to work unchanged.
  *
- * Lockout policy:
+ * Lockout policy (unchanged from P10.5):
  *   - 5 failed attempts in 15 minutes → 30-minute lockout.
  *   - A successful login clears all failure history for that email.
- *   - Counters live keyed by lower-cased email so case variations don't
- *     reset the counter.
- *   - The lockout window slides: while locked, additional failed
- *     attempts do NOT extend the timer (otherwise an attacker can
+ *   - Counters live keyed by lower-cased + trimmed email.
+ *   - The lockout window is fixed once engaged: while locked, additional
+ *     failed attempts do NOT extend the timer (otherwise an attacker can
  *     keep an account locked indefinitely as a DoS).
- *   - SUPER_ADMIN-driven manual unlock can land in a follow-up; for
- *     now operators can exec into a pod and call `clearFailures()`
- *     for a specific email.
  *
- * Test hooks: `__resetLockoutForTests()`.
+ * Public API change: the three exported functions are now async. The
+ * shape of `LockoutState` and `AccountLockedError` is unchanged. Call
+ * sites await; the only producer is `auth.service.ts::login`.
+ *
+ * Test hooks (`__resetLockoutForTests`, `__overrideLockoutClock`,
+ * `__overrideMaxStoreSizeForTests`, `__getStoreSizeForTests`) operate
+ * on the in-memory store. The Redis path uses Redis-server-side time
+ * for TTLs, so these hooks deliberately do NOT influence it — Redis
+ * tests use a mocked client and assert on observed Redis commands
+ * instead.
  */
+import type { Redis } from 'ioredis';
 import { logger } from './logger';
 import { AppError } from '../utils/errors';
+import { getRedis } from './redis';
 
 const MAX_FAILS = 5;
 const WINDOW_MS = 15 * 60 * 1000;
 const LOCK_MS = 30 * 60 * 1000;
 
-// Maximum number of distinct email keys held in the store at any one time.
-// When the store reaches this limit, the oldest (first-inserted) entry is
-// evicted before a new one is added. This bounds the memory an attacker can
-// consume by flooding the login endpoint with unique email addresses.
 const MAX_STORE_SIZE = 10_000;
-// Runtime cap — equals MAX_STORE_SIZE in production; lowered only by the
-// __overrideMaxStoreSizeForTests() test hook.
 let maxStoreSizeCap = MAX_STORE_SIZE;
 
-/**
- * Sentinel error thrown when the email is locked out due to repeated
- * failed login attempts. Lives in the lockout module (not in auth.service)
- * so test files that mock the auth service don't lose access to the
- * class — `instanceof` checks in the controller need the real class.
- *
- * Translates to HTTP 429 + the standard `Retry-After` header at the
- * controller boundary; the client renders a specific lockout message.
- *
- * `newlyEngaged` is true only when this attempt is the one that caused
- * the lockout to engage (the boundary attempt). Subsequent attempts
- * against an already-locked account set this to false so the controller
- * can emit `auth.lockout.engaged` exactly once per lockout event.
- */
+const REDIS_KEY_PREFIX = 'lockout';
+
 export class AccountLockedError extends AppError {
   constructor(
     public readonly retryAfterSeconds: number,
@@ -72,13 +61,11 @@ export class AccountLockedError extends AppError {
 }
 
 interface FailureRecord {
-  /** Recent failure timestamps within WINDOW_MS. Older entries pruned on every check. */
   attempts: number[];
-  /** When != null, the account is locked until this timestamp. */
   lockedUntil: number | null;
 }
 
-const store = new Map<string, FailureRecord>();
+const memStore = new Map<string, FailureRecord>();
 let clockFn: () => number = Date.now;
 
 function now(): number {
@@ -89,27 +76,22 @@ function key(email: string): string {
   return email.toLowerCase().trim();
 }
 
+export interface LockoutState {
+  locked: boolean;
+  retryAfterMs: number;
+  attemptsRemaining: number;
+}
+
+// ── In-memory backing store (unchanged behaviour from Phase 10.5) ──────────
+
 function pruneAttempts(record: FailureRecord, t: number): void {
   const cutoff = t - WINDOW_MS;
   record.attempts = record.attempts.filter((ts) => ts > cutoff);
 }
 
-export interface LockoutState {
-  /** Whether the account is currently locked. */
-  locked: boolean;
-  /** Wall-clock ms until the lock expires. 0 when not locked. */
-  retryAfterMs: number;
-  /** How many attempts remain before lockout engages. */
-  attemptsRemaining: number;
-}
-
-/**
- * Inspect the lockout state for an email. O(1) — call this BEFORE
- * bcrypt.compare so a locked account doesn't burn CPU per attempt.
- */
-export function checkLockout(email: string): LockoutState {
+function checkLockoutMemory(email: string): LockoutState {
   const k = key(email);
-  const record = store.get(k);
+  const record = memStore.get(k);
   const t = now();
 
   if (!record) {
@@ -120,16 +102,14 @@ export function checkLockout(email: string): LockoutState {
     return { locked: true, retryAfterMs: record.lockedUntil - t, attemptsRemaining: 0 };
   }
 
-  // Lock window expired — clear the lock and the attempt history.
   if (record.lockedUntil && record.lockedUntil <= t) {
     record.lockedUntil = null;
     record.attempts = [];
   }
 
   pruneAttempts(record, t);
-  // Remove entries that carry no active state to keep the store bounded.
   if (record.attempts.length === 0 && !record.lockedUntil) {
-    store.delete(k);
+    memStore.delete(k);
   }
   return {
     locked: false,
@@ -138,33 +118,24 @@ export function checkLockout(email: string): LockoutState {
   };
 }
 
-/**
- * Record a failed login. Engages lockout when MAX_FAILS is reached.
- * Returns the post-record state so the caller can decide whether to
- * surface a "your account is locked" message vs the generic 401.
- */
-export function recordFailure(email: string): LockoutState {
+function recordFailureMemory(email: string): LockoutState {
   const k = key(email);
   const t = now();
-  const isNew = !store.has(k);
-  const record = store.get(k) ?? { attempts: [], lockedUntil: null };
+  const isNew = !memStore.has(k);
+  const record = memStore.get(k) ?? { attempts: [], lockedUntil: null };
 
-  // Evict the oldest (first-inserted) entry when the store is full and a new
-  // key is about to be added. This caps memory under a unique-email flood.
-  if (isNew && store.size >= maxStoreSizeCap) {
-    const oldest = store.keys().next().value;
+  if (isNew && memStore.size >= maxStoreSizeCap) {
+    const oldest = memStore.keys().next().value;
     if (oldest !== undefined) {
-      store.delete(oldest);
+      memStore.delete(oldest);
     }
   }
-  store.set(k, record);
+  memStore.set(k, record);
 
-  // Already locked: don't extend the timer (DoS resistance).
   if (record.lockedUntil && record.lockedUntil > t) {
     return { locked: true, retryAfterMs: record.lockedUntil - t, attemptsRemaining: 0 };
   }
 
-  // Expired lock: clear stale lock state before counting a new failure.
   if (record.lockedUntil && record.lockedUntil <= t) {
     record.lockedUntil = null;
     record.attempts = [];
@@ -175,7 +146,7 @@ export function recordFailure(email: string): LockoutState {
 
   if (record.attempts.length >= MAX_FAILS) {
     record.lockedUntil = t + LOCK_MS;
-    record.attempts = []; // free the array; we hold the lock instead
+    record.attempts = [];
     logger.warn(
       { email: k, lockMs: LOCK_MS, maxFails: MAX_FAILS },
       'auth.lockout.engaged — too many failed attempts',
@@ -190,36 +161,196 @@ export function recordFailure(email: string): LockoutState {
   };
 }
 
+function clearFailuresMemory(email: string): void {
+  memStore.delete(key(email));
+}
+
+// ── Redis-backed backing store (Phase 10.9) ────────────────────────────────
+//
+// Two keys per email, both auto-expiring:
+//   lockout:fail:<email>  Sorted set; member=score=ms timestamp; TTL = WINDOW_MS
+//   lockout:lock:<email>  String "1"; TTL = LOCK_MS
+//
+// `lockout:fail:*` self-expires after WINDOW_MS of inactivity, so an
+// abandoned counter doesn't leak storage. The lock key auto-expires too,
+// so a forgotten account naturally unlocks without manual cleanup.
+
+function failKey(email: string): string {
+  return `${REDIS_KEY_PREFIX}:fail:${key(email)}`;
+}
+function lockKey(email: string): string {
+  return `${REDIS_KEY_PREFIX}:lock:${key(email)}`;
+}
+
+async function checkLockoutRedis(client: Redis, email: string): Promise<LockoutState> {
+  const fk = failKey(email);
+  const lk = lockKey(email);
+
+  const lockTtlMs = await client.pttl(lk);
+  if (lockTtlMs > 0) {
+    return { locked: true, retryAfterMs: lockTtlMs, attemptsRemaining: 0 };
+  }
+
+  // Prune attempts older than the sliding window before counting.
+  const t = Date.now();
+  await client.zremrangebyscore(fk, 0, t - WINDOW_MS);
+  const count = await client.zcard(fk);
+  return {
+    locked: false,
+    retryAfterMs: 0,
+    attemptsRemaining: Math.max(0, MAX_FAILS - count),
+  };
+}
+
+async function recordFailureRedis(client: Redis, email: string): Promise<LockoutState> {
+  const fk = failKey(email);
+  const lk = lockKey(email);
+
+  // DoS resistance: if a lock already exists, do not extend it. Surface
+  // the existing TTL as `retryAfterMs` so the caller can render a
+  // truthful Retry-After header.
+  const lockTtlMs = await client.pttl(lk);
+  if (lockTtlMs > 0) {
+    return { locked: true, retryAfterMs: lockTtlMs, attemptsRemaining: 0 };
+  }
+
+  const t = Date.now();
+  // Append this failure, refresh the window TTL, and prune in one round
+  // trip per command. We don't pipeline because ioredis's PIPELINE
+  // semantics complicate error-handling — and these are 4 cheap commands
+  // against a local-network Redis, well under any p99 budget the platform
+  // cares about.
+  await client.zadd(fk, t, t.toString());
+  await client.pexpire(fk, WINDOW_MS);
+  await client.zremrangebyscore(fk, 0, t - WINDOW_MS);
+  const count = await client.zcard(fk);
+
+  if (count >= MAX_FAILS) {
+    // Engage the lock atomically with NX so a concurrent boundary attempt
+    // doesn't race us into double-engaging (which would be harmless but
+    // would split the audit trail). On race, the loser surfaces the
+    // existing TTL as if they were a post-engagement attempt.
+    const ok = await client.set(lk, '1', 'PX', LOCK_MS, 'NX');
+    if (ok === 'OK') {
+      // We hold the lock — clear the fail set so post-lock attempts hit
+      // the early-return PTTL branch above instead of accumulating.
+      await client.del(fk);
+      logger.warn(
+        { email: key(email), lockMs: LOCK_MS, maxFails: MAX_FAILS },
+        'auth.lockout.engaged — too many failed attempts (redis)',
+      );
+      return { locked: true, retryAfterMs: LOCK_MS, attemptsRemaining: 0 };
+    }
+    // Race-loser path — read the actual TTL of the lock the winner set.
+    const ttl = await client.pttl(lk);
+    return { locked: true, retryAfterMs: ttl > 0 ? ttl : LOCK_MS, attemptsRemaining: 0 };
+  }
+
+  return {
+    locked: false,
+    retryAfterMs: 0,
+    attemptsRemaining: MAX_FAILS - count,
+  };
+}
+
+async function clearFailuresRedis(client: Redis, email: string): Promise<void> {
+  await client.del(failKey(email), lockKey(email));
+}
+
+// ── Public API ─────────────────────────────────────────────────────────────
+
+/**
+ * Inspect the lockout state for an email. Cheap (one PTTL + one ZCARD on
+ * Redis; one Map lookup on the in-memory path). Call this BEFORE bcrypt
+ * so a locked account doesn't burn CPU per attempt.
+ */
+export async function checkLockout(email: string): Promise<LockoutState> {
+  const client = getRedis();
+  if (client) {
+    try {
+      return await checkLockoutRedis(client, email);
+    } catch (err) {
+      // Fail open: if Redis is unreachable mid-request, prefer letting
+      // login proceed (with the in-memory fallback's view of the world)
+      // over locking out everyone. Operators see the readiness probe go
+      // amber; the alternative is a Redis blip causing total outage.
+      logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        'lockout: redis check failed, falling back to in-memory',
+      );
+      return checkLockoutMemory(email);
+    }
+  }
+  return checkLockoutMemory(email);
+}
+
+/**
+ * Record a failed login. Engages lockout when MAX_FAILS is reached.
+ * Returns the post-record state so the caller can decide whether to
+ * surface a "your account is locked" message vs the generic 401.
+ */
+export async function recordFailure(email: string): Promise<LockoutState> {
+  const client = getRedis();
+  if (client) {
+    try {
+      return await recordFailureRedis(client, email);
+    } catch (err) {
+      logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        'lockout: redis record failed, falling back to in-memory',
+      );
+      return recordFailureMemory(email);
+    }
+  }
+  return recordFailureMemory(email);
+}
+
 /**
  * Clear all failure history for an email. Called on successful login
  * so a forgotten password followed by a correct one doesn't carry
  * state forward into the next session.
  */
-export function clearFailures(email: string): void {
-  store.delete(key(email));
+export async function clearFailures(email: string): Promise<void> {
+  const client = getRedis();
+  if (client) {
+    try {
+      await clearFailuresRedis(client, email);
+      return;
+    } catch (err) {
+      logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        'lockout: redis clear failed, falling back to in-memory',
+      );
+    }
+  }
+  clearFailuresMemory(email);
 }
 
-/** Test hook: full reset. */
+// ── Test hooks (in-memory path only) ───────────────────────────────────────
+
 export function __resetLockoutForTests(): void {
-  store.clear();
+  memStore.clear();
   clockFn = Date.now;
   maxStoreSizeCap = MAX_STORE_SIZE;
 }
 
-/** Test hook: pin the clock so window/lock arithmetic is deterministic. */
 export function __overrideLockoutClock(fn: () => number): void {
   clockFn = fn;
 }
 
-/** Test hook: lower the store cap so memory-bound tests don't need 10k entries. */
 export function __overrideMaxStoreSizeForTests(n: number): void {
   maxStoreSizeCap = n;
 }
 
-/** Returns the current number of entries in the store. For tests only. */
 export function __getStoreSizeForTests(): number {
-  return store.size;
+  return memStore.size;
 }
 
-/** Tunables exposed for tests + audit messages. */
 export const LOCKOUT_CONFIG = { MAX_FAILS, WINDOW_MS, LOCK_MS, MAX_STORE_SIZE } as const;
+
+/**
+ * Test hook: build the same Redis key strings the production path uses,
+ * so Redis-path tests can assert on the right keys without duplicating
+ * the prefix convention.
+ */
+export const __redisKeysForTests = { failKey, lockKey };
