@@ -44,19 +44,22 @@ interface TokenInput {
   email?: string;
   name?: string;
   institutionId?: string;
+  institutionName?: string;
   tier?: string;
   impersonator?: { userId: string; email: string; name: string };
 }
 
 function tokenFor(t: TokenInput): string {
+  const institutionId = t.institutionId ?? 'inst-1';
+
   return jwt.sign(
     {
       userId: t.userId,
       email: t.email ?? `${t.userId}@example.test`,
       name: t.name ?? t.userId,
       role: t.role,
-      institutionId: t.institutionId ?? 'inst-1',
-      institutionName: t.institutionId ?? 'inst-1',
+      institutionId,
+      institutionName: t.institutionName ?? `Inst ${institutionId}`,
       tier: t.tier ?? 'enterprise',
       ...(t.impersonator ? { impersonator: t.impersonator } : {}),
     },
