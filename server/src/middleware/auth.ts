@@ -12,6 +12,22 @@ if (!process.env['JWT_SECRET']) {
 
 const JWT_SECRET = process.env['JWT_SECRET'] ?? 'dev-secret';
 
+/**
+ * The shape of a JWT in this platform. When `impersonator` is set, the
+ * token represents an active customer-support impersonation session
+ * (Phase 10.3): every middleware that checks `req.user.role` continues
+ * to use the TARGET user's role (so the support engineer sees the
+ * platform exactly as the customer would), but `audit()` and the auth
+ * banner read `req.user.impersonator` to record who actually performed
+ * the action and to keep the support engineer aware they are not
+ * acting as themselves.
+ */
+export interface ImpersonatorClaim {
+  userId: string;
+  email: string;
+  name: string;
+}
+
 export interface JwtPayload {
   userId: string;
   email: string;
@@ -20,6 +36,8 @@ export interface JwtPayload {
   institutionId: string;
   institutionName: string;
   tier: string;
+  /** Set when the bearer is impersonating; absent on normal sessions. */
+  impersonator?: ImpersonatorClaim;
 }
 
 declare global {
@@ -98,4 +116,23 @@ export function requireRole(roles: string[]) {
 
 export function generateToken(payload: JwtPayload): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+}
+
+/**
+ * Issue a short-lived impersonation token. The payload IS the target
+ * user's payload (so role/tier/institution flow naturally through every
+ * middleware), with an `impersonator` claim added so the audit pipeline
+ * and the client banner know who really sent the request.
+ *
+ * The 1-hour expiry is deliberate — long enough for a support engineer
+ * to reproduce a customer issue in a single session, short enough that
+ * a forgotten or copy-pasted token can't sit in a terminal history
+ * indefinitely.
+ */
+export function generateImpersonationToken(
+  targetPayload: Omit<JwtPayload, 'impersonator'>,
+  impersonator: ImpersonatorClaim,
+): string {
+  const payload: JwtPayload = { ...targetPayload, impersonator };
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
 }

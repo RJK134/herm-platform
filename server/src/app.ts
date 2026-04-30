@@ -34,6 +34,7 @@ import keysRouter from './api/keys/keys.router';
 import frameworksRouter from './api/frameworks/frameworks.router';
 import frameworkMappingsRouter from './api/framework-mappings/framework-mappings.router';
 import gdprRouter from './api/gdpr/gdpr.router';
+import ssoRouter from './api/sso/sso.router';
 import { frameworkContext } from './middleware/framework-context';
 import { tierGate } from './middleware/tier-gate';
 import { optionalJWT } from './middleware/auth';
@@ -112,6 +113,11 @@ export function createApp(): Express {
 
   app.use('/api/frameworks', frameworksRouter);
   app.use('/api/framework-mappings', frameworkMappingsRouter);
+
+  // Phase 10.7 — SSO discovery (scaffold). Anonymous endpoint that
+  // tells the frontend whether SSO is available for an institution.
+  // The actual SAML/OIDC login flows ship in a follow-up PR.
+  app.use('/api/sso', ssoRouter);
 
   // Phase 10.8 — GDPR data-subject rights (data export, erasure).
   // Mounted at /me because they're personal rights, not admin actions.

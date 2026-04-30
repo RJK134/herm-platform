@@ -17,6 +17,8 @@ const ENV_VARS: EnvVar[] = [
   { name: 'ANTHROPIC_API_KEY',     required: false, description: 'Anthropic API key for AI chat feature' },
   { name: 'STRIPE_SECRET_KEY',     required: false, description: 'Stripe secret key for subscription billing' },
   { name: 'STRIPE_WEBHOOK_SECRET', required: false, description: 'Stripe webhook secret for payment event verification' },
+  { name: 'SMTP_HOST',             required: false, description: 'SMTP server host for outbound email (billing notifications etc.)' },
+  { name: 'SMTP_FROM',             required: false, description: 'Default From: address for outbound email (e.g. "HERM <noreply@example.com>")' },
 ];
 
 export function checkEnvironment(): void {
@@ -54,6 +56,29 @@ export function checkEnvironment(): void {
       '  STRIPE_SECRET_KEY is set but STRIPE_WEBHOOK_SECRET is not — webhook signature verification cannot run, and every Stripe event will silently no-op. Set STRIPE_WEBHOOK_SECRET (from https://dashboard.stripe.com/webhooks).';
     if (isProd) missing.push(msg);
     else warnings.push(msg);
+  }
+
+  // SMTP coherence: if SMTP_HOST is set, the operator clearly intends to
+  // send mail — but a host alone is not enough. Without SMTP_FROM (or
+  // SMTP_USER as a fallback) the email path silently disables itself,
+  // which means dunning notifications won't reach paying customers. Fail
+  // loudly in production, warn in dev. Mirrors the Stripe-pair check above.
+  if (process.env['SMTP_HOST']) {
+    if (!process.env['SMTP_FROM'] && !process.env['SMTP_USER']) {
+      const msg =
+        '  SMTP_HOST is set but neither SMTP_FROM nor SMTP_USER is configured — outbound email will be silently disabled. Set SMTP_FROM (e.g. "HERM <noreply@your-domain>") and authentication credentials.';
+      if (isProd) missing.push(msg);
+      else warnings.push(msg);
+    }
+    const portStr = process.env['SMTP_PORT'];
+    if (portStr !== undefined) {
+      const port = Number.parseInt(portStr, 10);
+      if (!Number.isFinite(port) || port <= 0 || port > 65535) {
+        const msg = `  SMTP_PORT="${portStr}" is not a valid port number (1-65535).`;
+        if (isProd) missing.push(msg);
+        else warnings.push(msg);
+      }
+    }
   }
 
   // Shout if the pre-billing tier-unlock flag is set in production.

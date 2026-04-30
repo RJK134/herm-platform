@@ -3,15 +3,40 @@ import prisma from '../../utils/prisma';
 
 const MIN_INSTITUTIONS = 5;
 
-export const getOverview = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+/**
+ * Sector analytics — institutional cross-cut views.
+ *
+ * Phase 10 / 10.1: SELF-EXCLUSION. Every aggregate response excludes the
+ * caller's own institution from the dataset. Without this, a paid-tier
+ * customer querying "top capabilities across the sector" would see their
+ * OWN baskets contributing to the "anonymous" leaderboard, leaking signal
+ * about competitor strategies — and worse, narrowing the k-anon set
+ * without them realising it.
+ *
+ * The k-anonymity floor is computed against the EXCLUDED count
+ * (≥ MIN_INSTITUTIONS others), so a 5-institution platform with one
+ * caller will hide everything (count=4 fails the threshold) — by design.
+ *
+ * Authentication is enforced upstream by `authenticateJWT +
+ * requirePaidTier(['professional','enterprise'])` on the router, so
+ * `req.user` is guaranteed in every handler.
+ */
+
+/** Caller's institutionId — the value to exclude from each aggregate. */
+function excludeId(req: Request): string {
+  return req.user!.institutionId;
+}
+
+export const getOverview = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const [institutions, evaluations, procurements] = await Promise.all([
-      prisma.institution.count(),
-      prisma.evaluationProject.count(),
-      prisma.procurementProject.count(),
+    const me = excludeId(req);
+    const [institutionsExcl, evaluationsExcl, procurementsExcl] = await Promise.all([
+      prisma.institution.count({ where: { NOT: { id: me } } }),
+      prisma.evaluationProject.count({ where: { NOT: { institutionId: me } } }),
+      prisma.procurementProject.count({ where: { NOT: { institutionId: me } } }),
     ]);
 
-    const topSystems = institutions >= MIN_INSTITUTIONS
+    const topSystems = institutionsExcl >= MIN_INSTITUTIONS
       ? await prisma.vendorSystem.findMany({
           select: { id: true, name: true, vendor: true, _count: { select: { scores: true } } },
           orderBy: { scores: { _count: 'desc' } },
@@ -19,26 +44,43 @@ export const getOverview = async (_req: Request, res: Response, next: NextFuncti
         })
       : [];
 
-    const topCapabilities = institutions >= MIN_INSTITUTIONS
+    const topCapabilities = institutionsExcl >= MIN_INSTITUTIONS
       ? await prisma.basketItem.groupBy({
           by: ['capabilityId'],
+          // Exclude basket items owned by the caller's institution. The
+          // BasketItem model joins to CapabilityBasket which has institutionId.
+          where: { basket: { NOT: { institutionId: me } } },
           _count: { capabilityId: true },
           orderBy: { _count: { capabilityId: 'desc' } },
           take: 15,
         })
       : [];
 
-    res.json({ success: true, data: { institutions, evaluations, procurements, topSystems, topCapabilities } });
+    res.json({
+      success: true,
+      data: {
+        institutions: institutionsExcl,
+        evaluations: evaluationsExcl,
+        procurements: procurementsExcl,
+        topSystems,
+        topCapabilities,
+      },
+    });
   } catch (err) { next(err); }
 };
 
-export const getSystems = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const getSystems = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const count = await prisma.institution.count();
+    const me = excludeId(req);
+    const count = await prisma.institution.count({ where: { NOT: { id: me } } });
     if (count < MIN_INSTITUTIONS) {
       res.json({ success: true, data: [], note: 'Insufficient data.' });
       return;
     }
+    // CapabilityScore is global (no institutionId column), so the leaderboard
+    // count of scores per system is sector-level signal that doesn't reveal
+    // the caller's institution by itself. The k-anon gate above is what
+    // protects against single-institution sets.
     const data = await prisma.vendorSystem.findMany({
       select: { id: true, name: true, vendor: true, category: true, _count: { select: { scores: true } } },
       orderBy: { scores: { _count: 'desc' } },
@@ -48,15 +90,17 @@ export const getSystems = async (_req: Request, res: Response, next: NextFunctio
   } catch (err) { next(err); }
 };
 
-export const getCapabilities = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const getCapabilities = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const count = await prisma.institution.count();
+    const me = excludeId(req);
+    const count = await prisma.institution.count({ where: { NOT: { id: me } } });
     if (count < MIN_INSTITUTIONS) {
       res.json({ success: true, data: [], note: 'Insufficient data.' });
       return;
     }
     const caps = await prisma.basketItem.groupBy({
       by: ['capabilityId'],
+      where: { basket: { NOT: { institutionId: me } } },
       _count: { capabilityId: true },
       orderBy: { _count: { capabilityId: 'desc' } },
       take: 20,
@@ -78,8 +122,9 @@ export const getCapabilities = async (_req: Request, res: Response, next: NextFu
   } catch (err) { next(err); }
 };
 
-export const getJurisdictions = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const getJurisdictions = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const me = excludeId(req);
     const [jurisdictionDefs, projectGroups] = await Promise.all([
       prisma.procurementJurisdiction.findMany({
         where: { isActive: true },
@@ -87,6 +132,9 @@ export const getJurisdictions = async (_req: Request, res: Response, next: NextF
       }),
       prisma.procurementProject.groupBy({
         by: ['jurisdiction'],
+        // Exclude caller's own institution's projects so they can't infer
+        // jurisdiction-level peer activity from their own contribution.
+        where: { NOT: { institutionId: me } },
         _count: { jurisdiction: true },
       }),
     ]);
@@ -101,15 +149,25 @@ export const getJurisdictions = async (_req: Request, res: Response, next: NextF
   } catch (err) { next(err); }
 };
 
-export const getTrends = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const getTrends = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const me = excludeId(req);
     const twelveMonthsAgo = new Date();
     twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
 
     const [evals, procs, regs] = await Promise.all([
-      prisma.evaluationProject.findMany({ where: { createdAt: { gte: twelveMonthsAgo } }, select: { createdAt: true } }),
-      prisma.procurementProject.findMany({ where: { createdAt: { gte: twelveMonthsAgo } }, select: { createdAt: true } }),
-      prisma.institution.findMany({ where: { createdAt: { gte: twelveMonthsAgo } }, select: { createdAt: true } }),
+      prisma.evaluationProject.findMany({
+        where: { createdAt: { gte: twelveMonthsAgo }, NOT: { institutionId: me } },
+        select: { createdAt: true },
+      }),
+      prisma.procurementProject.findMany({
+        where: { createdAt: { gte: twelveMonthsAgo }, NOT: { institutionId: me } },
+        select: { createdAt: true },
+      }),
+      prisma.institution.findMany({
+        where: { createdAt: { gte: twelveMonthsAgo }, NOT: { id: me } },
+        select: { createdAt: true },
+      }),
     ]);
 
     const groupByMonth = (items: { createdAt: Date }[]): Record<string, number> => {
