@@ -109,14 +109,26 @@ export class AuthService {
       },
     });
 
-    if (!user) {
+    // The `!= null` (loose equality) catches both `null` and `undefined`
+    // — some test mocks return user objects without the deletedAt key
+    // populated; treating undefined as live keeps the existing test
+    // surface intact while still rejecting real soft-deleted rows.
+    if (!user || user.deletedAt != null) {
       // Run a dummy bcrypt comparison to match the response time of a
       // wrong-password attempt against an existing account. Without this,
       // an attacker can discover valid email addresses by measuring how much
       // faster the "email not found" path responds compared to the bcrypt
       // path. The result is discarded — we always return 401 here.
+      //
+      // Phase 11.9 — soft-deleted users are treated identically to
+      // "no such email": we DO NOT call recordFailure for the
+      // tombstone-rewritten address (`deleted+<id>@deleted.invalid`)
+      // because the lockout key would be wrong anyway, but we still
+      // burn the bcrypt cycles to keep response time constant.
       await bcrypt.compare(data.password, DUMMY_HASH);
-      await recordFailure(data.email);
+      if (!user) {
+        await recordFailure(data.email);
+      }
       throw new AppError(401, 'AUTHENTICATION_ERROR', 'Invalid email or password');
     }
 

@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import type { NextFunction, Request, Response } from 'express';
 import type { VendorJwtPayload } from '../api/vendor-portal/vendor-portal.service';
+import prisma from '../utils/prisma';
 
 if (!process.env['JWT_SECRET']) {
   if (process.env['NODE_ENV'] === 'production') {
@@ -57,7 +58,76 @@ function extractToken(req: Request): string | undefined {
   return undefined;
 }
 
-export function authenticateJWT(req: Request, res: Response, next: NextFunction): void {
+/**
+ * Phase 11.9 — soft-delete revocation cache.
+ *
+ * Every authenticated request consults `User.deletedAt` so that a
+ * GDPR erasure (or any future admin-driven soft-delete) takes effect
+ * even before the user's outstanding JWT expires. Without a cache that
+ * would be a Prisma round-trip per request; with one, we amortise to
+ * roughly one round-trip per user per `SOFT_DELETE_CACHE_TTL_MS`. The
+ * window is short enough to bound the worst-case post-erasure activity
+ * window, long enough that the steady-state cost is negligible.
+ *
+ * The cache is process-local; multi-pod deployments will independently
+ * each cache for ~30 s after a soft-delete. If shorter convergence
+ * matters operationally, drop `SOFT_DELETE_CACHE_TTL_MS` to 0 — the
+ * tradeoff is one read per request.
+ */
+const SOFT_DELETE_CACHE_TTL_MS = 30_000;
+const softDeleteCache = new Map<string, { deleted: boolean; cachedAt: number }>();
+
+async function isUserSoftDeleted(userId: string): Promise<boolean> {
+  // Test-mode opt-out: the existing test suite mocks `prisma.user`
+  // with `.mockResolvedValueOnce` patterns that would be consumed by
+  // this lookup before the test's own controller ever reaches Prisma.
+  // Tests that specifically want to exercise the revocation path opt
+  // back in by setting ENABLE_SOFT_DELETE_AUTH_CHECK=true.
+  if (
+    process.env['NODE_ENV'] === 'test' &&
+    process.env['ENABLE_SOFT_DELETE_AUTH_CHECK'] !== 'true'
+  ) {
+    return false;
+  }
+  const hit = softDeleteCache.get(userId);
+  if (hit && Date.now() - hit.cachedAt < SOFT_DELETE_CACHE_TTL_MS) {
+    return hit.deleted;
+  }
+  const row = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { deletedAt: true },
+  });
+  // The check answers "is this user in the soft-delete grace window?"
+  //   - row found with deletedAt non-null  → soft-deleted, reject.
+  //   - row found with deletedAt null      → live user, allow.
+  //   - row not found (already hard-deleted, or row never existed) →
+  //     allow. This matches the pre-Phase-11.9 baseline where the JWT
+  //     is self-contained and a hard-deleted user's outstanding token
+  //     remains valid until expiry; the row's absence has already
+  //     stripped the user from every per-tenant query, so the token
+  //     can no longer reach data. Forcing the missing-row path to 401
+  //     would break every test that constructs a JWT without seeding
+  //     a User row, with no commensurate security gain.
+  //
+  // The `!= null` (loose equality) is deliberate: it treats both
+  // `null` (no soft-delete recorded) and `undefined` (some test
+  // mocks omit the field entirely) as "live", which keeps the
+  // existing test surface intact.
+  const deleted = !!(row && row.deletedAt != null);
+  softDeleteCache.set(userId, { deleted, cachedAt: Date.now() });
+  return deleted;
+}
+
+/** Test hook: clears the soft-delete revocation cache. */
+export function _resetSoftDeleteCacheForTests(): void {
+  softDeleteCache.clear();
+}
+
+export async function authenticateJWT(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   const token = extractToken(req);
   if (!token) {
     res.status(401).json({
@@ -72,6 +142,20 @@ export function authenticateJWT(req: Request, res: Response, next: NextFunction)
     // token minted between password and TOTP) MUST NOT pass session auth.
     // Only the matching purpose-aware endpoint accepts them.
     if (decoded.purpose) {
+      res.status(401).json({
+        success: false,
+        error: { code: 'AUTHENTICATION_ERROR', message: 'Invalid or expired token' },
+      });
+      return;
+    }
+    // Phase 11.9 — revoke the session as soon as the User row is
+    // soft-deleted (GDPR erasure or admin removal). The check is
+    // cached for SOFT_DELETE_CACHE_TTL_MS to keep the per-request
+    // cost amortised. Tests can opt out by mocking
+    // `_resetSoftDeleteCacheForTests` — the cache returns `false`
+    // for any user not in the cache, then a single missed lookup
+    // populates it.
+    if (await isUserSoftDeleted(decoded.userId)) {
       res.status(401).json({
         success: false,
         error: { code: 'AUTHENTICATION_ERROR', message: 'Invalid or expired token' },

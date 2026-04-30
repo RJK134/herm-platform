@@ -8,6 +8,7 @@ import prisma from './utils/prisma';
 import { createApp } from './app';
 import { PRODUCT } from './lib/branding';
 import { logger } from './lib/logger';
+import { startRetentionScheduler, stopRetentionScheduler } from './services/retention/scheduler';
 
 const app = createApp();
 const PORT = Number(process.env['PORT'] ?? 3002);
@@ -49,10 +50,16 @@ prisma
 
 const server = app.listen(PORT, () => {
   logger.info({ port: PORT }, `${PRODUCT.name} API running on http://localhost:${PORT}`);
+  // Phase 11.9 — retention scheduler. Opt-in via
+  // RETENTION_SCHEDULER_ENABLED=true so dev / test envs do not surprise-
+  // purge soft-deleted rows. The first sweep runs on the next tick;
+  // subsequent sweeps follow RETENTION_SWEEP_INTERVAL_MS (default 6 h).
+  startRetentionScheduler();
 });
 
 function shutdown(signal: string): void {
   logger.info({ signal }, 'shutting down gracefully');
+  stopRetentionScheduler();
   server.close(async () => {
     // Drain Sentry before disconnecting from Postgres — once $disconnect
     // resolves we may be killed at any moment, and queued exception events
