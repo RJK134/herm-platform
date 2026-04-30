@@ -20,9 +20,13 @@
  *     rows are RETAINED — Article 17(3)(b) and 17(3)(e) explicitly
  *     allow retention "for compliance with a legal obligation" and
  *     "for the establishment, exercise or defence of legal claims",
- *     which is exactly what the audit log is for. Crucially, the audit
- *     log only records userId (no email, no name) — once the User row
- *     is gone, the audit row is just an opaque cuid.
+ *     which is exactly what the audit log is for. Retained audit rows
+ *     must be treated as compliance records, not as fully anonymized
+ *     data: depending on what was logged, they may still contain
+ *     metadata such as userId, ipAddress, and arbitrary `changes`
+ *     payloads. Deleting the User row therefore pseudonymizes the
+ *     subject reference, but does not guarantee that every retained
+ *     audit field is non-PII.
  *
  * Defence in depth:
  *   - Both endpoints require authenticateJWT — only the data subject
