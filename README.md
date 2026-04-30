@@ -62,6 +62,7 @@ CI runs the same gates on every push/PR — see `.github/workflows/ci.yml`.
 - [ARCHITECTURE_NOTES](ARCHITECTURE_NOTES.md) — module boundaries, data flow, auth model
 - [AI_GOVERNANCE](AI_GOVERNANCE.md) — allowlists, limits, how to add a new AI surface
 - [docs/adr/0001-sso-architecture.md](docs/adr/0001-sso-architecture.md) — SSO (SAML/OIDC) architecture, decisions, deferred items
+- [docs/SSO_MFA_DISCLOSURE.md](docs/SSO_MFA_DISCLOSURE.md) — customer-facing disclosure: what changes for users when an institution enables SSO (MFA-bypass policy)
 - [docs/USER_TESTING_BRIEF.md](docs/USER_TESTING_BRIEF.md) — persona-driven user testing brief
 
 ## Project layout

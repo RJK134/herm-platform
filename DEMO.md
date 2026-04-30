@@ -162,11 +162,11 @@ Restart the server. Every logged-in user is then issued a JWT carrying
 These are **deliberately deferred** — call them out if asked, do not paper over:
 
 - **At-rest encryption of `oidcClientSecret` / `samlCert`** — application-level
-  envelope encryption (AES-256-GCM) is now implemented (Phase 11.2). Set
-  `SSO_SECRET_KEY` (`openssl rand -hex 32`) and any newly-written SSO secret
-  is stored as `enc:v1:...` ciphertext. Legacy plaintext rows still resolve
-  (back-compat). Per-row key rotation and a one-shot encryption migration
-  script remain follow-ups.
+  envelope encryption (AES-256-GCM) is implemented (Phase 11.2), and a
+  one-shot migration script (`npm run db:encrypt-sso`, Phase 11.5) brings
+  legacy plaintext rows to the encrypted form on existing deployments.
+  Run with `--dry-run` first to preview. Per-row key rotation tooling
+  remains a follow-up.
 - **UKAMF compliance** — SP-side AuthnRequest signing + signed SP metadata
   are now wired (Phase 11.3). Set `SP_SIGNING_KEY` + `SP_SIGNING_CERT`
   (inline PEM or `file:/path/to.pem`) and `/api/sso/sp-metadata.xml` plus
@@ -183,12 +183,16 @@ These are **deliberately deferred** — call them out if asked, do not paper ove
   per-institution deep-link at `/admin/sso/institutions/:id` so a
   SUPER_ADMIN can administer any tenant without impersonating first.
   (Closed.)
-- **No live IdP integration tests** — `node-saml` and `openid-client` are
-  mocked in the test suite. End-to-end against `saml-test-idp` /
-  `oauth2-mock-server` is a deferred follow-up.
+- **Live IdP integration tests** — Phase 11.6 added in-process live IdPs:
+  `oauth2-mock-server` for OIDC (real /authorize → /token → JWKS dance)
+  and a hand-built `xml-crypto` SAML IdP for the ACS path (real signed
+  assertion verified by real `node-saml`). Together they pin the actual
+  protocol plumbing the unit-mock suite cannot see, including
+  signature-tamper and rogue-key rejection. (Closed.)
 - **MFA bypass on SSO** — when an institution has SSO, authenticator-app MFA is
   no longer enforced by HERM; the IdP enforces its own MFA. This is by design
-  (ADR-0001 Q10) and recorded in audit as `mfaBypassed: true`.
+  (ADR-0001 Q10) and recorded in audit as `mfaBypassed: true`. Customer-facing
+  disclosure published at [`docs/SSO_MFA_DISCLOSURE.md`](docs/SSO_MFA_DISCLOSURE.md).
 - **Soft-delete + retention scheduler** — deferred from PR #50.
 - **SAML Single Logout (SLO)** — needs a Redis-backed session store; v1 skip.
 - **Multi-IdP per tenant** — schema enforces one `SsoIdentityProvider` per
