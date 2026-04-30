@@ -3,6 +3,7 @@ import prisma from '../../utils/prisma';
 import { generateToken, type JwtPayload } from '../../middleware/auth';
 import { AppError, ConflictError } from '../../utils/errors';
 import type { RegisterInput, LoginInput } from './auth.schema';
+import { checkLockout, recordFailure, clearFailures, AccountLockedError } from '../../lib/lockout';
 
 function buildSlug(name: string): string {
   return (
@@ -80,6 +81,17 @@ export class AuthService {
   }
 
   async login(data: LoginInput) {
+    // Phase 10.5: lockout check FIRST, before the DB read and bcrypt
+    // comparison. Both are expensive (bcrypt is intentionally so), and
+    // an attacker hammering a locked account shouldn't burn CPU per
+    // attempt. The check is O(1) — Map lookup + a couple of timestamp
+    // comparisons. Keyed by lower-cased email so case variations don't
+    // bypass the counter.
+    const lockState = checkLockout(data.email);
+    if (lockState.locked) {
+      throw new AccountLockedError(Math.ceil(lockState.retryAfterMs / 1000));
+    }
+
     const user = await prisma.user.findUnique({
       where: { email: data.email.toLowerCase() },
       include: {
@@ -90,13 +102,24 @@ export class AuthService {
     });
 
     if (!user) {
+      // Record a failure even when the email doesn't exist — this
+      // prevents an attacker from probing for valid emails (different
+      // response timings would otherwise leak existence).
+      recordFailure(data.email);
       throw new AppError(401, 'AUTHENTICATION_ERROR', 'Invalid email or password');
     }
 
     const valid = await bcrypt.compare(data.password, user.passwordHash);
     if (!valid) {
+      const post = recordFailure(data.email);
+      if (post.locked) {
+        throw new AccountLockedError(Math.ceil(post.retryAfterMs / 1000));
+      }
       throw new AppError(401, 'AUTHENTICATION_ERROR', 'Invalid email or password');
     }
+
+    // Successful login — clear any prior failure history.
+    clearFailures(data.email);
 
     const tier = resolveEffectiveTier(
       user.institution.subscription?.tier?.toLowerCase() ?? 'free',
