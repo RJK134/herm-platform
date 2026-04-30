@@ -38,12 +38,25 @@ export interface RegisterData {
   institutionCountry?: string;
 }
 
+/**
+ * Discriminated result of `login()`.
+ *  - 'success'      → caller is fully signed in; AuthProvider has set state.
+ *  - 'mfa_required' → password OK but the account has TOTP MFA enrolled.
+ *                     The caller MUST collect a 6-digit code and call
+ *                     `loginMfa(challengeToken, code)` to complete sign-in.
+ *                     Until then no session is established.
+ */
+export type LoginResult =
+  | { type: 'success' }
+  | { type: 'mfa_required'; challengeToken: string };
+
 interface AuthContextValue {
   user: AuthUser | null;
   token: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<LoginResult>;
+  loginMfa: (challengeToken: string, code: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => void;
   endImpersonation: () => Promise<void>;
@@ -99,19 +112,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [clearAuth]);
 
   const login = useCallback(
-    async (email: string, password: string) => {
+    async (email: string, password: string): Promise<LoginResult> => {
+      // The login response is a discriminated union:
+      //   - { token, user }            → password-only sign-in
+      //   - { requiresMfa, challengeToken } → MFA-enabled accounts; the
+      //     caller collects a TOTP code and calls `loginMfa(...)`.
+      // Server returns non-2xx for credential failures, so axios throws
+      // and the caller's catch block handles error display — no
+      // `if (!data.success)` branch needed.
       const { data } = await axios.post<{
-        success: boolean;
-        data: { token: string; user: AuthUser };
-        error?: { message: string };
+        success: true;
+        data:
+          | { token: string; user: AuthUser }
+          | { requiresMfa: true; challengeToken: string };
       }>('/api/auth/login', { email, password });
 
-      if (!data.success) {
-        throw new Error(data.error?.message ?? 'Login failed');
+      if ('requiresMfa' in data.data) {
+        return { type: 'mfa_required', challengeToken: data.data.challengeToken };
       }
       setAuth(data.data.token, data.data.user);
+      return { type: 'success' };
     },
     [setAuth]
+  );
+
+  const loginMfa = useCallback(
+    async (challengeToken: string, code: string) => {
+      const { data } = await axios.post<{
+        success: true;
+        data: { token: string; user: AuthUser };
+      }>('/api/auth/mfa/login', { challengeToken, code });
+
+      setAuth(data.data.token, data.data.user);
+    },
+    [setAuth],
   );
 
   const register = useCallback(
@@ -164,6 +198,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         isAuthenticated: !!user,
         login,
+        loginMfa,
         register,
         logout,
         endImpersonation,

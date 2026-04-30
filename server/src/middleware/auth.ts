@@ -67,7 +67,18 @@ export function authenticateJWT(req: Request, res: Response, next: NextFunction)
     return;
   }
   try {
-    req.user = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload & { purpose?: string };
+    // Phase 10.8: short-lived purpose-tagged tokens (e.g. the MFA challenge
+    // token minted between password and TOTP) MUST NOT pass session auth.
+    // Only the matching purpose-aware endpoint accepts them.
+    if (decoded.purpose) {
+      res.status(401).json({
+        success: false,
+        error: { code: 'AUTHENTICATION_ERROR', message: 'Invalid or expired token' },
+      });
+      return;
+    }
+    req.user = decoded;
     next();
   } catch {
     res.status(401).json({

@@ -4,6 +4,7 @@ import { generateToken, type JwtPayload } from '../../middleware/auth';
 import { AppError, ConflictError } from '../../utils/errors';
 import type { RegisterInput, LoginInput } from './auth.schema';
 import { checkLockout, recordFailure, clearFailures, AccountLockedError } from '../../lib/lockout';
+import { generateMfaChallengeToken } from '../../lib/mfa';
 
 // Pre-computed bcrypt hash used when the email doesn't exist in the database.
 // Running bcrypt.compare against this dummy hash ensures the response time for
@@ -128,12 +129,28 @@ export class AuthService {
       throw new AppError(401, 'AUTHENTICATION_ERROR', 'Invalid email or password');
     }
 
-    // Successful login — clear any prior failure history.
+    // Successful password — clear lockout history regardless of MFA outcome.
+    // The MFA step is a separate gate; failing it does NOT re-lock the
+    // account at the password layer (the bad-code attempt is logged but
+    // can't trigger the password lockout, otherwise an attacker who
+    // correctly guessed the password could DoS the account by spamming
+    // bad TOTP codes).
     clearFailures(data.email);
 
     const tier = resolveEffectiveTier(
       user.institution.subscription?.tier?.toLowerCase() ?? 'free',
     );
+
+    // Phase 10.8: if the account has MFA enrolled AND verified, do not
+    // mint a session token. Return a short-lived challenge token; the
+    // client must POST it to /api/auth/mfa/login with a TOTP code to
+    // exchange for a real session.
+    if (user.mfaEnabledAt) {
+      return {
+        requiresMfa: true as const,
+        challengeToken: generateMfaChallengeToken(user.id),
+      };
+    }
 
     const payload: JwtPayload = {
       userId: user.id,

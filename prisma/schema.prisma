@@ -202,6 +202,14 @@ model User {
   role                  UserRole                     @default(VIEWER)
   institutionId         String
   institution           Institution                  @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  // Phase 10.8 — TOTP MFA. `mfaSecret` is the base32-encoded shared secret;
+  // it is set by `enroll` and only becomes "active" once `verify` confirms
+  // a working TOTP code (at which point `mfaEnabledAt` is stamped). When
+  // `mfaEnabledAt` is null the secret is staged but not yet enforced —
+  // the user can re-enroll without a verify step. At-rest encryption of
+  // the secret is the deployment's responsibility (Postgres TDE).
+  mfaSecret             String?
+  mfaEnabledAt          DateTime?
   evaluationMemberships EvaluationMember[]
   domainAssignments     EvaluationDomainAssignment[] @relation("DomainAssignments")
   notifications         Notification[]

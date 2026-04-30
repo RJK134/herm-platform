@@ -98,6 +98,18 @@ export const api = {
   logout: () =>
     client.post<ApiResponse<{ message: string }>>('/auth/logout'),
 
+  // Phase 10.8 — MFA (TOTP)
+  getMfaStatus: () =>
+    client.get<
+      ApiResponse<{ enrolled: boolean; enabled: boolean; enabledAt: string | null }>
+    >('/auth/mfa/status'),
+  enrollMfa: () =>
+    client.post<ApiResponse<{ secret: string; otpauthUri: string }>>('/auth/mfa/enroll'),
+  verifyMfa: (code: string) =>
+    client.post<ApiResponse<{ enabledAt: string }>>('/auth/mfa/verify', { code }),
+  disableMfa: (code: string) =>
+    client.post<ApiResponse<{ disabled: true }>>('/auth/mfa/disable', { code }),
+
   // Institution
   getMyInstitution: () =>
     client.get<ApiResponse<InstitutionDetail>>('/institutions/me'),
