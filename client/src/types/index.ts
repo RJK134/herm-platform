@@ -151,20 +151,12 @@ export interface ScoringMethodology {
 
 // ── Auth & Institution types ─────────────────────────────────────────────────
 
-export interface AuthUser {
-  userId: string;
-  email: string;
-  name: string;
-  role: string;
-  institutionId: string;
-  institutionName: string;
-  tier: 'free' | 'professional' | 'enterprise';
-  impersonator?: {
-    userId: string;
-    email: string;
-    name: string;
-  };
-}
+// `AuthUser` lives in the auth context (its semantic owner) and is
+// re-exported here so callers that import API/domain types from
+// `../types` get a single, consistent shape. Adding fields (e.g. the
+// `impersonator` claim from Phase 10.3) only requires touching the
+// context definition.
+export type { AuthUser } from '../contexts/AuthContext';
 
 export interface Subscription {
   id: string;

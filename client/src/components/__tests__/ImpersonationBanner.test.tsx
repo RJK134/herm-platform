@@ -67,7 +67,9 @@ describe('<ImpersonationBanner />', () => {
 
     const banner = screen.getByTestId('impersonation-banner');
     expect(banner).toBeInTheDocument();
-    expect(banner).toHaveAttribute('role', 'alert');
+    // role="status" gives a polite (non-interrupting) screen-reader
+    // announcement, matching the persistent-state nature of the banner.
+    expect(banner).toHaveAttribute('role', 'status');
     // Both customer and impersonator identity must be visible — the banner
     // only earns its keep if the engineer can see who they are pretending
     // to be AND who they really are.
@@ -115,6 +117,39 @@ describe('<ImpersonationBanner />', () => {
 
     // Cleanly resolve so React doesn't warn about leaked acts.
     resolveEnd();
+  });
+
+  it('resets the button state after a successful end so a second session is not stuck', async () => {
+    // Bugbot-flagged regression: the banner stays mounted (returns null
+    // when not impersonating) so its hooks state survives across
+    // impersonation sessions. Without a finally-block reset, a successful
+    // end leaves `isEnding=true` and the next session renders the button
+    // disabled with "Ending…".
+    mockAuth.user = makeUser({
+      impersonator: { userId: 'admin-1', email: 's@x.test', name: 'Admin' },
+    });
+    mockAuth.endImpersonation = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+
+    const { rerender } = render(<ImpersonationBanner />);
+    await user.click(screen.getByRole('button', { name: /End impersonation/i }));
+
+    // Simulate the new impersonation session re-mounting under the same
+    // tree position by re-rendering with a fresh impersonator.
+    await waitFor(() => {
+      expect(mockAuth.endImpersonation).toHaveBeenCalledTimes(1);
+    });
+
+    mockAuth.user = makeUser({
+      email: 'other@uni.test',
+      name: 'Other User',
+      impersonator: { userId: 'admin-1', email: 's@x.test', name: 'Admin' },
+    });
+    rerender(<ImpersonationBanner />);
+
+    expect(
+      screen.getByRole('button', { name: /End impersonation/i }),
+    ).not.toBeDisabled();
   });
 
   it('keeps the button enabled if endImpersonation rejects so the user can retry', async () => {

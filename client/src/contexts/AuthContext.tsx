@@ -135,16 +135,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [clearAuth]);
 
   const endImpersonation = useCallback(async () => {
-    const { data } = await axios.post<{
-      success: boolean;
-      data: { token: string; user: AuthUser };
-      error?: { message: string };
-    }>('/api/admin/impersonate/end');
-
-    if (!data.success) {
-      throw new Error(data.error?.message ?? 'Failed to end impersonation');
+    // Errors from `/end` come back as non-2xx and Axios throws — the
+    // legacy `if (!data.success)` branch was dead. Catch the AxiosError
+    // and surface the typed `error.message` so the banner toast says
+    // "Already a normal session" or similar instead of the generic
+    // "Request failed with status code 400".
+    try {
+      const { data } = await axios.post<{
+        success: true;
+        data: { token: string; user: AuthUser };
+      }>('/api/admin/impersonate/end');
+      setAuth(data.data.token, data.data.user);
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        const apiMsg = (err.response?.data as { error?: { message?: string } } | undefined)
+          ?.error?.message;
+        throw new Error(apiMsg ?? 'Failed to end impersonation');
+      }
+      throw err;
     }
-    setAuth(data.data.token, data.data.user);
   }, [setAuth]);
 
   return (
