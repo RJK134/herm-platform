@@ -447,8 +447,9 @@ describe('challenge token rejected at session-auth boundary', () => {
     // a partial object where role / institutionId / tier are undefined,
     // and downstream middleware would silently operate on those.
     //
-    // We exercise the default exported `optionalAuth = optionalJWT`
-    // through a scratch route that just returns whatever req.user is.
+    // We exercise the named export `optionalAuth` (aliased to
+    // `optionalJWT`) through a scratch route that just returns whatever
+    // req.user is.
     const { optionalAuth } = await import('../middleware/auth');
     const app = express();
     app.use(requestId);
