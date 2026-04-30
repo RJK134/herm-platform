@@ -17,6 +17,7 @@ const ENV_VARS: EnvVar[] = [
   { name: 'SP_BASE_URL',           required: false, description: 'API origin used for SAML ACS + OIDC callback URLs (Phase 10.10). REQUIRED in production — see prod-only check below.' },
   { name: 'SP_SIGNING_KEY',        required: false, description: 'PEM private key for signing SAML AuthnRequests + SP metadata (Phase 11.3). Pair with SP_SIGNING_CERT; set both or neither. Required for UKAMF federation enrolment.' },
   { name: 'SP_SIGNING_CERT',       required: false, description: 'PEM X.509 certificate matching SP_SIGNING_KEY. Required for UKAMF federation enrolment.' },
+  { name: 'SSO_SECRET_KEY',        required: false, description: 'Master key (32 bytes; 64 hex chars or base64) used to envelope-encrypt SsoIdentityProvider.samlCert + .oidcClientSecret at rest. Required when SSO is in use; warned-on in production when missing.' },
   { name: 'ANTHROPIC_API_KEY',     required: false, description: 'Anthropic API key for AI chat feature' },
   { name: 'STRIPE_SECRET_KEY',     required: false, description: 'Stripe secret key for subscription billing' },
   { name: 'STRIPE_WEBHOOK_SECRET', required: false, description: 'Stripe webhook secret for payment event verification' },
@@ -112,6 +113,17 @@ export function checkEnvironment(): void {
   if (hasSpKey !== hasSpCert) {
     missing.push(
       `  SP_SIGNING_KEY and SP_SIGNING_CERT must be set together. Got SP_SIGNING_KEY=${hasSpKey ? 'set' : 'unset'}, SP_SIGNING_CERT=${hasSpCert ? 'set' : 'unset'}. Either configure the full SP keypair (UKAMF-compliant) or remove both vars (legacy unsigned).`,
+    );
+  }
+
+  // SSO_SECRET_KEY: warn-only at boot. Not fatal even in production —
+  // a deployment that does not use SSO at all has no rows to encrypt
+  // and runs fine without the key. The encrypt/decrypt helpers throw
+  // at runtime when an actual SSO row is read or written without the
+  // key, which is the right place to fail (per-tenant, not at boot).
+  if (isProd && !process.env['SSO_SECRET_KEY']) {
+    console.warn(
+      '[ENV] SSO_SECRET_KEY is not set. Any encrypted SsoIdentityProvider row will fail to load, and the SSO admin write path will refuse to persist new secrets in plaintext. Generate one with: openssl rand -hex 32',
     );
   }
 

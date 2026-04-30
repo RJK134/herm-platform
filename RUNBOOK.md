@@ -73,6 +73,7 @@ The image is multi-stage:
 | `SP_ENTITY_ID` | optional | SAML entity ID. Defaults to `<SP_BASE_URL>/api/sso/sp`; override only when an IdP admin (e.g. UKAMF) assigns one. |
 | `SP_SIGNING_KEY` | optional (req'd for UKAMF) | PEM private key used to sign SAML AuthnRequests + SP metadata. Pair with `SP_SIGNING_CERT` — both set or both unset. Inline PEM (literal `\n` allowed) or `file:/abs/path.pem`. Generate a self-signed pair with `openssl req -x509 -newkey rsa:2048 -nodes -days 730 -keyout sp-signing.key -out sp-signing.crt -subj /CN=herm-sp`. |
 | `SP_SIGNING_CERT` | optional (req'd for UKAMF) | PEM X.509 certificate matching `SP_SIGNING_KEY`. Same accepted forms. |
+| `SSO_SECRET_KEY` | recommended (prod) | 32-byte master key (64 hex chars or base64) for envelope-encrypting `SsoIdentityProvider.samlCert` + `.oidcClientSecret`. Generate with `openssl rand -hex 32`. Without it, encrypted rows return opaque 404 and the SSO admin write path refuses to persist plaintext. Rotation: re-encrypt every row through the read→write path; a one-shot rotation tool is on the follow-up list. |
 | `REDIS_URL` | optional | Enables shared lockout state + the SSO OIDC PKCE flow store + Redis readiness probe. Without it, lockout falls back to in-memory (per-pod). Required for multi-pod deployments. |
 | `SENTRY_DSN` | optional | Error reporting; no-op when unset |
 | `SENTRY_ENVIRONMENT` | optional | Defaults to `NODE_ENV` |

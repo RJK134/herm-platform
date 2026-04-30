@@ -26,7 +26,34 @@ and `6380` so the stack does not collide with anything you may already have
 running on `5432`/`6379`. `.env.example` is already aligned to those ports;
 `cp .env.example .env` is the only env step you need for the demo.
 
-## Five-minute demo bootstrap
+## One-shot bootstrap (recommended)
+
+From a clean clone with Node 20+ and Docker installed:
+
+```bash
+npm run demo                        # cross-platform: dispatches to demo.sh / demo.bat
+```
+
+That single command:
+1. Verifies Node + Docker are on PATH.
+2. Copies `.env.example` → `.env` if missing.
+3. Brings up PostgreSQL + Redis via `docker compose`.
+4. Waits for Postgres to become healthy.
+5. Runs `npm run demo:bootstrap` (install + Prisma generate + db push + full seed).
+6. Prints demo credentials and runs `npm run dev` (foreground; Ctrl+C to stop).
+
+Equivalent direct invocations: `./demo.sh` (Linux/macOS) or `demo.bat` (Windows).
+
+When you are done:
+
+```bash
+./stop.sh                           # docker compose down (data volume is preserved)
+```
+
+### Manual / step-by-step alternative
+
+If you'd rather run each step yourself (or the one-shot fails partway and you
+want to resume):
 
 ```bash
 cp .env.example .env                # ports already aligned to docker-compose
@@ -35,17 +62,8 @@ npm run demo:bootstrap              # install deps + prisma generate/push + full
 npm run dev                         # starts client (5173) + server (3002)
 ```
 
-Or, on Linux/macOS, the same flow as a one-shot script:
-
-```bash
-./start.sh                          # writes .env, brings docker up, seeds, starts servers
-```
-
-When you are done:
-
-```bash
-./stop.sh                           # docker compose down (data volume is preserved)
-```
+`./start.sh` is a shorter daily-use variant — it skips `npm install` and the
+seed (assumes you've already bootstrapped) and just brings the stack back up.
 
 ## Validate the demo is up
 
@@ -143,10 +161,12 @@ Restart the server. Every logged-in user is then issued a JWT carrying
 
 These are **deliberately deferred** — call them out if asked, do not paper over:
 
-- **At-rest encryption of `oidcClientSecret` / `samlCert`** — currently
-  plaintext in Postgres. Contract is "DB-level encryption is the deployment's
-  responsibility (Postgres TDE / managed-DB equivalent)". App-level envelope
-  encryption is a clean follow-up PR.
+- **At-rest encryption of `oidcClientSecret` / `samlCert`** — application-level
+  envelope encryption (AES-256-GCM) is now implemented (Phase 11.2). Set
+  `SSO_SECRET_KEY` (`openssl rand -hex 32`) and any newly-written SSO secret
+  is stored as `enc:v1:...` ciphertext. Legacy plaintext rows still resolve
+  (back-compat). Per-row key rotation and a one-shot encryption migration
+  script remain follow-ups.
 - **UKAMF compliance** — SP-side AuthnRequest signing + signed SP metadata
   are now wired (Phase 11.3). Set `SP_SIGNING_KEY` + `SP_SIGNING_CERT`
   (inline PEM or `file:/path/to.pem`) and `/api/sso/sp-metadata.xml` plus
@@ -154,8 +174,11 @@ These are **deliberately deferred** — call them out if asked, do not paper ove
   the env pair the flow stays on the legacy unsigned path. Federation
   enrolment (uploading the signed SP metadata to UKAMF) and per-deployment
   cert-rotation tooling remain operator tasks.
-- **No admin UI for `SsoIdentityProvider`** — operators provision IdP rows via
-  raw Prisma today.
+- **Admin UI for `SsoIdentityProvider`** — Phase 11.4 ships an
+  INSTITUTION_ADMIN page at `/admin/sso` for creating, editing, and
+  deleting the institution's IdP row (SAML or OIDC). Secret fields use
+  "stored — leave blank to keep" semantics; writes go through the
+  envelope-encryption helper from Phase 11.2. (Closed.)
 - **No live IdP integration tests** — `node-saml` and `openid-client` are
   mocked in the test suite. End-to-end against `saml-test-idp` /
   `oauth2-mock-server` is a deferred follow-up.

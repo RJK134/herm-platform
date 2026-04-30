@@ -32,6 +32,7 @@ import { resolveEffectiveTier } from '../auth/auth.service';
 import { audit } from '../../lib/audit';
 import { AppError } from '../../utils/errors';
 import { logger } from '../../lib/logger';
+import { decryptSecret, encryptSecret } from '../../lib/secret-cipher';
 
 export type ResolvedIdp = SsoIdentityProvider & {
   institution: Institution & { subscription: Subscription | null };
@@ -86,13 +87,66 @@ export async function resolveSsoForFlow(institutionSlug: string): Promise<Resolv
       'SSO is not configured for this institution.',
     );
   }
+  // Decrypt the at-rest secrets here — once — so every downstream caller
+  // (controllers, saml.ts, oidc.ts) operates on plaintext like before.
+  // `decryptSecret` is a no-op for legacy rows that haven't been encrypted
+  // yet, so this is a backwards-compatible upgrade.
+  let samlCert: string | null;
+  let oidcClientSecret: string | null;
+  try {
+    samlCert = decryptSecret(institution.ssoProvider.samlCert) ?? null;
+    oidcClientSecret = decryptSecret(institution.ssoProvider.oidcClientSecret) ?? null;
+  } catch (err) {
+    logger.error(
+      {
+        institutionId: institution.id,
+        idpId: institution.ssoProvider.id,
+        err: err instanceof Error ? err.message : String(err),
+      },
+      'sso flow rejected: secret decryption failed',
+    );
+    // Same opaque 404 — the operator's IdP row exists, but we cannot
+    // load it. Surfacing a distinct error code here would tell an
+    // outside probe that an encrypted row exists.
+    throw new AppError(
+      404,
+      'SSO_NOT_CONFIGURED',
+      'SSO is not configured for this institution.',
+    );
+  }
   return {
     ...institution.ssoProvider,
+    samlCert,
+    oidcClientSecret,
     institution: {
       ...institution,
       subscription: institution.subscription,
     },
   };
+}
+
+/**
+ * Helper for the SSO admin write path (currently Prisma-direct;
+ * a future admin UI in PR D will call this). Takes the
+ * about-to-be-written values and returns them with `samlCert` and
+ * `oidcClientSecret` encrypted under `SSO_SECRET_KEY`. Other fields
+ * pass through untouched.
+ *
+ * Idempotent: re-encrypting an already-encrypted value is a no-op
+ * (`encryptSecret` short-circuits on the prefix), so a save that
+ * round-trips through a read → write path stays safe.
+ */
+export function encryptIdpSecretsForWrite<
+  T extends { samlCert?: string | null; oidcClientSecret?: string | null },
+>(input: T): T {
+  const out = { ...input };
+  if (typeof input.samlCert === 'string' && input.samlCert.length > 0) {
+    out.samlCert = encryptSecret(input.samlCert);
+  }
+  if (typeof input.oidcClientSecret === 'string' && input.oidcClientSecret.length > 0) {
+    out.oidcClientSecret = encryptSecret(input.oidcClientSecret);
+  }
+  return out;
 }
 
 interface AssertedIdentity {

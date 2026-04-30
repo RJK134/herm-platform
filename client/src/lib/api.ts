@@ -21,6 +21,39 @@ import type {
 const TOKEN_KEY = 'herm_auth_token';
 const REQUEST_TIMEOUT_MS = 15_000;
 
+// ── Phase 11.4 — SSO IdP admin types ──────────────────────────────────────
+export interface SsoIdpReadShape {
+  id: string;
+  institutionId: string;
+  protocol: 'SAML' | 'OIDC';
+  displayName: string;
+  enabled: boolean;
+  jitProvisioning: boolean;
+  defaultRole: 'VIEWER' | 'EVALUATOR' | 'PROCUREMENT_LEAD' | 'INSTITUTION_ADMIN';
+  samlEntityId: string | null;
+  samlSsoUrl: string | null;
+  oidcIssuer: string | null;
+  oidcClientId: string | null;
+  hasSamlCert: boolean;
+  hasOidcClientSecret: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SsoIdpUpsertPayload {
+  protocol?: 'SAML' | 'OIDC';
+  displayName?: string;
+  enabled?: boolean;
+  jitProvisioning?: boolean;
+  defaultRole?: 'VIEWER' | 'EVALUATOR' | 'PROCUREMENT_LEAD' | 'INSTITUTION_ADMIN';
+  samlEntityId?: string | null;
+  samlSsoUrl?: string | null;
+  samlCert?: string | null;
+  oidcIssuer?: string | null;
+  oidcClientId?: string | null;
+  oidcClientSecret?: string | null;
+}
+
 export class ApiError extends Error {
   code: string;
   status: number;
@@ -97,6 +130,14 @@ export const api = {
     client.patch<ApiResponse<AuthUser>>('/auth/me', { name }),
   logout: () =>
     client.post<ApiResponse<{ message: string }>>('/auth/logout'),
+
+  // Phase 11.4 — SSO IdP admin (institution-scoped)
+  getSsoIdp: () =>
+    client.get<ApiResponse<SsoIdpReadShape | null>>('/admin/sso/me'),
+  upsertSsoIdp: (data: SsoIdpUpsertPayload) =>
+    client.put<ApiResponse<SsoIdpReadShape>>('/admin/sso/me', data),
+  deleteSsoIdp: () =>
+    client.delete('/admin/sso/me'),
 
   // Phase 10.8 — MFA (TOTP)
   getMfaStatus: () =>
