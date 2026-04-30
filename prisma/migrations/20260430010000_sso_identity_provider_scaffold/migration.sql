@@ -1,9 +1,10 @@
 -- Phase 10.7 — SSO identity-provider scaffold.
 -- Adds the SsoIdentityProvider table and the SsoProtocol enum so the
 -- discovery endpoint and future SAML/OIDC flows have a stable contract
--- to read from. No application code reads from this table yet — the
--- actual auth flows ship in a follow-up PR. See
--- docs/adr/0001-sso-architecture.md for the design + open questions.
+-- to read from. The discovery endpoint (GET /api/sso/:slug/discover)
+-- already reads this table; the actual SAML/OIDC login flows ship in
+-- a follow-up PR. See docs/adr/0001-sso-architecture.md for the design
+-- + open questions.
 
 -- CreateEnum
 CREATE TYPE "SsoProtocol" AS ENUM ('SAML', 'OIDC');

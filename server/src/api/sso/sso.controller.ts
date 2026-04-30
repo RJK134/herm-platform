@@ -6,14 +6,24 @@
  * without revealing config details. The actual SAML/OIDC login flows
  * are not yet implemented — see docs/adr/0001-sso-architecture.md.
  *
- * Response shape:
- *   404 { code: 'SSO_NOT_CONFIGURED' }                  // institution unknown, no row, or disabled
- *   200 { protocol, displayName, loginUrl }             // configured + enabled
+ * Response shape (envelope from `lib/audit` / errorHandler):
+ *   200 { success: true, data: { protocol, displayName, loginUrl } }
+ *       // configured + enabled
+ *   404 { success: false, error: { code: 'SSO_NOT_CONFIGURED', message, requestId } }
+ *       // institution unknown, no row, or disabled
+ *   4xx/5xx { success: false, error: { code, message, requestId } }
+ *       // standard errorHandler envelope
  *
  * The discovery endpoint is INTENTIONALLY anonymous. It only reveals
  * "is SSO available for this slug" — the same information visible
  * from the institution's own login page anyway. No PII, no rate-limit
  * concerns beyond the global apiRateLimiter.
+ *
+ * Security note: we project the related `ssoProvider` row to ONLY the
+ * public-facing columns (`enabled`, `protocol`, `displayName`). Sensitive
+ * fields (`samlCert`, `oidcClientSecret`, etc.) are never pulled out of
+ * Postgres on this anonymous code path, so an accidental log line or a
+ * future change that serialises the prisma result can't leak them.
  */
 import type { Request, Response, NextFunction } from 'express';
 import prisma from '../../utils/prisma';
@@ -28,7 +38,15 @@ export const discover = async (req: Request, res: Response, next: NextFunction):
 
     const institution = await prisma.institution.findUnique({
       where: { slug: institutionSlug },
-      include: { ssoProvider: true },
+      select: {
+        ssoProvider: {
+          select: {
+            enabled: true,
+            protocol: true,
+            displayName: true,
+          },
+        },
+      },
     });
 
     if (!institution || !institution.ssoProvider || !institution.ssoProvider.enabled) {

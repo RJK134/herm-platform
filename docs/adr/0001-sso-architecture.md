@@ -141,7 +141,7 @@ HERM JWT default 7 days remains. **We don't sync to the IdP session lifetime** �
 - `npx prisma migrate status` shows the new migration applied cleanly.
 - `GET /api/sso/<unknown-slug>/discover` → 404 with `code = "SSO_NOT_CONFIGURED"`.
 - `GET /api/sso/<slug-of-institution-with-disabled-row>/discover` → 404.
-- A row with `enabled = true` is invisible until the auth flows land — discovery returns the IdP's display name + a placeholder `loginUrl` that 404s if hit. The frontend treats a placeholder as "show password login" until the rollout completes.
+- A row with `enabled = true` **is** discoverable now: `GET /api/sso/<slug>/discover` returns 200 with the IdP's display name + a placeholder `loginUrl`. Until the auth flows land, that placeholder `/login` endpoint still 404s if hit, so operators **MUST NOT** set `enabled = true` in production yet — doing so would surface an SSO option on the login page that doesn't actually work. The frontend treats a 404 from the `loginUrl` as "fall back to password login" until the rollout completes.
 
 ## References
 

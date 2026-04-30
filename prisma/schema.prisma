@@ -136,9 +136,12 @@ model SsoIdentityProvider {
   // OIDC-specific. Null for SAML providers.
   oidcIssuer       String?
   oidcClientId     String?
-  // Encrypted at rest: see ADR. The application layer is responsible for
-  // encryption/decryption at the edges; the column is opaque from the
-  // DB's perspective.
+  // Stored as-is in this column; protection at rest relies on the
+  // deployment's database encryption (Postgres TDE, RDS at-rest, etc.)
+  // as described in docs/adr/0001-sso-architecture.md. Application-layer
+  // envelope encryption is a future enhancement; until then operators
+  // MUST treat this column as sensitive and ensure at-rest encryption
+  // is enabled on the production database.
   oidcClientSecret String?
   // JIT-provisioning policy: when `true`, an unknown user from the IdP
   // is created on first login. When `false`, the login fails and an
