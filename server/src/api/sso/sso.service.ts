@@ -43,7 +43,12 @@ export type ResolvedIdp = SsoIdentityProvider & {
  * "this slug doesn't exist" from "SSO disabled" from "tier insufficient".
  *
  * Q7 enforcement: rejects if the institution's effective tier isn't
- * Enterprise (or if the SUPER_ADMIN dev-unlock is active).
+ * Enterprise. The effective tier comes from `resolveEffectiveTier`,
+ * which globally promotes every institution to Enterprise when the
+ * `DEV_UNLOCK_ALL_TIERS` env flag is set — useful for local SSO
+ * testing without provisioning an Enterprise subscription. There is
+ * no per-user / SUPER_ADMIN bypass here; the gate is institution-tier
+ * because the caller is anonymous on this code path.
  */
 export async function resolveSsoForFlow(institutionSlug: string): Promise<ResolvedIdp> {
   const institution = await prisma.institution.findUnique({
@@ -99,17 +104,20 @@ interface AssertedIdentity {
  * JIT-provision or link the User row for an asserted SSO identity, then
  * mint a session JWT.
  *
- * Three branches:
+ * Four branches:
  *   1. Unknown email + idp.jitProvisioning=true → create User with
  *      `defaultRole` and the institution from the IdP row.
  *   2. Unknown email + idp.jitProvisioning=false → 403, the institution
  *      requires pre-provisioning.
- *   3. Existing email → flip `passwordLoginDisabled` to true (Q3) and
- *      audit `auth.sso.account_linked` if it wasn't already disabled.
- *      We do NOT switch the user's `institutionId` even if it differs
- *      from the IdP's institution — that would silently move a user
- *      between tenants. The User stays on their original institution;
- *      audit-log mismatches and rely on a human review.
+ *   3. Existing email + DIFFERENT institutionId → REFUSED with 403 and
+ *      audit `auth.sso.cross_institution_blocked`. Cross-tenant
+ *      takeover prevention: an Enterprise admin who configures their
+ *      IdP to assert another institution's user email cannot link or
+ *      impersonate that user. Legitimate cross-institution moves
+ *      require admin action (delete or rename the source User row).
+ *   4. Existing email + SAME institutionId → flip `passwordLoginDisabled`
+ *      to true (Q3) and audit `auth.sso.account_linked` if it wasn't
+ *      already disabled.
  */
 export async function completeSsoSignIn(
   req: Request,
@@ -174,9 +182,41 @@ export async function completeSsoSignIn(
       },
     });
   } else {
-    // Q3 — existing account by email. Link this IdP identity by flipping
-    // `passwordLoginDisabled` to true (idempotent — if it was already
-    // true, no-op-but-still-mint-the-token). Audit only on the boundary.
+    // SECURITY: cross-institution rejection.
+    // The user lookup is by email (the only identifier the IdP gives
+    // us), but `User.email` is globally unique — so a malicious
+    // Enterprise admin who configures their IdP to assert a different
+    // institution's user email would otherwise let us link THAT
+    // user's account to THEIR IdP and mint a session JWT for them.
+    // Refuse outright when the asserted email belongs to a User in a
+    // different institution. The legitimate case (a user who genuinely
+    // moved institutions) is handled by an admin: hard-delete or
+    // rename the old User row first, then SSO from the new tenant.
+    if (existing.institutionId !== idp.institutionId) {
+      await audit(req, {
+        action: 'auth.sso.cross_institution_blocked',
+        entityType: 'User',
+        entityId: existing.id,
+        userId: null,
+        changes: {
+          email,
+          existingInstitutionId: existing.institutionId,
+          idpInstitutionId: idp.institutionId,
+          idpId: idp.id,
+          protocol: idp.protocol,
+        },
+      });
+      throw new AppError(
+        403,
+        'AUTHORIZATION_ERROR',
+        'This account belongs to a different institution.',
+      );
+    }
+
+    // Q3 — existing same-institution account by email. Link this IdP
+    // identity by flipping `passwordLoginDisabled` to true (idempotent
+    // — if it was already true, no-op-but-still-mint-the-token).
+    // Audit only on the boundary.
     if (!existing.passwordLoginDisabled) {
       await prisma.user.update({
         where: { id: existing.id },
@@ -192,10 +232,6 @@ export async function completeSsoSignIn(
           institutionId: existing.institutionId,
           idpId: idp.id,
           protocol: idp.protocol,
-          idpInstitutionId: idp.institutionId,
-          // Flag the cross-institution case for human review. We don't
-          // re-home the user; they stay on their original institution.
-          crossInstitution: existing.institutionId !== idp.institutionId,
         },
       });
     }

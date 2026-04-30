@@ -66,7 +66,6 @@ export async function buildOidcAuthorizeUrl(
     slug: institutionSlug,
     codeVerifier,
     nonce,
-    redirectUri,
   };
   await putFlowState(state, flow);
 

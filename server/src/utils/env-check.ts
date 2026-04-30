@@ -13,7 +13,8 @@ interface EnvVar {
 const ENV_VARS: EnvVar[] = [
   { name: 'DATABASE_URL',          required: true,  description: 'PostgreSQL connection string' },
   { name: 'JWT_SECRET',            required: true,  description: 'JWT signing secret (min 32 chars recommended)' },
-  { name: 'FRONTEND_URL',          required: false, description: 'Frontend origin for CORS (defaults to localhost:5173)' },
+  { name: 'FRONTEND_URL',          required: false, description: 'Browser-facing origin (CORS + SSO post-login redirect). REQUIRED in production — see prod-only check below.' },
+  { name: 'SP_BASE_URL',           required: false, description: 'API origin used for SAML ACS + OIDC callback URLs (Phase 10.10). REQUIRED in production — see prod-only check below.' },
   { name: 'ANTHROPIC_API_KEY',     required: false, description: 'Anthropic API key for AI chat feature' },
   { name: 'STRIPE_SECRET_KEY',     required: false, description: 'Stripe secret key for subscription billing' },
   { name: 'STRIPE_WEBHOOK_SECRET', required: false, description: 'Stripe webhook secret for payment event verification' },
@@ -80,6 +81,24 @@ export function checkEnvironment(): void {
         else warnings.push(msg);
       }
     }
+  }
+
+  // SSO requires both browser- and API-facing origins explicitly in
+  // production. Without them, sso-config.ts falls back to localhost
+  // dev defaults — which would mint SAML/OIDC callback URLs and a
+  // post-SSO redirect (carrying the session JWT) that point at
+  // origins the production user-agent can't reach. The runtime throw
+  // in sso-config is defence-in-depth; this is the loud-at-boot
+  // version so a misconfigured deploy never starts.
+  if (isProd && !process.env['FRONTEND_URL']) {
+    missing.push(
+      '  FRONTEND_URL is required in production. Without it the post-SSO redirect (which carries the session JWT) would 302 to localhost:5173 — leaking the token into an unintended browser context. Set to the public SPA origin (e.g. https://app.example.ac.uk).',
+    );
+  }
+  if (isProd && !process.env['SP_BASE_URL']) {
+    missing.push(
+      '  SP_BASE_URL is required in production. Without it the SAML ACS + OIDC callback URLs sent to IdPs would point at localhost:3002 — IdPs would redirect users to an unreachable origin and SSO would silently break. Set to the public API origin (e.g. https://api.example.ac.uk).',
+    );
   }
 
   // Shout if the pre-billing tier-unlock flag is set in production.

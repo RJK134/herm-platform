@@ -129,7 +129,20 @@ export class AuthService {
     // erodes the principle of giving credential probes a single
     // failure mode. The SSO discovery endpoint is the right place
     // for the client to learn this.
+    //
+    // Crucially we still engage lockout on a wrong password against
+    // a linked account, so an attacker can't burn unlimited bcrypt
+    // CPU on linked accounts and so the lockout-engaged side-channel
+    // matches non-linked behaviour. A correct password on a linked
+    // account is not counted as a failure (the password really is
+    // right; we just refuse to honour it through this endpoint).
     if (user.passwordLoginDisabled) {
+      if (!valid) {
+        const post = await recordFailure(data.email);
+        if (post.locked) {
+          throw new AccountLockedError(Math.ceil(post.retryAfterMs / 1000), true);
+        }
+      }
       throw new AppError(401, 'AUTHENTICATION_ERROR', 'Invalid email or password');
     }
 
