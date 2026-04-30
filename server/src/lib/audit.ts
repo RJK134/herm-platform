@@ -55,16 +55,27 @@ function ipFromReq(req: Request | undefined): string | null {
  * audit-failure to abort the action, write the row inside the same
  * transaction as the action (see procurement / evaluations services for
  * the transactional pattern).
+ *
+ * Phase 10.3: when the request carries an active impersonation session
+ * (`req.user.impersonator` set), the audit row records BOTH parties so a
+ * later review can attribute the action to the real support engineer
+ * who took it, not just to the customer they were impersonating. The
+ * impersonator's userId is merged into `changes.impersonator` so it
+ * surfaces in every existing AuditLog query without a schema migration.
  */
 export async function audit(req: Request | undefined, entry: AuditEntry): Promise<void> {
   try {
+    const impersonator = req?.user?.impersonator;
+    const changes = impersonator
+      ? { ...(entry.changes ?? {}), impersonator: { userId: impersonator.userId, email: impersonator.email } }
+      : entry.changes;
     await prisma.auditLog.create({
       data: {
         userId: entry.userId ?? null,
         action: entry.action,
         entityType: entry.entityType,
         entityId: entry.entityId ?? null,
-        changes: (entry.changes ?? null) as never,
+        changes: (changes ?? null) as never,
         ipAddress: ipFromReq(req),
       },
     });
