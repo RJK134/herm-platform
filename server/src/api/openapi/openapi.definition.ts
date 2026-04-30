@@ -245,8 +245,74 @@ export const openApiSpec = {
         summary: 'Readiness probe — DB + critical dependencies.',
         security: [],
         responses: {
-          '200': { description: 'Ready.', content: { 'application/json': { schema: { $ref: '#/components/schemas/ReadinessStatus' } } } },
-          '503': { description: 'One or more critical dependencies are failing.', content: { 'application/json': { schema: { $ref: '#/components/schemas/ReadinessStatus' } } } },
+          '200': {
+            description: 'Ready.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['success', 'data'],
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: {
+                      type: 'object',
+                      additionalProperties: false,
+                      required: ['status', 'checks', 'timestamp'],
+                      properties: {
+                        status: { type: 'string', enum: ['ready', 'not_ready'] },
+                        checks: {
+                          type: 'object',
+                          additionalProperties: false,
+                          required: ['database', 'db'],
+                          properties: {
+                            database: { type: 'boolean' },
+                            db: { type: 'boolean' },
+                            stripe: { type: 'boolean' },
+                          },
+                        },
+                        timestamp: { type: 'string', format: 'date-time' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          '503': {
+            description: 'One or more critical dependencies are failing.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['success', 'data'],
+                  properties: {
+                    success: { type: 'boolean' },
+                    data: {
+                      type: 'object',
+                      additionalProperties: false,
+                      required: ['status', 'checks', 'timestamp'],
+                      properties: {
+                        status: { type: 'string', enum: ['ready', 'not_ready'] },
+                        checks: {
+                          type: 'object',
+                          additionalProperties: false,
+                          required: ['database', 'db'],
+                          properties: {
+                            database: { type: 'boolean' },
+                            db: { type: 'boolean' },
+                            stripe: { type: 'boolean' },
+                          },
+                        },
+                        timestamp: { type: 'string', format: 'date-time' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       },
     },
