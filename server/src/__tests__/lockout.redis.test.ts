@@ -22,6 +22,10 @@ const redisMock = vi.hoisted(() => ({
   zcard: vi.fn(),
   set: vi.fn(),
   del: vi.fn(),
+  // Redis TIME — returns [seconds, microseconds] as decimal strings.
+  // Default to a fixed point so window arithmetic is deterministic;
+  // individual tests can override.
+  time: vi.fn(),
 }));
 
 vi.mock('../lib/redis', () => ({
@@ -46,6 +50,10 @@ beforeEach(() => {
   redisMock.zcard.mockReset();
   redisMock.set.mockReset();
   redisMock.del.mockReset().mockResolvedValue(1);
+  // Redis TIME default: a fixed timestamp so prune-cutoff arithmetic
+  // is deterministic across tests. Tests that need a specific clock
+  // override with `mockResolvedValueOnce`.
+  redisMock.time.mockReset().mockResolvedValue(['1700000000', '0']);
 });
 
 describe('lockout — redis backend dispatch', () => {
@@ -141,6 +149,47 @@ describe('lockout — redis backend dispatch', () => {
     await clearFailures(email);
 
     expect(redisMock.del).toHaveBeenCalledWith(fk, lk);
+  });
+
+  it('ZADD member is unique per call so same-ms concurrent failures do NOT dedupe', async () => {
+    // Bugbot/Copilot-flagged regression: if member == score == ms timestamp,
+    // two failures landing in the same millisecond would silently overwrite
+    // each other (sorted-set members are deduplicated), undercounting
+    // attempts and delaying lockout. Pin the contract: ZADD must be called
+    // with a unique member each time, even when the score is identical.
+    redisMock.pttl.mockResolvedValue(-2);
+    redisMock.zcard.mockResolvedValue(1);
+    // Pin Redis TIME to the same ms across both calls — this is the
+    // concurrent-burst case the regression test is about.
+    redisMock.time.mockResolvedValue(['1700000000', '500000']);
+
+    await recordFailure(email);
+    await recordFailure(email);
+
+    // Both calls used the same score (1700000000500 ms) but the members
+    // must differ.
+    const calls = redisMock.zadd.mock.calls;
+    expect(calls).toHaveLength(2);
+    const [, scoreA, memberA] = calls[0]!;
+    const [, scoreB, memberB] = calls[1]!;
+    expect(scoreA).toBe(scoreB);
+    expect(memberA).not.toBe(memberB);
+  });
+
+  it('uses Redis TIME (not Date.now) for window arithmetic', async () => {
+    // Pin: the implementation must consult Redis server time so multi-pod
+    // deployments don't disagree on "now". The whole point of moving off
+    // the in-process Map is multi-instance correctness.
+    redisMock.pttl.mockResolvedValueOnce(-2);
+    redisMock.zcard.mockResolvedValueOnce(0);
+    redisMock.time.mockResolvedValueOnce(['1700000123', '456000']);
+
+    await checkLockout(email);
+
+    expect(redisMock.time).toHaveBeenCalled();
+    // Prune cutoff = (1700000123*1000 + 456) - WINDOW_MS
+    const expectedCutoff = 1700000123 * 1000 + 456 - LOCKOUT_CONFIG.WINDOW_MS;
+    expect(redisMock.zremrangebyscore).toHaveBeenCalledWith(fk, 0, expectedCutoff);
   });
 
   it('email key is case-insensitive + trim-normalised in Redis paths too', async () => {

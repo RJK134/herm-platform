@@ -32,6 +32,7 @@
  * tests use a mocked client and assert on observed Redis commands
  * instead.
  */
+import { randomBytes } from 'node:crypto';
 import type { Redis } from 'ioredis';
 import { logger } from './logger';
 import { AppError } from '../utils/errors';
@@ -182,6 +183,36 @@ function lockKey(email: string): string {
   return `${REDIS_KEY_PREFIX}:lock:${key(email)}`;
 }
 
+/**
+ * Read Redis's wall clock (TIME command). Used in place of `Date.now()`
+ * for sliding-window arithmetic so multi-pod deployments can't disagree
+ * on what "now" is — which is the entire reason for migrating off the
+ * in-process Map. Each operation snapshots once at entry and reuses it
+ * for prune-cutoff and ZADD score so there is no intra-call drift.
+ *
+ * Cost: one extra round trip per public call. Cheap on a local-network
+ * Redis; well under the p99 budget the platform cares about.
+ */
+async function redisNow(client: Redis): Promise<number> {
+  const reply = await client.time();
+  // ioredis returns [seconds, microseconds] as strings.
+  const seconds = Number(reply[0]);
+  const micros = Number(reply[1]);
+  return seconds * 1000 + Math.floor(micros / 1000);
+}
+
+/**
+ * Build a unique ZSET member for the failure record. Sorted-set members
+ * must be unique: if two failures land in the same millisecond and we
+ * use just `t.toString()` as the member, ZADD overwrites the first
+ * record instead of incrementing cardinality, undercounting attempts
+ * and delaying lockout. The score stays as the integer timestamp so
+ * `zremrangebyscore` window pruning is unaffected.
+ */
+function uniqueAttemptMember(t: number): string {
+  return `${t}-${randomBytes(4).toString('hex')}`;
+}
+
 async function checkLockoutRedis(client: Redis, email: string): Promise<LockoutState> {
   const fk = failKey(email);
   const lk = lockKey(email);
@@ -192,7 +223,7 @@ async function checkLockoutRedis(client: Redis, email: string): Promise<LockoutS
   }
 
   // Prune attempts older than the sliding window before counting.
-  const t = Date.now();
+  const t = await redisNow(client);
   await client.zremrangebyscore(fk, 0, t - WINDOW_MS);
   const count = await client.zcard(fk);
   return {
@@ -214,13 +245,21 @@ async function recordFailureRedis(client: Redis, email: string): Promise<Lockout
     return { locked: true, retryAfterMs: lockTtlMs, attemptsRemaining: 0 };
   }
 
-  const t = Date.now();
+  const t = await redisNow(client);
   // Append this failure, refresh the window TTL, and prune in one round
   // trip per command. We don't pipeline because ioredis's PIPELINE
   // semantics complicate error-handling — and these are 4 cheap commands
   // against a local-network Redis, well under any p99 budget the platform
   // cares about.
-  await client.zadd(fk, t, t.toString());
+  //
+  // Score = millisecond timestamp (used by zremrangebyscore to prune by
+  // age). Member = `<score>-<random hex>` so two failures at the same
+  // millisecond don't collide and silently overwrite — sorted-set
+  // members are deduplicated, so reusing the timestamp as both fields
+  // would let an attacker spamming concurrent requests stay under the
+  // counter. Any unique-per-call suffix works; 4 random bytes is
+  // overkill but cheap.
+  await client.zadd(fk, t, uniqueAttemptMember(t));
   await client.pexpire(fk, WINDOW_MS);
   await client.zremrangebyscore(fk, 0, t - WINDOW_MS);
   const count = await client.zcard(fk);
