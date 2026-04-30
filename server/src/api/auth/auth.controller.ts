@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { AuthService } from './auth.service';
+import { AccountLockedError } from '../../lib/lockout';
 import { registerSchema, loginSchema, updateProfileSchema } from './auth.schema';
 import { audit } from '../../lib/audit';
 import { AppError } from '../../utils/errors';
@@ -47,7 +48,26 @@ export const login = async (
       // Failed-login attempts must be logged so a security review can
       // reconstruct credential-stuffing or account-targeting attacks. We
       // intentionally don't log the password — only the email tried.
-      if (loginErr instanceof AppError && loginErr.statusCode === 401) {
+      if (loginErr instanceof AccountLockedError) {
+        // Do not emit `auth.lockout.engaged` here because this controller
+        // cannot distinguish a newly engaged lockout from an attempt made
+        // while the account is already locked. Record it as a failed login
+        // with lockout context instead, so audit trails remain accurate
+        // without inflating lockout-engaged counts.
+        await audit(req, {
+          action: 'auth.login.fail',
+          entityType: 'User',
+          changes: {
+            emailTried: data.email.toLowerCase(),
+            locked: true,
+            retryAfterSeconds: loginErr.retryAfterSeconds,
+          },
+        });
+        // RFC-7231 Retry-After header so clients (and humans reading
+        // network panels) know when to try again without parsing the
+        // body.
+        res.setHeader('Retry-After', String(loginErr.retryAfterSeconds));
+      } else if (loginErr instanceof AppError && loginErr.statusCode === 401) {
         await audit(req, {
           action: 'auth.login.fail',
           entityType: 'User',
