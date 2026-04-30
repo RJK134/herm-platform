@@ -49,12 +49,19 @@ export const login = async (
       // reconstruct credential-stuffing or account-targeting attacks. We
       // intentionally don't log the password — only the email tried.
       if (loginErr instanceof AccountLockedError) {
-        // Distinct audit event so dashboards can count lockouts as a
-        // signal independent of plain failed attempts.
+        // Do not emit `auth.lockout.engaged` here because this controller
+        // cannot distinguish a newly engaged lockout from an attempt made
+        // while the account is already locked. Record it as a failed login
+        // with lockout context instead, so audit trails remain accurate
+        // without inflating lockout-engaged counts.
         await audit(req, {
-          action: 'auth.lockout.engaged',
+          action: 'auth.login.fail',
           entityType: 'User',
-          changes: { emailTried: data.email.toLowerCase(), retryAfterSeconds: loginErr.retryAfterSeconds },
+          changes: {
+            emailTried: data.email.toLowerCase(),
+            locked: true,
+            retryAfterSeconds: loginErr.retryAfterSeconds,
+          },
         });
         // RFC-7231 Retry-After header so clients (and humans reading
         // network panels) know when to try again without parsing the
