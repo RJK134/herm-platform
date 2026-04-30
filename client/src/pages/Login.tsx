@@ -1,9 +1,17 @@
 import type { FormEvent } from 'react';
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { LogIn, Eye, EyeOff, AlertCircle, ShieldCheck } from 'lucide-react';
+import { LogIn, Eye, EyeOff, AlertCircle, ShieldCheck, Building2 } from 'lucide-react';
+import axios from 'axios';
 import { useAuth } from '../hooks/useAuth';
 import { PRODUCT } from '../lib/branding';
+
+interface SsoDiscovery {
+  institutionSlug: string;
+  protocol: 'SAML' | 'OIDC';
+  displayName: string;
+  loginUrl: string;
+}
 
 /**
  * Returns the path if it's a safe same-origin route, otherwise null.
@@ -36,16 +44,47 @@ export function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    new URLSearchParams(location.search).get('error') === 'sso_failed'
+      ? "Single sign-on didn't complete. Try again or use email and password."
+      : null,
+  );
   // Phase 10.8 — MFA challenge state. Non-null when the password step
   // returned a `requiresMfa` envelope; the second form is rendered until
   // the user submits a TOTP code or hits Cancel.
   const [challengeToken, setChallengeToken] = useState<string | null>(null);
   const [mfaCode, setMfaCode] = useState('');
+  // Phase 10.10 — SSO discovery state. Populated when the user blurs an
+  // email whose domain has an SSO IdP enabled. Renders a "Sign in with X"
+  // button above the password form; the button hits the IdP via the
+  // backend /login redirect.
+  const [ssoOption, setSsoOption] = useState<SsoDiscovery | null>(null);
 
   function extractAxiosMessage(err: unknown): string | null {
     return (err as { response?: { data?: { error?: { message?: string } } } })
       ?.response?.data?.error?.message ?? null;
+  }
+
+  async function checkSsoForEmail(value: string) {
+    if (!value.includes('@')) {
+      setSsoOption(null);
+      return;
+    }
+    try {
+      const { data } = await axios.get<{ success: boolean; data: SsoDiscovery }>(
+        '/api/sso/discover',
+        { params: { email: value } },
+      );
+      if (data.success && data.data) {
+        setSsoOption(data.data);
+      } else {
+        setSsoOption(null);
+      }
+    } catch {
+      // 404 (no SSO for this domain) is the common case — silently
+      // fall through to the password form.
+      setSsoOption(null);
+    }
   }
 
   const handleSubmit = async (e: FormEvent) => {
@@ -183,10 +222,26 @@ export function Login() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                onBlur={(e) => checkSsoForEmail(e.target.value)}
                 className="w-full px-3.5 py-2.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
                 placeholder="you@university.ac.uk"
               />
             </div>
+
+            {ssoOption && (
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-2">
+                <a
+                  href={ssoOption.loginUrl}
+                  className="flex w-full items-center justify-center gap-2 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
+                  <Building2 className="w-4 h-4" aria-hidden="true" />
+                  {ssoOption.displayName}
+                </a>
+                <p className="text-center text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  Or sign in below with your password.
+                </p>
+              </div>
+            )}
 
             <div>
               <label
