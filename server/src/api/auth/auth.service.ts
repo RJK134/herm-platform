@@ -9,6 +9,7 @@ import { checkLockout, recordFailure, clearFailures, AccountLockedError } from '
 // Running bcrypt.compare against this dummy hash ensures the response time for
 // non-existent emails matches the time for existing emails with a wrong password,
 // preventing an attacker from enumerating valid addresses by measuring latency.
+// This is a bcrypt hash of the string "dummy-password-placeholder" at cost 10.
 const DUMMY_HASH = '$2a$10$HMZm49nwfBLvO2Omv16KtuM8SGCKi5p.9aY6icgaOFJ5rFeJKQFRS';
 
 function buildSlug(name: string): string {
