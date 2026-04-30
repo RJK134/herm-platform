@@ -34,6 +34,7 @@ import keysRouter from './api/keys/keys.router';
 import frameworksRouter from './api/frameworks/frameworks.router';
 import frameworkMappingsRouter from './api/framework-mappings/framework-mappings.router';
 import openApiRouter from './api/openapi/openapi.router';
+import ssoRouter from './api/sso/sso.router';
 import { frameworkContext } from './middleware/framework-context';
 import { tierGate } from './middleware/tier-gate';
 import { optionalJWT } from './middleware/auth';
@@ -71,9 +72,13 @@ export function createApp(): Express {
   // Per-route auth (`authenticateJWT`) still runs further down the chain
   // and re-validates the JWT — these app-level decoders just establish
   // the rate-limit context.
-  app.use('/api', apiKeyAuth);
-  app.use('/api', optionalJWT);
-  app.use('/api', apiRateLimiter);
+  // Applied to both /api and /api/v1 so the alias shares the same
+  // auth-context and rate-limit enforcement.
+  for (const base of ['/api', '/api/v1'] as const) {
+    app.use(base, apiKeyAuth);
+    app.use(base, optionalJWT);
+    app.use(base, apiRateLimiter);
+  }
 
   // Mount every public route under both `/api` (legacy alias) and
   // `/api/v1` (versioned base). Future breaking changes ship as
@@ -125,6 +130,11 @@ export function createApp(): Express {
     app.use(`${base}/frameworks`, frameworksRouter);
     app.use(`${base}/framework-mappings`, frameworkMappingsRouter);
   }
+
+  // Phase 10.7 — SSO discovery (scaffold). Anonymous endpoint that
+  // tells the frontend whether SSO is available for an institution.
+  // The actual SAML/OIDC login flows ship in a follow-up PR.
+  app.use('/api/sso', ssoRouter);
 
   app.use((req, res) => {
     res.status(404).json({
