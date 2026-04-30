@@ -15,6 +15,8 @@ const ENV_VARS: EnvVar[] = [
   { name: 'JWT_SECRET',            required: true,  description: 'JWT signing secret (min 32 chars recommended)' },
   { name: 'FRONTEND_URL',          required: false, description: 'Browser-facing origin (CORS + SSO post-login redirect). REQUIRED in production — see prod-only check below.' },
   { name: 'SP_BASE_URL',           required: false, description: 'API origin used for SAML ACS + OIDC callback URLs (Phase 10.10). REQUIRED in production — see prod-only check below.' },
+  { name: 'SP_SIGNING_KEY',        required: false, description: 'PEM private key for signing SAML AuthnRequests + SP metadata (Phase 11.3). Pair with SP_SIGNING_CERT; set both or neither. Required for UKAMF federation enrolment.' },
+  { name: 'SP_SIGNING_CERT',       required: false, description: 'PEM X.509 certificate matching SP_SIGNING_KEY. Required for UKAMF federation enrolment.' },
   { name: 'SSO_SECRET_KEY',        required: false, description: 'Master key (32 bytes; 64 hex chars or base64) used to envelope-encrypt SsoIdentityProvider.samlCert + .oidcClientSecret at rest. Required when SSO is in use; warned-on in production when missing.' },
   { name: 'ANTHROPIC_API_KEY',     required: false, description: 'Anthropic API key for AI chat feature' },
   { name: 'STRIPE_SECRET_KEY',     required: false, description: 'Stripe secret key for subscription billing' },
@@ -99,6 +101,18 @@ export function checkEnvironment(): void {
   if (isProd && !process.env['SP_BASE_URL']) {
     missing.push(
       '  SP_BASE_URL is required in production. Without it the SAML ACS + OIDC callback URLs sent to IdPs would point at localhost:3002 — IdPs would redirect users to an unreachable origin and SSO would silently break. Set to the public API origin (e.g. https://api.example.ac.uk).',
+    );
+  }
+
+  // SP signing keypair (Phase 11.3) — half-configured is always fatal
+  // (dev or prod). Setting only one of the two would silently revert
+  // to the unsigned path with a misleading config; either turn on
+  // signing fully or leave both unset.
+  const hasSpKey = !!process.env['SP_SIGNING_KEY'];
+  const hasSpCert = !!process.env['SP_SIGNING_CERT'];
+  if (hasSpKey !== hasSpCert) {
+    missing.push(
+      `  SP_SIGNING_KEY and SP_SIGNING_CERT must be set together. Got SP_SIGNING_KEY=${hasSpKey ? 'set' : 'unset'}, SP_SIGNING_CERT=${hasSpCert ? 'set' : 'unset'}. Either configure the full SP keypair (UKAMF-compliant) or remove both vars (legacy unsigned).`,
     );
   }
 

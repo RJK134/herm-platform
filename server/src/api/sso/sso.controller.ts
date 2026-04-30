@@ -51,6 +51,7 @@ import {
   type TenantOidcConfig,
 } from './oidc';
 import { resolveSsoForFlow, completeSsoSignIn } from './sso.service';
+import { getSpSigningMaterial } from '../../lib/sp-signing';
 
 // ── Discovery ──────────────────────────────────────────────────────────────
 
@@ -156,9 +157,10 @@ export const discoverByEmail = async (req: Request, res: Response, next: NextFun
 
 /**
  * Static SAML SP metadata. UKAMF-compliant federation registration
- * normally requires a SIGNED metadata document; v1 ships unsigned —
- * sufficient for IdPs that accept it during dev/staging. Tracked in
- * the SSO ADR's open questions.
+ * requires a SIGNED metadata document; the metadata is signed when the
+ * SP keypair is configured via `SP_SIGNING_KEY` + `SP_SIGNING_CERT`
+ * (Phase 11.3). When the keypair is not set the document goes out
+ * unsigned (legacy default — sufficient for dev / permissive IdPs).
  *
  * One document per deployment; the SP entityID and ACS URL come from
  * env. ACS URL contains a `:institutionSlug` placeholder so the IdP
@@ -167,9 +169,17 @@ export const discoverByEmail = async (req: Request, res: Response, next: NextFun
  */
 export const spMetadata = (_req: Request, res: Response, next: NextFunction): void => {
   try {
+    const signing = getSpSigningMaterial();
     const xml = generateServiceProviderMetadata({
       issuer: getSpEntityId(),
       callbackUrl: getSamlAcsUrl(':institutionSlug'),
+      ...(signing
+        ? {
+            privateKey: signing.privateKey,
+            publicCerts: [signing.publicCert],
+            signMetadata: true,
+          }
+        : {}),
     });
     res.type('application/xml').send(xml);
   } catch (err) {
