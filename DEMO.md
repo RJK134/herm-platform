@@ -178,7 +178,11 @@ These are **deliberately deferred** — call them out if asked, do not paper ove
   INSTITUTION_ADMIN page at `/admin/sso` for creating, editing, and
   deleting the institution's IdP row (SAML or OIDC). Secret fields use
   "stored — leave blank to keep" semantics; writes go through the
-  envelope-encryption helper from Phase 11.2. (Closed.)
+  envelope-encryption helper from Phase 11.2. Phase 11.8 adds a
+  SUPER_ADMIN cross-institution panel at `/admin/sso/all` and a
+  per-institution deep-link at `/admin/sso/institutions/:id` so a
+  SUPER_ADMIN can administer any tenant without impersonating first.
+  (Closed.)
 - **No live IdP integration tests** — `node-saml` and `openid-client` are
   mocked in the test suite. End-to-end against `saml-test-idp` /
   `oauth2-mock-server` is a deferred follow-up.

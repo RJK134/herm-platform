@@ -11,8 +11,12 @@ const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
     ssoIdentityProvider: {
       findUnique: vi.fn(),
+      findMany: vi.fn(),
       upsert: vi.fn(),
       delete: vi.fn(),
+    },
+    institution: {
+      findUnique: vi.fn(),
     },
     auditLog: { create: vi.fn(async () => ({})) },
   },
@@ -237,5 +241,169 @@ describe('DELETE /api/admin/sso/me', () => {
     const [createCall] = prismaMock.auditLog.create.mock.calls;
     const auditData = (createCall as unknown as [{ data: { action: string } }])[0].data;
     expect(auditData.action).toBe('admin.sso.delete');
+  });
+});
+
+
+// ── Phase 11.8 — SUPER_ADMIN cross-institution panel ───────────────────────
+
+describe('GET /api/admin/sso/all', () => {
+  it('rejects INSTITUTION_ADMIN with 403 (SUPER_ADMIN-only)', async () => {
+    const res = await request(buildApp())
+      .get('/api/admin/sso/all')
+      .set('Authorization', `Bearer ${makeToken({ role: 'INSTITUTION_ADMIN' })}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('returns every IdP with institution name + slug for SUPER_ADMIN', async () => {
+    prismaMock.ssoIdentityProvider.findMany.mockResolvedValue([
+      {
+        ...baseRow,
+        institution: { name: 'University One', slug: 'uni-1' },
+      },
+      {
+        ...baseRow,
+        id: 'idp-2',
+        institutionId: 'inst-2',
+        institution: { name: 'College Two', slug: 'college-two' },
+      },
+    ]);
+    const res = await request(buildApp())
+      .get('/api/admin/sso/all')
+      .set('Authorization', `Bearer ${makeToken({ role: 'SUPER_ADMIN' })}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(2);
+    expect(res.body.data[0].institutionName).toBe('University One');
+    expect(res.body.data[1].institutionSlug).toBe('college-two');
+    // Sensitive fields still suppressed in the list shape.
+    expect(res.body.data[0].oidcClientSecret).toBeUndefined();
+    expect(res.body.data[0].samlCert).toBeUndefined();
+  });
+});
+
+describe('GET /api/admin/sso/institutions/:id', () => {
+  it('rejects INSTITUTION_ADMIN with 403', async () => {
+    const res = await request(buildApp())
+      .get('/api/admin/sso/institutions/inst-2')
+      .set('Authorization', `Bearer ${makeToken({ role: 'INSTITUTION_ADMIN' })}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('returns null when the IdP row does not exist', async () => {
+    prismaMock.ssoIdentityProvider.findUnique.mockResolvedValue(null);
+    const res = await request(buildApp())
+      .get('/api/admin/sso/institutions/inst-empty')
+      .set('Authorization', `Bearer ${makeToken({ role: 'SUPER_ADMIN' })}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, data: null });
+  });
+
+  it('returns the IdP with institution metadata when it exists', async () => {
+    prismaMock.ssoIdentityProvider.findUnique.mockResolvedValue({
+      ...baseRow,
+      institution: { name: 'College Two', slug: 'college-two' },
+    });
+    const res = await request(buildApp())
+      .get('/api/admin/sso/institutions/inst-1')
+      .set('Authorization', `Bearer ${makeToken({ role: 'SUPER_ADMIN' })}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.institutionName).toBe('College Two');
+    expect(res.body.data.hasOidcClientSecret).toBe(true);
+    expect(res.body.data.oidcClientSecret).toBeUndefined();
+  });
+});
+
+describe('PUT /api/admin/sso/institutions/:id', () => {
+  it('rejects INSTITUTION_ADMIN with 403', async () => {
+    const res = await request(buildApp())
+      .put('/api/admin/sso/institutions/inst-2')
+      .set('Authorization', `Bearer ${makeToken({ role: 'INSTITUTION_ADMIN' })}`)
+      .send({ enabled: true });
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 404 when the institution does not exist (no orphan rows)', async () => {
+    prismaMock.institution.findUnique.mockResolvedValue(null);
+    const res = await request(buildApp())
+      .put('/api/admin/sso/institutions/inst-typo')
+      .set('Authorization', `Bearer ${makeToken({ role: 'SUPER_ADMIN' })}`)
+      .send({
+        protocol: 'OIDC',
+        displayName: 'X',
+      });
+    expect(res.status).toBe(404);
+    expect(prismaMock.ssoIdentityProvider.upsert).not.toHaveBeenCalled();
+  });
+
+  it('upserts an IdP for any institution as SUPER_ADMIN and audits', async () => {
+    const originalKey = process.env['SSO_SECRET_KEY'];
+    process.env['SSO_SECRET_KEY'] = '42'.repeat(32);
+    const { _resetCipherKeyCache } = await import('../../lib/secret-cipher');
+    _resetCipherKeyCache();
+    try {
+      prismaMock.institution.findUnique.mockResolvedValue({
+        id: 'inst-2',
+        name: 'College Two',
+      });
+      prismaMock.ssoIdentityProvider.findUnique.mockResolvedValue(null);
+      prismaMock.ssoIdentityProvider.upsert.mockResolvedValue({
+        ...baseRow,
+        institutionId: 'inst-2',
+        enabled: true,
+      });
+      const res = await request(buildApp())
+        .put('/api/admin/sso/institutions/inst-2')
+        .set('Authorization', `Bearer ${makeToken({ role: 'SUPER_ADMIN' })}`)
+        .send({
+          protocol: 'OIDC',
+          displayName: 'Sign in with Azure',
+          enabled: true,
+          oidcIssuer: 'https://login.microsoftonline.com/tenant-2',
+          oidcClientId: 'client-2',
+          oidcClientSecret: 'super-secret-2',
+        });
+      expect(res.status).toBe(200);
+      // Upsert was scoped to the path institutionId, not the caller's.
+      const upsertArgs = prismaMock.ssoIdentityProvider.upsert.mock.calls[0]?.[0] as
+        | { where: { institutionId: string }; create: Record<string, unknown> }
+        | undefined;
+      expect(upsertArgs?.where.institutionId).toBe('inst-2');
+      expect(upsertArgs?.create.institutionId).toBe('inst-2');
+      const [createCall] = prismaMock.auditLog.create.mock.calls;
+      const auditData = (createCall as unknown as [{ data: { action: string; changes: { institutionId: string } } }])[0].data;
+      expect(auditData.action).toBe('admin.sso.create');
+      expect(auditData.changes.institutionId).toBe('inst-2');
+    } finally {
+      if (originalKey === undefined) delete process.env['SSO_SECRET_KEY'];
+      else process.env['SSO_SECRET_KEY'] = originalKey;
+      _resetCipherKeyCache();
+    }
+  });
+});
+
+describe('DELETE /api/admin/sso/institutions/:id', () => {
+  it('rejects INSTITUTION_ADMIN with 403', async () => {
+    const res = await request(buildApp())
+      .delete('/api/admin/sso/institutions/inst-2')
+      .set('Authorization', `Bearer ${makeToken({ role: 'INSTITUTION_ADMIN' })}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('deletes another institution\'s IdP as SUPER_ADMIN', async () => {
+    prismaMock.ssoIdentityProvider.findUnique.mockResolvedValue({
+      ...baseRow,
+      institutionId: 'inst-2',
+    });
+    prismaMock.ssoIdentityProvider.delete.mockResolvedValue({
+      ...baseRow,
+      institutionId: 'inst-2',
+    });
+    const res = await request(buildApp())
+      .delete('/api/admin/sso/institutions/inst-2')
+      .set('Authorization', `Bearer ${makeToken({ role: 'SUPER_ADMIN' })}`);
+    expect(res.status).toBe(204);
+    expect(prismaMock.ssoIdentityProvider.delete).toHaveBeenCalledWith({
+      where: { institutionId: 'inst-2' },
+    });
   });
 });

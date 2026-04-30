@@ -8,7 +8,15 @@ import {
   reviewSubmission,
 } from './admin-vendors.controller';
 import { startImpersonation, endImpersonation } from './impersonation.controller';
-import { readMe as readSsoMe, upsertMe as upsertSsoMe, deleteMe as deleteSsoMe } from './admin-sso.controller';
+import {
+  readMe as readSsoMe,
+  upsertMe as upsertSsoMe,
+  deleteMe as deleteSsoMe,
+  readAll as readSsoAll,
+  readByInstitution as readSsoByInstitution,
+  upsertByInstitution as upsertSsoByInstitution,
+  deleteByInstitution as deleteSsoByInstitution,
+} from './admin-sso.controller';
 
 const router = Router();
 
@@ -39,5 +47,14 @@ router.patch('/submissions/:id', reviewSubmission);
 router.get('/sso/me', readSsoMe);
 router.put('/sso/me', upsertSsoMe);
 router.delete('/sso/me', deleteSsoMe);
+
+// Phase 11.8 — SUPER_ADMIN cross-institution panel. Each handler
+// re-checks `req.user.role === 'SUPER_ADMIN'` itself; the
+// INSTITUTION_ADMIN guard at the top of this router is a necessary
+// but-not-sufficient gate for these specific routes.
+router.get('/sso/all', readSsoAll);
+router.get('/sso/institutions/:institutionId', readSsoByInstitution);
+router.put('/sso/institutions/:institutionId', upsertSsoByInstitution);
+router.delete('/sso/institutions/:institutionId', deleteSsoByInstitution);
 
 export default router;

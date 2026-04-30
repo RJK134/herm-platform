@@ -139,6 +139,114 @@ function callerInstitutionId(req: Request): string {
   return user.institutionId;
 }
 
+function requireSuperAdmin(req: Request): void {
+  if (req.user?.role !== 'SUPER_ADMIN') {
+    throw new AppError(403, 'AUTHORIZATION_ERROR', 'SUPER_ADMIN role required');
+  }
+}
+
+/**
+ * Shared upsert path used by both the institution-scoped (`/me`) and
+ * the SUPER_ADMIN cross-institution (`/institutions/:institutionId`)
+ * endpoints. The only thing the two callers disagree on is which
+ * institutionId to write to; everything else (validation,
+ * keep-or-replace secret semantics, encrypt-at-rest, audit shape) is
+ * identical.
+ */
+async function upsertForInstitution(
+  req: Request,
+  institutionId: string,
+  rawInput: unknown,
+): Promise<IdpReadShape> {
+  const parsed = upsertSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    throw new AppError(
+      400,
+      'VALIDATION_ERROR',
+      parsed.error.errors[0]?.message ?? 'Invalid payload',
+    );
+  }
+  const input = parsed.data;
+  const existing = await prisma.ssoIdentityProvider.findUnique({ where: { institutionId } });
+
+  if (!existing) {
+    if (!input.protocol || !input.displayName) {
+      throw new AppError(
+        400,
+        'VALIDATION_ERROR',
+        'protocol and displayName are required when creating an SSO IdP row.',
+      );
+    }
+  }
+
+  function keepOrReplace<K extends 'samlCert' | 'oidcClientSecret'>(
+    key: K,
+  ): { update: { [P in K]?: string | null }; create: string | null } {
+    const v = input[key];
+    if (v === undefined) return { update: {}, create: null };
+    if (v === null || v === '') return { update: { [key]: null } as never, create: null };
+    return { update: { [key]: v } as never, create: v };
+  }
+
+  const samlCertOp = keepOrReplace('samlCert');
+  const oidcSecretOp = keepOrReplace('oidcClientSecret');
+
+  const encUpdate = encryptIdpSecretsForWrite({
+    ...samlCertOp.update,
+    ...oidcSecretOp.update,
+  });
+  const encCreate = encryptIdpSecretsForWrite({
+    samlCert: samlCertOp.create,
+    oidcClientSecret: oidcSecretOp.create,
+  });
+
+  const row = await prisma.ssoIdentityProvider.upsert({
+    where: { institutionId },
+    update: {
+      ...(input.protocol !== undefined && { protocol: input.protocol }),
+      ...(input.displayName !== undefined && { displayName: input.displayName }),
+      ...(input.enabled !== undefined && { enabled: input.enabled }),
+      ...(input.jitProvisioning !== undefined && { jitProvisioning: input.jitProvisioning }),
+      ...(input.defaultRole !== undefined && { defaultRole: input.defaultRole }),
+      ...(input.samlEntityId !== undefined && { samlEntityId: input.samlEntityId }),
+      ...(input.samlSsoUrl !== undefined && { samlSsoUrl: input.samlSsoUrl }),
+      ...(input.oidcIssuer !== undefined && { oidcIssuer: input.oidcIssuer }),
+      ...(input.oidcClientId !== undefined && { oidcClientId: input.oidcClientId }),
+      ...encUpdate,
+    },
+    create: {
+      institutionId,
+      protocol: input.protocol!,
+      displayName: input.displayName!,
+      enabled: input.enabled ?? false,
+      jitProvisioning: input.jitProvisioning ?? true,
+      defaultRole: input.defaultRole ?? 'VIEWER',
+      samlEntityId: input.samlEntityId ?? null,
+      samlSsoUrl: input.samlSsoUrl ?? null,
+      oidcIssuer: input.oidcIssuer ?? null,
+      oidcClientId: input.oidcClientId ?? null,
+      samlCert: encCreate.samlCert ?? null,
+      oidcClientSecret: encCreate.oidcClientSecret ?? null,
+    },
+  });
+
+  await audit(req, {
+    action: existing ? 'admin.sso.update' : 'admin.sso.create',
+    entityType: 'SsoIdentityProvider',
+    entityId: row.id,
+    changes: {
+      institutionId,
+      protocol: row.protocol,
+      enabled: row.enabled,
+      jitProvisioning: row.jitProvisioning,
+      samlCertTouched: input.samlCert !== undefined,
+      oidcClientSecretTouched: input.oidcClientSecret !== undefined,
+    },
+  });
+
+  return toReadShape(row);
+}
+
 // ── GET /api/admin/sso/me ──────────────────────────────────────────────────
 
 export const readMe = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -160,102 +268,8 @@ export const readMe = async (req: Request, res: Response, next: NextFunction): P
 export const upsertMe = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const institutionId = callerInstitutionId(req);
-    const parsed = upsertSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new AppError(
-        400,
-        'VALIDATION_ERROR',
-        parsed.error.errors[0]?.message ?? 'Invalid payload',
-      );
-    }
-    const input = parsed.data;
-    const existing = await prisma.ssoIdentityProvider.findUnique({ where: { institutionId } });
-
-    // First-create requires protocol + displayName so the row is
-    // never persisted in a half-state. Updates leave them optional.
-    if (!existing) {
-      if (!input.protocol || !input.displayName) {
-        throw new AppError(
-          400,
-          'VALIDATION_ERROR',
-          'protocol and displayName are required when creating an SSO IdP row.',
-        );
-      }
-    }
-
-    // "Keep existing secret" semantics: an undefined / empty-string
-    // value means "leave the column alone". Explicit null clears it.
-    function keepOrReplace<K extends 'samlCert' | 'oidcClientSecret'>(
-      key: K,
-    ): { update: { [P in K]?: string | null }; create: string | null } {
-      const v = input[key];
-      if (v === undefined) return { update: {}, create: null };
-      if (v === null || v === '') return { update: { [key]: null } as never, create: null };
-      return { update: { [key]: v } as never, create: v };
-    }
-
-    const samlCertOp = keepOrReplace('samlCert');
-    const oidcSecretOp = keepOrReplace('oidcClientSecret');
-
-    // Encrypt-at-rest before persisting. `encryptIdpSecretsForWrite`
-    // is idempotent on already-encrypted values and a no-op on empty,
-    // so calling it on every write is safe.
-    const encUpdate = encryptIdpSecretsForWrite({
-      ...samlCertOp.update,
-      ...oidcSecretOp.update,
-    });
-    const encCreate = encryptIdpSecretsForWrite({
-      samlCert: samlCertOp.create,
-      oidcClientSecret: oidcSecretOp.create,
-    });
-
-    const row = await prisma.ssoIdentityProvider.upsert({
-      where: { institutionId },
-      update: {
-        ...(input.protocol !== undefined && { protocol: input.protocol }),
-        ...(input.displayName !== undefined && { displayName: input.displayName }),
-        ...(input.enabled !== undefined && { enabled: input.enabled }),
-        ...(input.jitProvisioning !== undefined && { jitProvisioning: input.jitProvisioning }),
-        ...(input.defaultRole !== undefined && { defaultRole: input.defaultRole }),
-        ...(input.samlEntityId !== undefined && { samlEntityId: input.samlEntityId }),
-        ...(input.samlSsoUrl !== undefined && { samlSsoUrl: input.samlSsoUrl }),
-        ...(input.oidcIssuer !== undefined && { oidcIssuer: input.oidcIssuer }),
-        ...(input.oidcClientId !== undefined && { oidcClientId: input.oidcClientId }),
-        ...encUpdate,
-      },
-      create: {
-        institutionId,
-        protocol: input.protocol!,
-        displayName: input.displayName!,
-        enabled: input.enabled ?? false,
-        jitProvisioning: input.jitProvisioning ?? true,
-        defaultRole: input.defaultRole ?? 'VIEWER',
-        samlEntityId: input.samlEntityId ?? null,
-        samlSsoUrl: input.samlSsoUrl ?? null,
-        oidcIssuer: input.oidcIssuer ?? null,
-        oidcClientId: input.oidcClientId ?? null,
-        samlCert: encCreate.samlCert ?? null,
-        oidcClientSecret: encCreate.oidcClientSecret ?? null,
-      },
-    });
-
-    await audit(req, {
-      action: existing ? 'admin.sso.update' : 'admin.sso.create',
-      entityType: 'SsoIdentityProvider',
-      entityId: row.id,
-      changes: {
-        institutionId,
-        protocol: row.protocol,
-        enabled: row.enabled,
-        jitProvisioning: row.jitProvisioning,
-        // We deliberately do not include the secret values themselves
-        // in the audit changes. Flag whether they were touched instead.
-        samlCertTouched: input.samlCert !== undefined,
-        oidcClientSecretTouched: input.oidcClientSecret !== undefined,
-      },
-    });
-
-    res.json({ success: true, data: toReadShape(row) });
+    const data = await upsertForInstitution(req, institutionId, req.body);
+    res.json({ success: true, data });
   } catch (err) {
     next(err);
   }
@@ -263,20 +277,136 @@ export const upsertMe = async (req: Request, res: Response, next: NextFunction):
 
 // ── DELETE /api/admin/sso/me ───────────────────────────────────────────────
 
+async function deleteForInstitution(req: Request, institutionId: string): Promise<void> {
+  const existing = await prisma.ssoIdentityProvider.findUnique({ where: { institutionId } });
+  if (!existing) {
+    throw new AppError(404, 'NOT_FOUND', 'No SSO IdP row to delete.');
+  }
+  await prisma.ssoIdentityProvider.delete({ where: { institutionId } });
+  await audit(req, {
+    action: 'admin.sso.delete',
+    entityType: 'SsoIdentityProvider',
+    entityId: existing.id,
+    changes: { institutionId, protocol: existing.protocol },
+  });
+}
+
 export const deleteMe = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const institutionId = callerInstitutionId(req);
-    const existing = await prisma.ssoIdentityProvider.findUnique({ where: { institutionId } });
-    if (!existing) {
-      throw new AppError(404, 'NOT_FOUND', 'No SSO IdP row to delete.');
-    }
-    await prisma.ssoIdentityProvider.delete({ where: { institutionId } });
-    await audit(req, {
-      action: 'admin.sso.delete',
-      entityType: 'SsoIdentityProvider',
-      entityId: existing.id,
-      changes: { institutionId, protocol: existing.protocol },
+    await deleteForInstitution(req, institutionId);
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── SUPER_ADMIN cross-institution panel (Phase 11.8) ───────────────────────
+//
+// The /me endpoints are scoped to the caller's own institutionId.
+// SUPER_ADMINs need to administer IdP rows across every institution,
+// which the impersonation-first workflow today makes awkward (start a
+// session as the tenant, then administer). These endpoints land that
+// directly on the SUPER_ADMIN console.
+//
+//   GET    /api/admin/sso/all                       — list every IdP + its institution
+//   GET    /api/admin/sso/institutions/:id          — read one IdP by institutionId
+//   PUT    /api/admin/sso/institutions/:id          — upsert one IdP by institutionId
+//   DELETE /api/admin/sso/institutions/:id          — delete one IdP by institutionId
+//
+// All four require role === 'SUPER_ADMIN' (the standard admin guard
+// that lets INSTITUTION_ADMINs through is too lax — they must not be
+// able to peek at or edit other tenants' IdPs).
+
+interface IdpListEntry extends IdpReadShape {
+  institutionName: string;
+  institutionSlug: string;
+}
+
+export const readAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    requireSuperAdmin(req);
+    const rows = await prisma.ssoIdentityProvider.findMany({
+      include: { institution: { select: { name: true, slug: true } } },
+      orderBy: { updatedAt: 'desc' },
     });
+    const data: IdpListEntry[] = rows.map((row) => ({
+      ...toReadShape(row),
+      institutionName: row.institution.name,
+      institutionSlug: row.institution.slug,
+    }));
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const readByInstitution = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    requireSuperAdmin(req);
+    const institutionId = req.params['institutionId'];
+    if (!institutionId) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'institutionId is required');
+    }
+    const row = await prisma.ssoIdentityProvider.findUnique({
+      where: { institutionId },
+      include: { institution: { select: { name: true, slug: true } } },
+    });
+    if (!row) {
+      res.json({ success: true, data: null });
+      return;
+    }
+    const data: IdpListEntry = {
+      ...toReadShape(row),
+      institutionName: row.institution.name,
+      institutionSlug: row.institution.slug,
+    };
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const upsertByInstitution = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    requireSuperAdmin(req);
+    const institutionId = req.params['institutionId'];
+    if (!institutionId) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'institutionId is required');
+    }
+    // Confirm the institution exists before touching the IdP table —
+    // a typo in the path would otherwise create an orphaned row.
+    const inst = await prisma.institution.findUnique({ where: { id: institutionId } });
+    if (!inst) {
+      throw new AppError(404, 'NOT_FOUND', 'Institution not found');
+    }
+    const data = await upsertForInstitution(req, institutionId, req.body);
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deleteByInstitution = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    requireSuperAdmin(req);
+    const institutionId = req.params['institutionId'];
+    if (!institutionId) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'institutionId is required');
+    }
+    await deleteForInstitution(req, institutionId);
     res.status(204).end();
   } catch (err) {
     next(err);
