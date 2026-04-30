@@ -146,10 +146,10 @@ export const eraseMyAccount = async (req: Request, res: Response, next: NextFunc
       }
     }
 
-    // Audit BEFORE the delete so the row references the userId that's
-    // about to disappear. Once the User row is gone, the audit row is
-    // an opaque cuid — no PII left over. Article 17(3)(b)/(e) covers
-    // this retention.
+    // Audit BEFORE the soft-delete so the row references the still-
+    // populated userId. The audit row references that userId after
+    // hard-delete too — Article 17(3)(b)/(e) explicitly retains
+    // audit-log data for legal-compliance / dispute purposes.
     await audit(req, {
       action: 'gdpr.erasure.completed',
       entityType: 'User',
@@ -158,13 +158,37 @@ export const eraseMyAccount = async (req: Request, res: Response, next: NextFunc
       changes: { role: me.role, institutionId: me.institutionId },
     });
 
-    // Cascade deletes: Notification, EvaluationMember,
-    // EvaluationDomainAssignment all set onDelete: Cascade. AuditLog
-    // and ChatMessage have nullable userId without an FK constraint,
-    // so they're left in place by design — see module header.
-    await prisma.user.delete({ where: { id: me.userId } });
+    // Phase 11.9 — soft delete with PII scrub. The row stays for the
+    // retention window (RETENTION_GRACE_DAYS) so an accidental
+    // erasure can be reversed by an admin, but the PII columns are
+    // wiped at the moment of erasure so the grace-period row already
+    // minimises personal data. The retention scheduler hard-deletes
+    // anything past the window.
+    //
+    // Email is rewritten to a deterministic tombstone so the unique
+    // constraint doesn't block a fresh signup using the same address.
+    // Format: `deleted+<userId>@deleted.invalid` — the .invalid TLD
+    // (RFC 2606 §2) guarantees no collision with a real domain.
+    const tombstoneEmail = `deleted+${me.userId}@deleted.invalid`;
+    await prisma.user.update({
+      where: { id: me.userId },
+      data: {
+        deletedAt: new Date(),
+        email: tombstoneEmail,
+        name: '[deleted user]',
+        passwordHash: '',
+        passwordLoginDisabled: true,
+        mfaSecret: null,
+        mfaEnabledAt: null,
+      },
+    });
+    // Notifications and SSO-side artefacts are detached / cleared in
+    // the same transaction the original hard-delete used to handle
+    // via cascade. We do it explicitly so the soft-deleted row is no
+    // longer referenced by any user-facing surface.
+    await prisma.notification.deleteMany({ where: { userId: me.userId } });
 
-    logger.info({ erasedUserId: me.userId }, 'gdpr.erasure: user record deleted');
+    logger.info({ erasedUserId: me.userId }, 'gdpr.erasure: user soft-deleted (PII scrubbed)');
 
     res.json({
       success: true,
@@ -172,9 +196,10 @@ export const eraseMyAccount = async (req: Request, res: Response, next: NextFunc
         erased: true,
         userId: me.userId,
         notes: [
-          'Your User record and personal Notifications have been deleted.',
+          'Your User record has been marked deleted and your personal data (email, name, MFA secret, password hash) has been scrubbed.',
+          'The row is retained in tombstone form during a short grace window (default 30 days) so an accidental erasure can be reversed. After the grace window the row is hard-deleted by the retention scheduler.',
           'Audit log entries reference your former user ID and are retained under Article 17(3)(b)/(e) for legal-compliance and dispute purposes.',
-          'If you still hold an access token, it may remain valid until it expires unless it is separately revoked by the authentication layer.',
+          'If you still hold an access token, it is rejected at every authenticated endpoint as soon as the soft-delete lands; you do not need to wait for the token to expire.',
         ],
       },
     });

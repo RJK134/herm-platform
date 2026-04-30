@@ -29,8 +29,11 @@ const { prismaMock } = vi.hoisted(() => ({
       findUnique: vi.fn(),
       count: vi.fn(),
       delete: vi.fn(),
+      // Phase 11.9 — erasure now soft-deletes (update + scrub) and
+      // wipes notifications via deleteMany. Tests stub both.
+      update: vi.fn(),
     },
-    notification: { findMany: vi.fn() },
+    notification: { findMany: vi.fn(), deleteMany: vi.fn(async () => ({ count: 0 })) },
     evaluationMember: { findMany: vi.fn() },
     evaluationDomainAssignment: { findMany: vi.fn() },
     auditLog: { findMany: vi.fn(), create: vi.fn(async () => ({})) },
@@ -186,9 +189,9 @@ describe('POST /api/me/erase', () => {
     expect(res.status).toBe(401);
   });
 
-  it('deletes the User row and reports erasure', async () => {
+  it('soft-deletes the User row, scrubs PII, and reports erasure', async () => {
     prismaMock.user.count.mockResolvedValueOnce(1); // not the only admin
-    prismaMock.user.delete.mockResolvedValueOnce({ id: 'u-me' });
+    prismaMock.user.update.mockResolvedValueOnce({ id: 'u-me' });
 
     const res = await request(buildApp())
       .post('/api/me/erase')
@@ -197,7 +200,23 @@ describe('POST /api/me/erase', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.erased).toBe(true);
     expect(res.body.data.userId).toBe('u-me');
-    expect(prismaMock.user.delete).toHaveBeenCalledWith({ where: { id: 'u-me' } });
+    // Phase 11.9 — erasure is now an update + PII scrub. The row stays
+    // for the retention window; the scheduler hard-deletes later.
+    expect(prismaMock.user.update).toHaveBeenCalledTimes(1);
+    const updateArgs = prismaMock.user.update.mock.calls[0]?.[0] as
+      | { where: { id: string }; data: Record<string, unknown> }
+      | undefined;
+    expect(updateArgs?.where).toEqual({ id: 'u-me' });
+    expect(updateArgs?.data.deletedAt).toBeInstanceOf(Date);
+    expect(updateArgs?.data.email).toBe('deleted+u-me@deleted.invalid');
+    expect(updateArgs?.data.name).toBe('[deleted user]');
+    expect(updateArgs?.data.passwordHash).toBe('');
+    expect(updateArgs?.data.passwordLoginDisabled).toBe(true);
+    expect(updateArgs?.data.mfaSecret).toBeNull();
+    // Notifications wiped in the same erasure flow.
+    expect(prismaMock.notification.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u-me' } });
+    // The legacy hard-delete path is no longer used.
+    expect(prismaMock.user.delete).not.toHaveBeenCalled();
   });
 
   it('refuses to erase the only remaining INSTITUTION_ADMIN with 409', async () => {
@@ -207,24 +226,24 @@ describe('POST /api/me/erase', () => {
       .set('Authorization', `Bearer ${tokenFor({ userId: 'u-admin', role: 'INSTITUTION_ADMIN' })}`);
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe('GDPR_ERASURE_CONFLICT');
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
     expect(prismaMock.user.delete).not.toHaveBeenCalled();
   });
 
   it('lets a non-only INSTITUTION_ADMIN proceed', async () => {
     prismaMock.user.count.mockResolvedValueOnce(2);
-    prismaMock.user.delete.mockResolvedValueOnce({ id: 'u-admin' });
+    prismaMock.user.update.mockResolvedValueOnce({ id: 'u-admin' });
     const res = await request(buildApp())
       .post('/api/me/erase')
       .set('Authorization', `Bearer ${tokenFor({ userId: 'u-admin', role: 'INSTITUTION_ADMIN' })}`);
     expect(res.status).toBe(200);
-    expect(prismaMock.user.delete).toHaveBeenCalled();
-    // Other-admin count is scoped to the same institution and excludes self.
+    expect(prismaMock.user.update).toHaveBeenCalled();
     expect(prismaMock.user.count).toHaveBeenCalledWith({
       where: { institutionId: 'inst-1', role: 'INSTITUTION_ADMIN', id: { not: 'u-admin' } },
     });
   });
 
-  it('audit-logs gdpr.erasure.completed BEFORE deleting the User (so the row references the soon-vanishing id)', async () => {
+  it('audit-logs gdpr.erasure.completed BEFORE soft-deleting the User (so the row references the soon-tombstoned id)', async () => {
     prismaMock.user.count.mockResolvedValueOnce(1);
     const callOrder: string[] = [];
     (prismaMock.auditLog.create as unknown as { mockImplementationOnce: (fn: (arg: unknown) => Promise<unknown>) => unknown })
@@ -232,9 +251,9 @@ describe('POST /api/me/erase', () => {
         callOrder.push('audit');
         return {};
       });
-    (prismaMock.user.delete as unknown as { mockImplementationOnce: (fn: (arg: unknown) => Promise<unknown>) => unknown })
+    (prismaMock.user.update as unknown as { mockImplementationOnce: (fn: (arg: unknown) => Promise<unknown>) => unknown })
       .mockImplementationOnce(async () => {
-        callOrder.push('delete');
+        callOrder.push('soft-delete');
         return {};
       });
 
@@ -242,7 +261,7 @@ describe('POST /api/me/erase', () => {
       .post('/api/me/erase')
       .set('Authorization', `Bearer ${tokenFor({ userId: 'u-me', role: 'VIEWER' })}`);
 
-    expect(callOrder).toEqual(['audit', 'delete']);
+    expect(callOrder).toEqual(['audit', 'soft-delete']);
     expect(prismaMock.auditLog.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({

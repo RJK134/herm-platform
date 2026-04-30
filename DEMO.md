@@ -185,7 +185,15 @@ These are **deliberately deferred** — call them out if asked, do not paper ove
 - **MFA bypass on SSO** — when an institution has SSO, authenticator-app MFA is
   no longer enforced by HERM; the IdP enforces its own MFA. This is by design
   (ADR-0001 Q10) and recorded in audit as `mfaBypassed: true`.
-- **Soft-delete + retention scheduler** — deferred from PR #50.
+- **Soft-delete + retention scheduler** — Phase 11.9 ships User soft-delete
+  (the GDPR erasure path stamps `deletedAt` and scrubs PII rather than
+  hard-deleting), session revocation in `authenticateJWT` (a soft-deleted
+  user's outstanding JWT is rejected within ~30 s of erasure via a small
+  in-process cache), and a retention scheduler that hard-deletes
+  tombstoned rows past the grace window (`RETENTION_GRACE_DAYS`, default
+  30). Opt the in-process scheduler in via `RETENTION_SCHEDULER_ENABLED=true`;
+  out-of-process operators can run `npm run db:retention-sweep` instead.
+  (Closed.)
 - **SAML Single Logout (SLO)** — needs a Redis-backed session store; v1 skip.
 - **Multi-IdP per tenant** — schema enforces one `SsoIdentityProvider` per
   institution today; relax later.

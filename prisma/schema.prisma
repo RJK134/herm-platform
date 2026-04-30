@@ -217,6 +217,17 @@ model User {
   // password hash stays in the row so support can audit; we just refuse
   // to validate against it. Null/false on every other account.
   passwordLoginDisabled Boolean                      @default(false)
+  // Phase 11.9 — Soft delete. Set by the GDPR right-to-erasure path
+  // (Article 17) and any future admin-initiated removals. The row is
+  // kept for the retention window (RETENTION_GRACE_DAYS) so an
+  // accidental erasure can be reversed; the retention scheduler then
+  // hard-deletes anything past the window. The auth chokepoint
+  // (`authenticateJWT` + login) treats `deletedAt != null` as "this
+  // user does not exist" so soft-deleted accounts cannot transact even
+  // while the row physically remains. PII fields (email, name, mfa
+  // secret) are scrubbed at the moment of soft-delete so the
+  // grace-period row already minimises personal data.
+  deletedAt             DateTime?
   evaluationMemberships EvaluationMember[]
   domainAssignments     EvaluationDomainAssignment[] @relation("DomainAssignments")
   notifications         Notification[]
@@ -224,6 +235,7 @@ model User {
   updatedAt             DateTime                     @updatedAt
 
   @@index([institutionId])
+  @@index([deletedAt])
 }
 
 enum UserRole {
