@@ -37,6 +37,7 @@ import { VendorPortal } from './pages/VendorPortal';
 import { TeamWorkspaces } from './pages/TeamWorkspaces';
 import { AdminVendors } from './pages/AdminVendors';
 import { Subscriptions } from './pages/Subscriptions';
+import { SecuritySettings } from './pages/SecuritySettings';
 import { SectorAnalytics } from './pages/SectorAnalytics';
 import { ApiIntegration } from './pages/ApiIntegration';
 import { FrameworkMapping } from './pages/FrameworkMapping';
@@ -186,6 +187,14 @@ export default function App() {
                           element={
                             <ProtectedRoute>
                               <Subscriptions />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="/security"
+                          element={
+                            <ProtectedRoute>
+                              <SecuritySettings />
                             </ProtectedRoute>
                           }
                         />

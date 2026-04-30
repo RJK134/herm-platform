@@ -24,6 +24,7 @@ import {
   Key,
   Calculator,
   Workflow,
+  ShieldCheck,
 } from 'lucide-react';
 import type { PaidTier } from './branding';
 
@@ -130,6 +131,7 @@ const sectorItems: readonly NavItem[] = [
 
 const accountItems: readonly NavItem[] = [
   { to: '/subscription', label: 'Subscription', icon: CreditCard, tier: 'authenticated' },
+  { to: '/security', label: 'Security', icon: ShieldCheck, tier: 'authenticated' },
   { to: '/api-keys', label: 'API Integration', icon: Key, tier: ['enterprise'] as const },
   { to: '/vendor-portal', label: 'Vendor Portal', icon: Store, tier: 'authenticated' },
 ];

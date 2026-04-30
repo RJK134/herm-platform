@@ -1,9 +1,12 @@
 import type { Request, Response, NextFunction } from 'express';
-import { AuthService } from './auth.service';
+import prisma from '../../utils/prisma';
+import { AuthService, resolveEffectiveTier } from './auth.service';
 import { AccountLockedError } from '../../lib/lockout';
-import { registerSchema, loginSchema, updateProfileSchema } from './auth.schema';
+import { registerSchema, loginSchema, updateProfileSchema, mfaLoginSchema } from './auth.schema';
 import { audit } from '../../lib/audit';
 import { AppError } from '../../utils/errors';
+import { generateToken, type JwtPayload } from '../../middleware/auth';
+import { verifyMfaChallengeToken, verifyTotp } from '../../lib/mfa';
 
 const service = new AuthService();
 
@@ -37,6 +40,19 @@ export const login = async (
     const data = loginSchema.parse(req.body);
     try {
       const result = await service.login(data);
+      // Phase 10.8: a successful PASSWORD step does not yet imply a
+      // session. When the account has MFA active, `login` returns a
+      // challenge envelope; the actual session is minted by
+      // `mfaLogin` after the TOTP step succeeds.
+      if ('requiresMfa' in result) {
+        await audit(req, {
+          action: 'auth.login.mfa_required',
+          entityType: 'User',
+          changes: { email: data.email.toLowerCase() },
+        });
+        res.json({ success: true, data: result });
+        return;
+      }
       await audit(req, {
         action: 'auth.login.success',
         entityType: 'User',
@@ -157,6 +173,83 @@ export const logout = async (
       userId: req.user!.userId,
     });
     res.json({ success: true, data: { message: 'Logged out successfully' } });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * POST /api/auth/mfa/login — second leg of the login flow. The caller
+ * presents the short-lived challenge token from the password step plus a
+ * 6-digit TOTP code; on success this mints a normal session JWT.
+ *
+ * The challenge token is purpose-tagged ('mfa_challenge') and rejected by
+ * `authenticateJWT` for normal session use, so this endpoint is the only
+ * place a challenge can be consumed.
+ */
+export const mfaLogin = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { challengeToken, code } = mfaLoginSchema.parse(req.body);
+
+    const userId = verifyMfaChallengeToken(challengeToken);
+    if (!userId) {
+      throw new AppError(401, 'AUTHENTICATION_ERROR', 'Challenge expired — sign in again');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { institution: { include: { subscription: true } } },
+    });
+    if (!user) {
+      throw new AppError(401, 'AUTHENTICATION_ERROR', 'Account no longer exists');
+    }
+
+    // Defence in depth: the user might have disabled MFA between password
+    // and TOTP steps. If so, refuse the challenge — the password step's
+    // result is no longer well-defined, and the client should retry login
+    // from scratch (which will succeed without a TOTP step).
+    if (!user.mfaEnabledAt || !user.mfaSecret) {
+      throw new AppError(409, 'MFA_NOT_ENABLED', 'MFA is no longer enabled — sign in again');
+    }
+
+    if (!verifyTotp(user.mfaSecret, code)) {
+      await audit(req, {
+        action: 'auth.login.mfa.fail',
+        entityType: 'User',
+        entityId: user.id,
+        userId: user.id,
+      });
+      throw new AppError(401, 'AUTHENTICATION_ERROR', 'Invalid authentication code');
+    }
+
+    const tier = resolveEffectiveTier(
+      user.institution.subscription?.tier?.toLowerCase() ?? 'free',
+    );
+    const payload: JwtPayload = {
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      institutionId: user.institutionId,
+      institutionName: user.institution.name,
+      tier,
+    };
+
+    await audit(req, {
+      action: 'auth.login.mfa.success',
+      entityType: 'User',
+      entityId: user.id,
+      userId: user.id,
+    });
+
+    res.json({
+      success: true,
+      data: { token: generateToken(payload), user: payload },
+    });
   } catch (err) {
     next(err);
   }

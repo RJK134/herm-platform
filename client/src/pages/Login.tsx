@@ -1,7 +1,7 @@
 import type { FormEvent } from 'react';
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { LogIn, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { LogIn, Eye, EyeOff, AlertCircle, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { PRODUCT } from '../lib/branding';
 
@@ -18,7 +18,7 @@ function safeInternalPath(path: string | null | undefined): string | null {
 }
 
 export function Login() {
-  const { login } = useAuth();
+  const { login, loginMfa } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   // Post-login destination can come from two sources:
@@ -37,24 +37,60 @@ export function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Phase 10.8 — MFA challenge state. Non-null when the password step
+  // returned a `requiresMfa` envelope; the second form is rendered until
+  // the user submits a TOTP code or hits Cancel.
+  const [challengeToken, setChallengeToken] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
+
+  function extractAxiosMessage(err: unknown): string | null {
+    return (err as { response?: { data?: { error?: { message?: string } } } })
+      ?.response?.data?.error?.message ?? null;
+  }
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     setIsLoading(true);
     try {
-      await login(email, password);
+      const result = await login(email, password);
+      if (result.type === 'mfa_required') {
+        setChallengeToken(result.challengeToken);
+        return;
+      }
       navigate(from, { replace: true });
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : 'Login failed. Please try again.';
-      // Axios wraps API errors — extract the message from response
-      const axiosMsg = (err as { response?: { data?: { error?: { message?: string } } } })
-        ?.response?.data?.error?.message;
-      setError(axiosMsg ?? message);
+      const message = err instanceof Error ? err.message : 'Login failed. Please try again.';
+      setError(extractAxiosMessage(err) ?? message);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleMfaSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!challengeToken) return;
+    setError(null);
+    setIsLoading(true);
+    try {
+      await loginMfa(challengeToken, mfaCode);
+      navigate(from, { replace: true });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Verification failed. Try again.';
+      setError(extractAxiosMessage(err) ?? message);
+      // Common case: a stale code. Keep the challenge token (server has
+      // a 5-minute window) so the user can retry without re-entering the
+      // password. Clearing the input lets them just type the next code.
+      setMfaCode('');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const cancelMfa = () => {
+    setChallengeToken(null);
+    setMfaCode('');
+    setError(null);
   };
 
   return (
@@ -76,7 +112,7 @@ export function Login() {
         {/* Card */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-8">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
-            Sign in to your account
+            {challengeToken ? 'Two-factor authentication' : 'Sign in to your account'}
           </h2>
 
           {error && (
@@ -86,6 +122,52 @@ export function Login() {
             </div>
           )}
 
+          {challengeToken ? (
+            <form onSubmit={handleMfaSubmit} className="space-y-4">
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                <ShieldCheck className="w-4 h-4 text-teal-600 flex-shrink-0" aria-hidden="true" />
+                <span>Enter the 6-digit code from your authenticator app.</span>
+              </div>
+              <div>
+                <label
+                  htmlFor="mfa-code"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                >
+                  Authentication code
+                </label>
+                <input
+                  id="mfa-code"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]{6}"
+                  maxLength={6}
+                  required
+                  autoFocus
+                  value={mfaCode}
+                  onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
+                  className="w-full px-3.5 py-2.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition tracking-widest font-mono"
+                  placeholder="123 456"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={cancelMfa}
+                  className="flex-1 py-2.5 px-4 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 text-sm font-medium rounded-lg transition focus:outline-none focus:ring-2 focus:ring-gray-400"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isLoading || mfaCode.length !== 6}
+                  className="flex-[2] py-2.5 px-4 bg-teal-600 hover:bg-teal-700 disabled:bg-teal-400 text-white text-sm font-medium rounded-lg transition focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
+                >
+                  {isLoading ? 'Verifying…' : 'Verify and sign in'}
+                </button>
+              </div>
+            </form>
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label
@@ -156,8 +238,9 @@ export function Login() {
               )}
             </button>
           </form>
+          )}
 
-          {/* Demo credentials */}
+          {!challengeToken && (
           <div className="mt-5 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
             <p className="text-xs font-medium text-blue-700 dark:text-blue-400 mb-1">
               Demo credentials
@@ -166,6 +249,7 @@ export function Login() {
               demo@demo-university.ac.uk / demo12345
             </p>
           </div>
+          )}
         </div>
 
         <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-6">
