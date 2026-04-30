@@ -132,6 +132,12 @@ export function recordFailure(email: string): LockoutState {
     return { locked: true, retryAfterMs: record.lockedUntil - t, attemptsRemaining: 0 };
   }
 
+  // Expired lock: clear stale lock state before counting a new failure.
+  if (record.lockedUntil && record.lockedUntil <= t) {
+    record.lockedUntil = null;
+    record.attempts = [];
+  }
+
   pruneAttempts(record, t);
   record.attempts.push(t);
 
