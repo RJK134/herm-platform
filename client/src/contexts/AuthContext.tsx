@@ -17,6 +17,17 @@ export interface AuthUser {
   institutionId: string;
   institutionName: string;
   tier: 'free' | 'professional' | 'enterprise';
+  /**
+   * Present only on tokens minted by `POST /api/admin/impersonate` — carries
+   * the SUPER_ADMIN's identity so the client can render the impersonation
+   * banner and offer an "End impersonation" exit. Absent on every normal
+   * session, including the fresh token returned by `/impersonate/end`.
+   */
+  impersonator?: {
+    userId: string;
+    email: string;
+    name: string;
+  };
 }
 
 export interface RegisterData {
@@ -35,6 +46,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => void;
+  endImpersonation: () => Promise<void>;
 }
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -122,6 +134,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearAuth();
   }, [clearAuth]);
 
+  const endImpersonation = useCallback(async () => {
+    // Errors from `/end` come back as non-2xx and Axios throws — the
+    // legacy `if (!data.success)` branch was dead. Catch the AxiosError
+    // and surface the typed `error.message` so the banner toast says
+    // "Already a normal session" or similar instead of the generic
+    // "Request failed with status code 400".
+    try {
+      const { data } = await axios.post<{
+        success: true;
+        data: { token: string; user: AuthUser };
+      }>('/api/admin/impersonate/end');
+      setAuth(data.data.token, data.data.user);
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        const apiMsg = (err.response?.data as { error?: { message?: string } } | undefined)
+          ?.error?.message;
+        throw new Error(apiMsg ?? 'Failed to end impersonation');
+      }
+      throw err;
+    }
+  }, [setAuth]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -132,6 +166,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         register,
         logout,
+        endImpersonation,
       }}
     >
       {children}
