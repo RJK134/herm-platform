@@ -37,6 +37,7 @@ import { ProcurementGuide } from './pages/ProcurementGuide';
 import { VendorPortal } from './pages/VendorPortal';
 import { TeamWorkspaces } from './pages/TeamWorkspaces';
 import { AdminVendors } from './pages/AdminVendors';
+import { AdminSso } from './pages/AdminSso';
 import { Subscriptions } from './pages/Subscriptions';
 import { SecuritySettings } from './pages/SecuritySettings';
 import { SectorAnalytics } from './pages/SectorAnalytics';
@@ -181,6 +182,14 @@ export default function App() {
                           element={
                             <ProtectedRoute roles={ADMIN_ROLES}>
                               <AdminVendors />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="/admin/sso"
+                          element={
+                            <ProtectedRoute roles={ADMIN_ROLES}>
+                              <AdminSso />
                             </ProtectedRoute>
                           }
                         />
