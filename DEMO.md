@@ -179,9 +179,12 @@ These are **deliberately deferred** — call them out if asked, do not paper ove
   deleting the institution's IdP row (SAML or OIDC). Secret fields use
   "stored — leave blank to keep" semantics; writes go through the
   envelope-encryption helper from Phase 11.2. (Closed.)
-- **No live IdP integration tests** — `node-saml` and `openid-client` are
-  mocked in the test suite. End-to-end against `saml-test-idp` /
-  `oauth2-mock-server` is a deferred follow-up.
+- **Live IdP integration tests** — Phase 11.6 added in-process live IdPs:
+  `oauth2-mock-server` for OIDC (real /authorize → /token → JWKS dance)
+  and a hand-built `xml-crypto` SAML IdP for the ACS path (real signed
+  assertion verified by real `node-saml`). Together they pin the actual
+  protocol plumbing the unit-mock suite cannot see, including
+  signature-tamper and rogue-key rejection. (Closed.)
 - **MFA bypass on SSO** — when an institution has SSO, authenticator-app MFA is
   no longer enforced by HERM; the IdP enforces its own MFA. This is by design
   (ADR-0001 Q10) and recorded in audit as `mfaBypassed: true`.
