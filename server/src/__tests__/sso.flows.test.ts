@@ -348,6 +348,48 @@ describe('Q3 account collision — existing password user signs in via SSO', () 
   });
 });
 
+// ── Cross-institution rejection (Bugbot HIGH severity follow-up) ──────────
+
+describe('Cross-institution SSO is REFUSED — no account takeover via email', () => {
+  it('rejects when the asserted email belongs to a User in a different institution', async () => {
+    prismaMock.institution.findUnique.mockResolvedValue(enterpriseInstitutionWithSamlIdp());
+    // Existing user lives in a DIFFERENT institution from the asserting IdP.
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'u-other-tenant',
+      email: 'admin@other-tenant.test',
+      name: 'Other Tenant Admin',
+      role: 'INSTITUTION_ADMIN',
+      institutionId: 'inst-OTHER',
+      passwordLoginDisabled: false,
+      mfaEnabledAt: null,
+      institution: { id: 'inst-OTHER', name: 'Other Tenant', subscription: { tier: 'ENTERPRISE' } },
+    });
+    samlInstance.validatePostResponseAsync.mockResolvedValueOnce({
+      profile: { nameID: 'admin@other-tenant.test', attributes: {} },
+      loggedOut: false,
+    });
+
+    const res = await request(buildApp())
+      .post('/api/sso/uni-1/saml/acs')
+      .type('form')
+      .send({ SAMLResponse: 'b64', RelayState: 'uni-1' });
+
+    // Failure path → /login?error=sso_failed (the controller catches the
+    // AppError thrown from completeSsoSignIn and surfaces it via the
+    // global error handler, NOT via failureRedirect. So we expect the
+    // JSON 403 envelope here, not a redirect.)
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe('AUTHORIZATION_ERROR');
+
+    // Critically: NO update, NO session-mint, audit recorded.
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+    const actions = auditActions();
+    expect(actions).toContain('auth.sso.cross_institution_blocked');
+    expect(actions).not.toContain('auth.sso.account_linked');
+    expect(actions).not.toContain('auth.sso.success');
+  });
+});
+
 // ── Q10: MFA bypass ────────────────────────────────────────────────────────
 
 describe('Q10 MFA bypass — SSO mints a session even when user has mfaEnabledAt', () => {
@@ -414,7 +456,6 @@ describe('GET /api/sso/:slug/oidc/callback', () => {
       slug: 'uni-1',
       codeVerifier: 'verifier-cb',
       nonce: 'nonce-cb',
-      redirectUri: 'http://test/api/sso/uni-1/oidc/callback',
     });
 
     oidcMock.discovery.mockResolvedValueOnce({} as unknown);

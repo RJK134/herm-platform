@@ -35,6 +35,7 @@ import { AppError } from '../../utils/errors';
 import { audit } from '../../lib/audit';
 import { logger } from '../../lib/logger';
 import {
+  getFrontendBaseUrl,
   getFrontendSsoCallbackUrl,
   getSamlAcsUrl,
   getSpEntityId,
@@ -349,6 +350,5 @@ export const oidcCallback = async (req: Request, res: Response, next: NextFuncti
 };
 
 function failureRedirect(): string {
-  const frontend = process.env['FRONTEND_URL'] ?? 'http://localhost:5173';
-  return `${frontend}/login?error=sso_failed`;
+  return `${getFrontendBaseUrl()}/login?error=sso_failed`;
 }

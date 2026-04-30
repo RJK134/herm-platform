@@ -8,7 +8,13 @@
  *   - the PKCE code_verifier (so the callback can prove the same client
  *     started the flow)
  *   - the nonce (verified against the id_token claim)
- *   - the original redirect_uri
+ *
+ * The original `redirect_uri` is NOT stored: it's a deterministic
+ * function of the slug (`/api/sso/:slug/oidc/callback`), and
+ * `openid-client` reconstructs it from the callback URL the IdP
+ * redirected to, then sends it on the token-exchange POST. Storing
+ * it here would be dead state at best and a source of drift at worst
+ * (the stored copy could lag a deploy that changed `SP_BASE_URL`).
  *
  * `state` is a random string that doubles as the lookup key. We use
  * `GETDEL` so reading the flow record atomically deletes it — replay
@@ -31,7 +37,6 @@ export interface OidcFlowState {
   slug: string;
   codeVerifier: string;
   nonce: string;
-  redirectUri: string;
 }
 
 const KEY_PREFIX = 'sso:oidc:flow';
