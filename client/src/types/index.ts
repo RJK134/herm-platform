@@ -159,6 +159,11 @@ export interface AuthUser {
   institutionId: string;
   institutionName: string;
   tier: 'free' | 'professional' | 'enterprise';
+  impersonator?: {
+    userId: string;
+    email: string;
+    name: string;
+  };
 }
 
 export interface Subscription {

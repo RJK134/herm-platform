@@ -17,6 +17,17 @@ export interface AuthUser {
   institutionId: string;
   institutionName: string;
   tier: 'free' | 'professional' | 'enterprise';
+  /**
+   * Present only on tokens minted by `POST /api/admin/impersonate` — carries
+   * the SUPER_ADMIN's identity so the client can render the impersonation
+   * banner and offer an "End impersonation" exit. Absent on every normal
+   * session, including the fresh token returned by `/impersonate/end`.
+   */
+  impersonator?: {
+    userId: string;
+    email: string;
+    name: string;
+  };
 }
 
 export interface RegisterData {
@@ -35,6 +46,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => void;
+  endImpersonation: () => Promise<void>;
 }
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -122,6 +134,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearAuth();
   }, [clearAuth]);
 
+  const endImpersonation = useCallback(async () => {
+    const { data } = await axios.post<{
+      success: boolean;
+      data: { token: string; user: AuthUser };
+      error?: { message: string };
+    }>('/api/admin/impersonate/end');
+
+    if (!data.success) {
+      throw new Error(data.error?.message ?? 'Failed to end impersonation');
+    }
+    setAuth(data.data.token, data.data.user);
+  }, [setAuth]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -132,6 +157,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         register,
         logout,
+        endImpersonation,
       }}
     >
       {children}
