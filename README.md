@@ -18,16 +18,20 @@ Higher-education procurement intelligence: score, compare and shortlist SIS/LMS/
 ## Quick start
 
 ```bash
-cp .env.example .env            # fill in JWT_SECRET, DATABASE_URL, etc.
+cp .env.example .env            # ports already aligned to docker-compose
 docker compose up -d            # local Postgres + Redis
-npm install
-npm run db:generate
-npm run db:push
-npm run db:seed                 # ~165 capabilities, 21 systems, vendor profiles
+npm run demo:bootstrap          # install + prisma generate/push + full seed
 npm run dev                     # client + server concurrently
 ```
 
-Open `http://localhost:5173`.
+Or, on Linux/macOS, the same flow as a one-shot:
+
+```bash
+./start.sh
+```
+
+Open `http://localhost:5173`. Demo credentials and the colleague-review
+walkthrough live in [DEMO.md](DEMO.md). Day-two ops in [RUNBOOK.md](RUNBOOK.md).
 
 ## Quality gates
 
@@ -44,17 +48,20 @@ CI runs the same gates on every push/PR — see `.github/workflows/ci.yml`.
 ## Health & readiness
 
 - `GET /api/health` — liveness (process up)
-- `GET /api/ready` — readiness (checks DB). Returns 503 if any dependency is unhealthy.
+- `GET /api/readiness` — readiness (checks DB; also Redis when `REDIS_URL` is set). Returns 503 if any dependency is unhealthy. Available under `/api/ready` as a short-form alias.
 - Every response carries an `x-request-id` header; every structured log line carries the same id for correlation.
 
 ## Docs
 
+- [DEMO](DEMO.md) — five-minute demo bootstrap, demo credentials, colleague-review walkthrough
+- [RUNBOOK](RUNBOOK.md) — start/stop, env-var matrix, migrations, incident responses, rollback drills
 - [HERM_COMPLIANCE](HERM_COMPLIANCE.md) — how this codebase honours CC-BY-NC-SA-4.0: attribution surfaces, tier classification, release-time audit checklist
 - [PROCUREMENT_WORKFLOW](PROCUREMENT_WORKFLOW.md) — project-status state machine, shortlist decision governance, scoring provenance
-- [PRODUCTION_READINESS](docs/PRODUCTION_READINESS.md) — quality gates, known gaps, go-live checklist
-- [ARCHITECTURE_NOTES](docs/ARCHITECTURE_NOTES.md) — module boundaries, data flow, auth model
-- [RUNBOOK](docs/RUNBOOK.md) — start/stop, migrations, incident responses
-- [AI_GOVERNANCE](docs/AI_GOVERNANCE.md) — allowlists, limits, how to add a new AI surface
+- [PRODUCTION_READINESS](PRODUCTION_READINESS.md) — quality gates, known gaps, go-live checklist
+- [ARCHITECTURE_NOTES](ARCHITECTURE_NOTES.md) — module boundaries, data flow, auth model
+- [AI_GOVERNANCE](AI_GOVERNANCE.md) — allowlists, limits, how to add a new AI surface
+- [docs/adr/0001-sso-architecture.md](docs/adr/0001-sso-architecture.md) — SSO (SAML/OIDC) architecture, decisions, deferred items
+- [docs/USER_TESTING_BRIEF.md](docs/USER_TESTING_BRIEF.md) — persona-driven user testing brief
 
 ## Project layout
 
