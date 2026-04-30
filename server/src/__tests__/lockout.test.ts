@@ -236,14 +236,11 @@ describe('login route — lockout integration', () => {
     const calls = prismaMock.auditLog.create.mock.calls as unknown as Array<[{ data: { action: string; changes?: Record<string, unknown> } }]>;
     const actions = calls.map((c) => c[0].data.action);
     expect(actions).toContain('auth.login.fail');
-    // On lockout, auth.login.fail is emitted with locked:true and retryAfterSeconds.
-    const lockoutCall = calls.find(
-      (c) => c[0].data.action === 'auth.login.fail' && c[0].data.changes?.locked === true,
-    );
+    expect(actions).toContain('auth.lockout.engaged');
+    const lockoutCall = calls.find((c) => c[0].data.action === 'auth.lockout.engaged');
     expect(lockoutCall?.[0].data.changes).toEqual(
       expect.objectContaining({
         emailTried: 'a@b.test',
-        locked: true,
         retryAfterSeconds: expect.any(Number),
       }),
     );
