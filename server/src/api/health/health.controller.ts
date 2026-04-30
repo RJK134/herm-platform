@@ -87,8 +87,7 @@ async function probeStripe(): Promise<DependencyCheck | null> {
  * Probes Redis with a `PING` command. Returns null when Redis is not
  * configured on this instance — there's no dependency to probe. Phase
  * 10.6: same informational-only criticality as the Stripe probe — Redis
- * is currently used for nothing user-facing (rate-limit counters fall
- * back to in-process state when Redis is unreachable), so a Redis
+ * is not currently readiness-critical for this instance, so a Redis
  * outage shouldn't drain pods. External monitoring can read
  * `checks.redis.ok` to page on-call.
  */
