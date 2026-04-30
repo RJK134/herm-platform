@@ -17,6 +17,7 @@ const ENV_VARS: EnvVar[] = [
   { name: 'ANTHROPIC_API_KEY',     required: false, description: 'Anthropic API key for AI chat feature' },
   { name: 'STRIPE_SECRET_KEY',     required: false, description: 'Stripe secret key for subscription billing' },
   { name: 'STRIPE_WEBHOOK_SECRET', required: false, description: 'Stripe webhook secret for payment event verification' },
+  { name: 'REDIS_URL',             required: false, description: 'Redis connection string (e.g. redis://localhost:6379) — enables shared rate-limit / session state when set' },
 ];
 
 export function checkEnvironment(): void {

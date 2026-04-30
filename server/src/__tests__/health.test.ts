@@ -19,6 +19,12 @@ vi.mock('../services/stripe', () => ({
   getStripeForHealthCheck: () => getStripeForHealthCheck(),
 }));
 
+const redisPing = vi.fn();
+const getRedis = vi.fn();
+vi.mock('../lib/redis', () => ({
+  getRedis: () => getRedis(),
+}));
+
 import { liveness, readiness } from '../api/health/health.controller';
 
 function buildApp() {
@@ -32,6 +38,10 @@ beforeEach(() => {
   queryRaw.mockReset();
   balanceRetrieve.mockReset();
   getStripeForHealthCheck.mockReset();
+  redisPing.mockReset();
+  getRedis.mockReset();
+  // Default: Redis not configured. Individual tests opt in by overriding.
+  getRedis.mockReturnValue(null);
 });
 
 describe('health endpoints', () => {
@@ -139,6 +149,75 @@ describe('health endpoints', () => {
     expect(res.body.data.checks.stripe.ok).toBe(false);
     expect(res.body.data.checks.stripe.message).toMatch(/Cannot find module 'stripe'/);
   });
+
+  // ── Redis probe (Phase 10.6) ─────────────────────────────────────────────
+
+  it('GET /api/ready omits checks.redis when Redis is not configured', async () => {
+    queryRaw.mockResolvedValueOnce([{ '?column?': 1 }]);
+    getStripeForHealthCheck.mockReturnValueOnce(null);
+    getRedis.mockReturnValueOnce(null);
+    const res = await request(buildApp()).get('/api/ready');
+    expect(res.status).toBe(200);
+    expect(res.body.data.checks.redis).toBeUndefined();
+  });
+
+  it('GET /api/ready includes redis.ok=true when PING returns PONG', async () => {
+    queryRaw.mockResolvedValueOnce([{ '?column?': 1 }]);
+    getStripeForHealthCheck.mockReturnValueOnce(null);
+    redisPing.mockResolvedValueOnce('PONG');
+    getRedis.mockReturnValueOnce({ ping: redisPing } as never);
+    const res = await request(buildApp()).get('/api/ready');
+    expect(res.status).toBe(200);
+    expect(res.body.data.checks.redis.ok).toBe(true);
+    expect(res.body.data.checks.redis.durationMs).toEqual(expect.any(Number));
+    expect(redisPing).toHaveBeenCalledOnce();
+  });
+
+  it('GET /api/ready surfaces redis.ok=false on an unexpected PING reply, but stays 200', async () => {
+    queryRaw.mockResolvedValueOnce([{ '?column?': 1 }]);
+    getStripeForHealthCheck.mockReturnValueOnce(null);
+    redisPing.mockResolvedValueOnce('NOT_A_PONG');
+    getRedis.mockReturnValueOnce({ ping: redisPing } as never);
+    const res = await request(buildApp()).get('/api/ready');
+    expect(res.status).toBe(200);
+    expect(res.body.data.checks.redis.ok).toBe(false);
+    expect(res.body.data.checks.redis.message).toMatch(/unexpected PING reply: NOT_A_PONG/);
+  });
+
+  it('GET /api/ready stays 200 when Redis fails (informational, not paging)', async () => {
+    // Same critical contract as the Stripe probe: Redis isn't yet
+    // user-facing (no session store, no shared rate limiter), so an
+    // outage MUST NOT drain pods.
+    queryRaw.mockResolvedValueOnce([{ '?column?': 1 }]);
+    getStripeForHealthCheck.mockReturnValueOnce(null);
+    redisPing.mockRejectedValueOnce(new Error('ECONNREFUSED'));
+    getRedis.mockReturnValueOnce({ ping: redisPing } as never);
+    const res = await request(buildApp()).get('/api/ready');
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('ready');
+    expect(res.body.data.checks.database.ok).toBe(true);
+    expect(res.body.data.checks.redis.ok).toBe(false);
+    expect(res.body.data.checks.redis.message).toBe('ECONNREFUSED');
+  });
+
+  it('Redis probe times out at 1s and reports failed (still 200)', async () => {
+    queryRaw.mockResolvedValueOnce([{ '?column?': 1 }]);
+    getStripeForHealthCheck.mockReturnValueOnce(null);
+    redisPing.mockImplementationOnce(() => new Promise(() => {}));
+    getRedis.mockReturnValueOnce({ ping: redisPing } as never);
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const reqPromise = request(buildApp()).get('/api/ready');
+      await vi.advanceTimersByTimeAsync(1100);
+      const res = await reqPromise;
+      expect(res.status).toBe(200);
+      expect(res.body.data.checks.redis.ok).toBe(false);
+      expect(res.body.data.checks.redis.message).toMatch(/timed out/);
+    } finally {
+      vi.useRealTimers();
+    }
+  }, 10_000);
 
   it('Stripe probe times out at 2s and reports as failed (still 200 — informational)', async () => {
     queryRaw.mockResolvedValueOnce([{ '?column?': 1 }]);
