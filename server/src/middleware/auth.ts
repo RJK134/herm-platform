@@ -113,12 +113,16 @@ async function isUserSoftDeleted(userId: string): Promise<boolean> {
   if (hit && Date.now() - hit.cachedAt < SOFT_DELETE_CACHE_TTL_MS) {
     return hit.deleted;
   }
-  // Phase 11.14 — also check Institution.deletedAt. A SUPER_ADMIN who
-  // soft-deletes a tenant cascades to scrub each User row, but the
-  // cascade is N+1 writes; this check ensures that even before the
-  // per-User scrub commits (or if the cascade is interrupted), no
-  // existing JWT can transact against the soft-deleted institution.
-  // Loaded in the same round-trip as the per-User check via `include`.
+  // Phase 11.14 — also check Institution.deletedAt. Tenant soft-delete
+  // may be applied separately from the per-User scrub, so this rejects
+  // an otherwise-live user as soon as the linked institution row is
+  // marked soft-deleted. The cascade in `services/retention/cascade.ts`
+  // stamps `Institution.deletedAt` BEFORE the per-User scrub so this
+  // gate engages first; if a later cascade step errors, JWT auth is
+  // already blocked. (This guarantee depends on the cascade ordering;
+  // the gate itself only checks the row's current `deletedAt`.)
+  // Loaded in the same round-trip as the per-User check via the nested
+  // `select` on the institution relation.
   const row = await prisma.user.findUnique({
     where: { id: userId },
     select: { deletedAt: true, institution: { select: { deletedAt: true } } },

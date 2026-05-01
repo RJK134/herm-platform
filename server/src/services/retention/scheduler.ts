@@ -178,26 +178,44 @@ export function startRetentionScheduler(): void {
   }
   const intervalMs = readNumberEnv('RETENTION_SWEEP_INTERVAL_MS', DEFAULT_INTERVAL_MS);
 
+  // Phase 11.14 follow-up (Bugbot review on PR #76) — guard against
+  // overlapping ticks. Each tick now runs TWO sweeps (institutions +
+  // users), so a long-running sweep could exceed `intervalMs` and the
+  // next setInterval fire would start a second concurrent tick. The
+  // result: overlapping `deleteMany` calls, doubled DB load, confusing
+  // log lines. The guard skips a fired tick when the previous one is
+  // still running (logged at debug), letting the in-flight tick finish
+  // before the next one starts.
+  let inFlight = false;
   async function tick(): Promise<void> {
-    // Phase 11.14 — sweep institutions FIRST so the cascading hard-
-    // delete reaps any User rows that hadn't yet been per-User
-    // soft-deleted. Then the user sweep mops up GDPR-individual
-    // erasures (which don't touch Institution).
-    try {
-      await sweepInstitutions();
-    } catch (err) {
-      logger.error(
-        { err: err instanceof Error ? err.message : String(err) },
-        'retention.sweep.institutions.failed',
-      );
+    if (inFlight) {
+      logger.debug('retention.tick: skipped — previous tick still running');
+      return;
     }
+    inFlight = true;
     try {
-      await sweepUsers();
-    } catch (err) {
-      logger.error(
-        { err: err instanceof Error ? err.message : String(err) },
-        'retention.sweep.users.failed',
-      );
+      // Phase 11.14 — sweep institutions FIRST so the cascading hard-
+      // delete reaps any User rows that hadn't yet been per-User
+      // soft-deleted. Then the user sweep mops up GDPR-individual
+      // erasures (which don't touch Institution).
+      try {
+        await sweepInstitutions();
+      } catch (err) {
+        logger.error(
+          { err: err instanceof Error ? err.message : String(err) },
+          'retention.sweep.institutions.failed',
+        );
+      }
+      try {
+        await sweepUsers();
+      } catch (err) {
+        logger.error(
+          { err: err instanceof Error ? err.message : String(err) },
+          'retention.sweep.users.failed',
+        );
+      }
+    } finally {
+      inFlight = false;
     }
   }
 
