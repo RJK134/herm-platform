@@ -7,6 +7,7 @@ import { audit } from '../../lib/audit';
 import { AppError } from '../../utils/errors';
 import { generateToken, type JwtPayload } from '../../middleware/auth';
 import { verifyMfaChallengeToken, verifyTotp } from '../../lib/mfa';
+import { revokeSession } from '../../lib/session-store';
 
 const service = new AuthService();
 
@@ -166,6 +167,14 @@ export const logout = async (
   // which the client's axios interceptor maps to the same "clear token
   // and redirect to /login" UX as a successful logout.
   try {
+    // Phase 11.12 — also revoke the session-store row so a stolen JWT
+    // cannot be reused for the rest of its 7-day lifetime. Tokens
+    // minted before that phase have no jti claim; the call is a no-op
+    // for them. Best-effort: a session-store hiccup does not block the
+    // 200 because audit + client-side wipe still complete.
+    if (req.user!.jti) {
+      await revokeSession(req.user!.jti);
+    }
     await audit(req, {
       action: 'auth.logout',
       entityType: 'User',

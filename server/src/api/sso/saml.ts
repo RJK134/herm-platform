@@ -78,6 +78,14 @@ export async function buildAuthnRequestUrl(
 export interface SamlAssertion {
   email: string;
   name?: string;
+  /**
+   * Phase 11.12 — surfaced for SAML SLO. The IdP's LogoutRequest will
+   * carry the same NameID; the session store indexes by it so we can
+   * find every session belonging to the subject.
+   */
+  samlNameId?: string;
+  /** AuthnStatement SessionIndex (when present) for narrower SLO targeting. */
+  samlSessionIndex?: string;
 }
 
 /**
@@ -109,5 +117,44 @@ export async function validateSamlResponse(
   const attrs = (profile.attributes ?? {}) as Record<string, unknown>;
   const rawName = attrs['displayName'] ?? attrs['name'] ?? attrs['cn'];
   const name = typeof rawName === 'string' ? rawName : undefined;
-  return { email, name };
+  const samlSessionIndex =
+    typeof profile.sessionIndex === 'string' ? profile.sessionIndex : undefined;
+  return { email, name, samlNameId: email, samlSessionIndex };
+}
+
+/**
+ * Validate an IdP-initiated LogoutRequest delivered via HTTP-Redirect
+ * binding (the common shape — UKAMF and Entra ID both use it).
+ * Returns the asserted NameID + (optional) SessionIndex; the caller's
+ * SLO handler then revokes every session matching that subject.
+ *
+ * `query` should be the express `req.query` object as-is; node-saml
+ * needs all of `SAMLRequest`, `RelayState`, `SigAlg`, `Signature` to
+ * verify the redirect-binding signature.
+ */
+export async function validateLogoutRequest(
+  institutionSlug: string,
+  idp: TenantSamlConfig,
+  query: Record<string, unknown>,
+  originalQuery: string,
+): Promise<{ nameId: string; sessionIndex?: string }> {
+  const saml = buildSaml(institutionSlug, idp);
+  // node-saml's `validateRedirectAsync` expects an Express ParsedQs;
+  // the Record<string, unknown> shape we accept matches the runtime
+  // payload (express's req.query) but TS narrows through ParsedQs.
+  // Cast safely — every value we read off `result.profile` is checked
+  // before use.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = await saml.validateRedirectAsync(query as any, originalQuery);
+  const profile = result.profile;
+  if (!profile || !result.loggedOut) {
+    throw new Error('SAML LogoutRequest did not yield a logout profile');
+  }
+  const nameId = profile.nameID;
+  if (!nameId || typeof nameId !== 'string') {
+    throw new Error('SAML LogoutRequest missing NameID');
+  }
+  const sessionIndex =
+    typeof profile.sessionIndex === 'string' ? profile.sessionIndex : undefined;
+  return { nameId, sessionIndex };
 }
