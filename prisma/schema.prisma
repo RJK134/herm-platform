@@ -101,6 +101,23 @@ model Institution {
   tier               String                @default("free")
   logoUrl            String?
   domain             String?
+  // Phase 11.14 — soft-delete cascade. When an Institution is removed
+  // by a SUPER_ADMIN, the row is kept for the retention grace window
+  // so the change can be reversed before the scheduler hard-deletes
+  // it. The cascade stamps `deletedAt` on the related Subscription
+  // and User rows (the latter via the same scrub-on-soft-delete
+  // pattern that the GDPR right-to-erasure path uses). In the JWT
+  // auth chokepoint (`authenticateJWT`), `Institution.deletedAt != null`
+  // is treated as "no such tenant", so JWT-authenticated users from
+  // a soft-deleted institution are blocked even before their per-User
+  // `deletedAt` propagates through the cache.
+  //
+  // Note: API-key auth (the `/api/keys/*` surface) does NOT yet read
+  // this column. ApiKey rows are hard-deleted by the cascade (via the
+  // `onDelete: Cascade` FK), so the keys are revoked at the same
+  // moment, but a defence-in-depth check on `Institution.deletedAt`
+  // in api-key-auth is on the deferred follow-up list.
+  deletedAt          DateTime?
   users              User[]
   baskets            CapabilityBasket[]
   projects           ProcurementProject[]
@@ -110,6 +127,8 @@ model Institution {
   ssoProviders       SsoIdentityProvider[]
   createdAt          DateTime              @default(now())
   updatedAt          DateTime              @updatedAt
+
+  @@index([deletedAt])
 }
 
 // Phase 10.7 (scaffold) + Phase 11.13 (multi-IdP per tenant): per-
@@ -187,9 +206,18 @@ model Subscription {
   stripeSubscriptionId String?
   currentPeriodStart   DateTime?
   currentPeriodEnd     DateTime?
+  // Phase 11.14 — soft-delete cascade. Stamped when the parent
+  // Institution is soft-deleted; the retention scheduler hard-deletes
+  // Subscription rows past the grace window. Stripe webhooks for a
+  // soft-deleted subscription are still recorded (the Stripe ID lives
+  // on this row) but the entitlements no longer apply because the
+  // Institution itself is gone.
+  deletedAt            DateTime?
   payments             Payment[]
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
+
+  @@index([deletedAt])
 }
 
 enum SubscriptionTier {

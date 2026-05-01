@@ -35,16 +35,21 @@ vi.mock('@node-saml/node-saml', () => ({
   ValidateInResponseTo: { never: 'never' },
 }));
 
-const { findUniqueMock, ssoFindUniqueMock, auditCreateMock, userFindUniqueMock } = vi.hoisted(() => ({
+const { findUniqueMock, ssoFindUniqueMock, ssoFindFirstMock, auditCreateMock, userFindUniqueMock } = vi.hoisted(() => ({
   findUniqueMock: vi.fn(),
   ssoFindUniqueMock: vi.fn(),
+  // Phase 11.13 follow-up — `resolveSsoForFlow` now reads the IdP via
+  // `ssoIdentityProvider.findFirst` directly. Tests need to mock that
+  // alongside the legacy `institution.findUnique` (still used for
+  // discovery via `listEnabledIdpsForSlug`).
+  ssoFindFirstMock: vi.fn(),
   auditCreateMock: vi.fn(),
   userFindUniqueMock: vi.fn(),
 }));
 vi.mock('../utils/prisma', () => ({
   default: {
     institution: { findUnique: findUniqueMock },
-    ssoIdentityProvider: { findUnique: ssoFindUniqueMock },
+    ssoIdentityProvider: { findUnique: ssoFindUniqueMock, findFirst: ssoFindFirstMock },
     auditLog: { create: auditCreateMock },
     user: { findUnique: userFindUniqueMock },
   },
@@ -87,28 +92,29 @@ const ENTERPRISE_INSTITUTION = {
   name: 'Acme University',
   domain: 'acme.test',
   subscription: { tier: 'ENTERPRISE' },
-  // Phase 11.13 — `ssoProvider` (singular 1:1) became `ssoProviders`
-  // (1:N array). Single-IdP fixtures wrap the row in an array.
-  ssoProviders: [
-    {
-      id: 'idp-acme',
-      institutionId: 'inst-acme',
-      protocol: 'SAML',
-      displayName: 'Acme SAML',
-      samlEntityId: 'https://idp.acme.test/saml',
-      samlSsoUrl: 'https://idp.acme.test/sso',
-      samlCert: '-----BEGIN CERTIFICATE-----\nMIIDazCCAlOgAwIBAgIUaaaaaaaaaaaaaaaaaaaaaaaa\n-----END CERTIFICATE-----',
-      oidcIssuer: null,
-      oidcClientId: null,
-      oidcClientSecret: null,
-      jitProvisioning: true,
-      defaultRole: 'VIEWER',
-      enabled: true,
-      priority: 100,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
-  ],
+};
+
+// Phase 11.13 follow-up — `resolveSsoForFlow` returns this shape via
+// the ssoIdentityProvider.findFirst path: a single IdP row with the
+// institution (and its subscription) joined in.
+const ENTERPRISE_IDP_ROW = {
+  id: 'idp-acme',
+  institutionId: 'inst-acme',
+  protocol: 'SAML',
+  displayName: 'Acme SAML',
+  samlEntityId: 'https://idp.acme.test/saml',
+  samlSsoUrl: 'https://idp.acme.test/sso',
+  samlCert: '-----BEGIN CERTIFICATE-----\nMIIDazCCAlOgAwIBAgIUaaaaaaaaaaaaaaaaaaaaaaaa\n-----END CERTIFICATE-----',
+  oidcIssuer: null,
+  oidcClientId: null,
+  oidcClientSecret: null,
+  jitProvisioning: true,
+  defaultRole: 'VIEWER',
+  enabled: true,
+  priority: 100,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  institution: ENTERPRISE_INSTITUTION,
 };
 
 function buildApp(): express.Express {
@@ -131,6 +137,7 @@ beforeEach(() => {
   samlInstance.validateRedirectAsync.mockReset();
   findUniqueMock.mockReset();
   ssoFindUniqueMock.mockReset();
+  ssoFindFirstMock.mockReset();
   auditCreateMock.mockReset();
   userFindUniqueMock.mockReset();
   revokeBySamlSubjectMock.mockReset();
@@ -145,7 +152,8 @@ beforeEach(() => {
 
 describe('GET /api/sso/:slug/saml/slo (IdP-initiated SLO)', () => {
   it('302s to /login?logged_out=sso, revokes matching sessions, and audits slo_success', async () => {
-    findUniqueMock.mockResolvedValue(ENTERPRISE_INSTITUTION);
+    // Phase 11.13 — service uses ssoIdentityProvider.findFirst now.
+    ssoFindFirstMock.mockResolvedValue(ENTERPRISE_IDP_ROW);
     samlInstance.validateRedirectAsync.mockResolvedValue({
       profile: {
         nameID: 'alice@acme.test',
@@ -173,7 +181,7 @@ describe('GET /api/sso/:slug/saml/slo (IdP-initiated SLO)', () => {
   });
 
   it('302s to /login?error=sso_failed and audits slo_fail when the LogoutRequest signature is bad', async () => {
-    findUniqueMock.mockResolvedValue(ENTERPRISE_INSTITUTION);
+    ssoFindFirstMock.mockResolvedValue(ENTERPRISE_IDP_ROW);
     samlInstance.validateRedirectAsync.mockRejectedValue(new Error('Invalid signature'));
 
     const res = await request(buildApp()).get(
@@ -190,16 +198,19 @@ describe('GET /api/sso/:slug/saml/slo (IdP-initiated SLO)', () => {
   });
 
   it('returns 404 SSO_NOT_CONFIGURED for an unknown institution slug', async () => {
-    findUniqueMock.mockResolvedValue(null);
+    // findFirst returns null when nothing matches.
+    ssoFindFirstMock.mockResolvedValue(null);
     const res = await request(buildApp()).get('/api/sso/unknown/saml/slo?SAMLRequest=x');
     expect(res.status).toBe(404);
     expect(res.body.error?.code).toBe('SSO_NOT_CONFIGURED');
   });
 
   it('returns 404 SSO_NOT_CONFIGURED for a non-Enterprise tier (Q7 opaque gate)', async () => {
-    findUniqueMock.mockResolvedValue({
-      ...ENTERPRISE_INSTITUTION,
-      subscription: { tier: 'PROFESSIONAL' },
+    // The IdP row exists but the institution's subscription tier is
+    // below Enterprise — service flattens this to the same opaque 404.
+    ssoFindFirstMock.mockResolvedValue({
+      ...ENTERPRISE_IDP_ROW,
+      institution: { ...ENTERPRISE_INSTITUTION, subscription: { tier: 'PROFESSIONAL' } },
     });
     const res = await request(buildApp()).get('/api/sso/acme/saml/slo?SAMLRequest=x');
     expect(res.status).toBe(404);

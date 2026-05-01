@@ -109,6 +109,54 @@ export async function sweepUsers(options: SweepOptions = {}): Promise<SweepStats
   return { scanned: candidates.length, deleted: result.count, cutoff };
 }
 
+/**
+ * Phase 11.14 — sweep soft-deleted Institutions past the grace window.
+ * The cascade controller scrubs PII and stamps `deletedAt` on Users,
+ * Subscription, and Institution; the scheduler then hard-deletes the
+ * tombstoned rows, letting Prisma's `onDelete: Cascade` FKs propagate
+ * to the deeper rows (CapabilityBasket, ProcurementProject, etc.).
+ *
+ * Order matters: Subscription and User rows are deleted by the
+ * Institution cascade once the parent is hard-deleted. We still call
+ * `sweepUsers` separately because GDPR-erasure paths can soft-delete a
+ * single user without a matching institution-level soft-delete.
+ */
+export async function sweepInstitutions(options: SweepOptions = {}): Promise<SweepStats> {
+  const graceDays = options.graceDays ?? readNumberEnv('RETENTION_GRACE_DAYS', DEFAULT_GRACE_DAYS);
+  const batchSize = options.batchSize ?? readNumberEnv('RETENTION_BATCH_SIZE', DEFAULT_BATCH_SIZE);
+  const cutoff = new Date(Date.now() - graceDays * 24 * 60 * 60 * 1000);
+
+  const candidates = await prisma.institution.findMany({
+    where: { deletedAt: { not: null, lt: cutoff } },
+    select: { id: true, deletedAt: true },
+    take: batchSize,
+    orderBy: { deletedAt: 'asc' },
+  });
+
+  if (candidates.length === 0) {
+    return { scanned: 0, deleted: 0, cutoff };
+  }
+
+  if (options.dryRun) {
+    return { scanned: candidates.length, deleted: 0, cutoff };
+  }
+
+  const result = await prisma.institution.deleteMany({
+    where: { id: { in: candidates.map((c) => c.id) } },
+  });
+
+  logger.info(
+    {
+      scanned: candidates.length,
+      deleted: result.count,
+      cutoff: cutoff.toISOString(),
+    },
+    'retention.sweep.institutions',
+  );
+
+  return { scanned: candidates.length, deleted: result.count, cutoff };
+}
+
 // ── In-process scheduler ───────────────────────────────────────────────────
 
 let intervalHandle: NodeJS.Timeout | null = null;
@@ -130,17 +178,54 @@ export function startRetentionScheduler(): void {
   }
   const intervalMs = readNumberEnv('RETENTION_SWEEP_INTERVAL_MS', DEFAULT_INTERVAL_MS);
 
+  // Phase 11.14 follow-up (Bugbot review on PR #76) — guard against
+  // overlapping ticks. Each tick now runs TWO sweeps (institutions +
+  // users), so a long-running sweep could exceed `intervalMs` and the
+  // next setInterval fire would start a second concurrent tick. The
+  // result: overlapping `deleteMany` calls, doubled DB load, confusing
+  // log lines. The guard skips a fired tick when the previous one is
+  // still running (logged at debug), letting the in-flight tick finish
+  // before the next one starts.
+  let inFlight = false;
+  async function tick(): Promise<void> {
+    if (inFlight) {
+      logger.debug('retention.tick: skipped — previous tick still running');
+      return;
+    }
+    inFlight = true;
+    try {
+      // Phase 11.14 — sweep institutions FIRST so the cascading hard-
+      // delete reaps any User rows that hadn't yet been per-User
+      // soft-deleted. Then the user sweep mops up GDPR-individual
+      // erasures (which don't touch Institution).
+      try {
+        await sweepInstitutions();
+      } catch (err) {
+        logger.error(
+          { err: err instanceof Error ? err.message : String(err) },
+          'retention.sweep.institutions.failed',
+        );
+      }
+      try {
+        await sweepUsers();
+      } catch (err) {
+        logger.error(
+          { err: err instanceof Error ? err.message : String(err) },
+          'retention.sweep.users.failed',
+        );
+      }
+    } finally {
+      inFlight = false;
+    }
+  }
+
   // Kick off the first sweep on the next tick so server startup
   // doesn't block on it; subsequent sweeps follow the interval.
   setImmediate(() => {
-    sweepUsers().catch((err: unknown) => {
-      logger.error({ err: err instanceof Error ? err.message : String(err) }, 'retention.sweep.failed');
-    });
+    void tick();
   });
   intervalHandle = setInterval(() => {
-    sweepUsers().catch((err: unknown) => {
-      logger.error({ err: err instanceof Error ? err.message : String(err) }, 'retention.sweep.failed');
-    });
+    void tick();
   }, intervalMs);
   // unref so a hung scheduler can never keep the process alive.
   intervalHandle.unref?.();
