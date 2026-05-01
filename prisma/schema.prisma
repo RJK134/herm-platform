@@ -228,12 +228,19 @@ model User {
   // secret) are scrubbed at the moment of soft-delete so the
   // grace-period row already minimises personal data.
   deletedAt             DateTime?
+  // Phase 11.11 — SCIM 2.0 provisioning. Identifier the IdP / SCIM
+  // client uses to track this user on its side. Optional and unique
+  // per-institution (composite uniqueness, not global) so two different
+  // tenants can both have a user with the same IdP-side externalId
+  // without colliding. Null for non-SCIM-provisioned users.
+  externalId            String?
   evaluationMemberships EvaluationMember[]
   domainAssignments     EvaluationDomainAssignment[] @relation("DomainAssignments")
   notifications         Notification[]
   createdAt             DateTime                     @default(now())
   updatedAt             DateTime                     @updatedAt
 
+  @@unique([institutionId, externalId])
   @@index([institutionId])
   @@index([deletedAt])
 }

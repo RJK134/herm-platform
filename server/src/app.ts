@@ -36,6 +36,7 @@ import frameworkMappingsRouter from './api/framework-mappings/framework-mappings
 import gdprRouter from './api/gdpr/gdpr.router';
 import openApiRouter from './api/openapi/openapi.router';
 import ssoRouter from './api/sso/sso.router';
+import { createScimRouter } from './api/scim/scim.router';
 import { frameworkContext } from './middleware/framework-context';
 import { tierGate } from './middleware/tier-gate';
 import { optionalJWT } from './middleware/auth';
@@ -136,6 +137,13 @@ export function createApp(): Express {
   // tells the frontend whether SSO is available for an institution.
   // The actual SAML/OIDC login flows ship in a follow-up PR.
   app.use('/api/sso', ssoRouter);
+
+  // Phase 11.11 — SCIM 2.0 provisioning. Mounted at the conventional
+  // `/scim/v2` path (NOT under `/api/*`) so SCIM clients (Okta, Entra,
+  // Google) reach a standard URL without HERM-specific prefixing. Auth
+  // is API-key + `admin:scim` permission, not JWT — wired inside the
+  // router itself. Skipped under /api/v1 because SCIM is its own spec.
+  app.use('/scim/v2', createScimRouter());
 
   // Phase 10.8 — GDPR data-subject rights (data export, erasure).
   // Mounted at /me because they're personal rights, not admin actions.
