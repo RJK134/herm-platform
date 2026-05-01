@@ -188,9 +188,32 @@ describe('rotateOnce', () => {
   }
 
   it('returns no-op stats when UKAMF_METADATA_URL is unset and no override given', async () => {
-    const stats = await rotateOnce({ feedUrl: undefined });
-    expect(stats).toEqual({ scanned: 0, rotated: 0, skipped: 0, errors: 0 });
-    expect(findManyMock).not.toHaveBeenCalled();
+    const originalUkamfEnv = Object.fromEntries(
+      Object.keys(process.env)
+        .filter((key) => key.startsWith('UKAMF_'))
+        .map((key) => [key, process.env[key]]),
+    );
+
+    for (const key of Object.keys(originalUkamfEnv)) {
+      delete process.env[key];
+    }
+
+    try {
+      const stats = await rotateOnce({ feedUrl: undefined });
+      expect(stats).toEqual({ scanned: 0, rotated: 0, skipped: 0, errors: 0 });
+      expect(findManyMock).not.toHaveBeenCalled();
+    } finally {
+      for (const key of Object.keys(process.env).filter((envKey) => envKey.startsWith('UKAMF_'))) {
+        delete process.env[key];
+      }
+      for (const [key, value] of Object.entries(originalUkamfEnv)) {
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
+      }
+    }
   });
 
   it('rotates IdP A (different cert), skips IdP B (matching cert), skips IdP C (not in feed)', async () => {
