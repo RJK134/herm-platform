@@ -62,31 +62,26 @@ export async function resolveSsoForFlow(
   institutionSlug: string,
   idpId?: string,
 ): Promise<ResolvedIdp> {
-  const institution = await prisma.institution.findUnique({
-    where: { slug: institutionSlug },
+  // Single-row query: fetches only the one IdP we need (highest-priority
+  // enabled row, or the specific row if `idpId` is supplied). This avoids
+  // loading every enabled IdP's secrets when an institution has multiple
+  // IdPs — only the chosen row's encrypted fields are materialised.
+  const provider = await prisma.ssoIdentityProvider.findFirst({
+    where: {
+      enabled: true,
+      institution: { slug: institutionSlug },
+      ...(idpId ? { id: idpId } : {}),
+    },
+    orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
     include: {
-      subscription: true,
-      ssoProviders: {
-        where: { enabled: true },
-        orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+      institution: {
+        include: { subscription: true },
       },
     },
   });
-  if (!institution || institution.ssoProviders.length === 0) {
-    throw new AppError(
-      404,
-      'SSO_NOT_CONFIGURED',
-      'SSO is not configured for this institution.',
-    );
-  }
-  // Multi-IdP: pick the requested row if `idpId` is given, otherwise
-  // the highest-priority enabled row (already sorted by the include).
-  const provider = idpId
-    ? institution.ssoProviders.find((p) => p.id === idpId)
-    : institution.ssoProviders[0];
   if (!provider) {
-    // `idpId` supplied but no matching enabled row in this institution.
-    // Same opaque 404 — never confirm or deny which idpIds exist.
+    // Covers: institution not found, no enabled IdP row, wrong idpId.
+    // Same opaque 404 in all cases — never confirm which of these applies.
     throw new AppError(
       404,
       'SSO_NOT_CONFIGURED',
@@ -94,14 +89,14 @@ export async function resolveSsoForFlow(
     );
   }
   const tier = resolveEffectiveTier(
-    institution.subscription?.tier?.toLowerCase() ?? 'free',
+    provider.institution.subscription?.tier?.toLowerCase() ?? 'free',
   );
   if (tier !== 'enterprise') {
     // Same opaque 404 to avoid leaking tier state across the boundary.
     // The institution admin who wired SSO already knows their plan;
     // an outside probe doesn't need to.
     logger.warn(
-      { institutionId: institution.id, tier },
+      { institutionId: provider.institution.id, tier },
       'sso flow rejected: institution not on enterprise tier',
     );
     throw new AppError(
@@ -122,7 +117,7 @@ export async function resolveSsoForFlow(
   } catch (err) {
     logger.error(
       {
-        institutionId: institution.id,
+        institutionId: provider.institution.id,
         idpId: provider.id,
         err: err instanceof Error ? err.message : String(err),
       },
@@ -142,8 +137,8 @@ export async function resolveSsoForFlow(
     samlCert,
     oidcClientSecret,
     institution: {
-      ...institution,
-      subscription: institution.subscription,
+      ...provider.institution,
+      subscription: provider.institution.subscription,
     },
   };
 }

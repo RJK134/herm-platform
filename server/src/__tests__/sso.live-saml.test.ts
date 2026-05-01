@@ -40,6 +40,7 @@ vi.mock('../lib/redis', () => ({ getRedis: () => null }));
 const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
     institution: { findUnique: vi.fn(), findFirst: vi.fn() },
+    ssoIdentityProvider: { findFirst: vi.fn() },
     user: { findUnique: vi.fn(), update: vi.fn(), create: vi.fn() },
     auditLog: { create: vi.fn(async () => ({})) },
   },
@@ -72,30 +73,27 @@ describe('SAML end-to-end through an in-process signing IdP', () => {
   it('verifies a real signed assertion and JIT-provisions the user', async () => {
     const idp = createSamlTestIdp({ entityId: 'https://idp.live.test/saml/idp' });
 
-    prismaMock.institution.findUnique.mockResolvedValue({
-      id: 'inst-saml-1',
-      slug: 'uni-saml',
-      name: 'SAML University',
-      subscription: { tier: 'ENTERPRISE' },
-      // Phase 11.13 — singular ssoProvider became an array.
-      ssoProviders: [
-        {
-          id: 'idp-saml-1',
-          institutionId: 'inst-saml-1',
-          protocol: 'SAML',
-          enabled: true,
-          displayName: 'Sign in with Live SAML',
-          samlEntityId: idp.entityId,
-          samlSsoUrl: 'https://idp.live.test/saml/sso',
-          samlCert: idp.cert,
-          oidcIssuer: null,
-          oidcClientId: null,
-          oidcClientSecret: null,
-          jitProvisioning: true,
-          defaultRole: 'VIEWER',
-          priority: 100,
-        },
-      ],
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue({
+      id: 'idp-saml-1',
+      institutionId: 'inst-saml-1',
+      protocol: 'SAML',
+      enabled: true,
+      displayName: 'Sign in with Live SAML',
+      samlEntityId: idp.entityId,
+      samlSsoUrl: 'https://idp.live.test/saml/sso',
+      samlCert: idp.cert,
+      oidcIssuer: null,
+      oidcClientId: null,
+      oidcClientSecret: null,
+      jitProvisioning: true,
+      defaultRole: 'VIEWER',
+      priority: 100,
+      institution: {
+        id: 'inst-saml-1',
+        slug: 'uni-saml',
+        name: 'SAML University',
+        subscription: { tier: 'ENTERPRISE' },
+      },
     });
     prismaMock.user.findUnique.mockResolvedValue(null);
     prismaMock.user.create.mockResolvedValue({
@@ -150,29 +148,27 @@ describe('SAML end-to-end through an in-process signing IdP', () => {
   it('rejects a tampered assertion (signature mismatch)', async () => {
     const idp = createSamlTestIdp({ entityId: 'https://idp.live.test/saml/idp' });
 
-    prismaMock.institution.findUnique.mockResolvedValue({
-      id: 'inst-saml-2',
-      slug: 'uni-saml-tamper',
-      name: 'SAML University',
-      subscription: { tier: 'ENTERPRISE' },
-      ssoProviders: [
-        {
-          id: 'idp-saml-2',
-          institutionId: 'inst-saml-2',
-          protocol: 'SAML',
-          enabled: true,
-          displayName: 'Sign in with Live SAML',
-          samlEntityId: idp.entityId,
-          samlSsoUrl: 'https://idp.live.test/saml/sso',
-          samlCert: idp.cert,
-          oidcIssuer: null,
-          oidcClientId: null,
-          oidcClientSecret: null,
-          jitProvisioning: true,
-          defaultRole: 'VIEWER',
-          priority: 100,
-        },
-      ],
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue({
+      id: 'idp-saml-2',
+      institutionId: 'inst-saml-2',
+      protocol: 'SAML',
+      enabled: true,
+      displayName: 'Sign in with Live SAML',
+      samlEntityId: idp.entityId,
+      samlSsoUrl: 'https://idp.live.test/saml/sso',
+      samlCert: idp.cert,
+      oidcIssuer: null,
+      oidcClientId: null,
+      oidcClientSecret: null,
+      jitProvisioning: true,
+      defaultRole: 'VIEWER',
+      priority: 100,
+      institution: {
+        id: 'inst-saml-2',
+        slug: 'uni-saml-tamper',
+        name: 'SAML University',
+        subscription: { tier: 'ENTERPRISE' },
+      },
     });
 
     const responseXml = idp.buildSamlResponse({
@@ -205,29 +201,27 @@ describe('SAML end-to-end through an in-process signing IdP', () => {
     const realIdp = createSamlTestIdp({ entityId: 'https://idp.live.test/saml/idp' });
     const attackerIdp = createSamlTestIdp({ entityId: 'https://idp.live.test/saml/idp' });
 
-    prismaMock.institution.findUnique.mockResolvedValue({
-      id: 'inst-saml-3',
-      slug: 'uni-saml-rogue',
-      name: 'SAML University',
-      subscription: { tier: 'ENTERPRISE' },
-      ssoProviders: [
-        {
-          id: 'idp-saml-3',
-          institutionId: 'inst-saml-3',
-          protocol: 'SAML',
-          enabled: true,
-          displayName: 'Sign in with Live SAML',
-          samlEntityId: realIdp.entityId,
-          samlSsoUrl: 'https://idp.live.test/saml/sso',
-          samlCert: realIdp.cert, // SP trusts only the real IdP's cert
-          oidcIssuer: null,
-          oidcClientId: null,
-          oidcClientSecret: null,
-          jitProvisioning: true,
-          defaultRole: 'VIEWER',
-          priority: 100,
-        },
-      ],
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue({
+      id: 'idp-saml-3',
+      institutionId: 'inst-saml-3',
+      protocol: 'SAML',
+      enabled: true,
+      displayName: 'Sign in with Live SAML',
+      samlEntityId: realIdp.entityId,
+      samlSsoUrl: 'https://idp.live.test/saml/sso',
+      samlCert: realIdp.cert, // SP trusts only the real IdP's cert
+      oidcIssuer: null,
+      oidcClientId: null,
+      oidcClientSecret: null,
+      jitProvisioning: true,
+      defaultRole: 'VIEWER',
+      priority: 100,
+      institution: {
+        id: 'inst-saml-3',
+        slug: 'uni-saml-rogue',
+        name: 'SAML University',
+        subscription: { tier: 'ENTERPRISE' },
+      },
     });
 
     // Attacker generates a valid-looking response signed with a

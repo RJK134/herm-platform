@@ -131,18 +131,22 @@ export async function takeFlowState(state: string): Promise<OidcFlowState | null
  * destructive `takeFlowState` call. Returns null when the state is
  * unknown / expired. Does NOT extend the TTL — the subsequent take
  * still has the original window to land within.
+ *
+ * Fail-closed when Redis is configured: a transient Redis error during
+ * peek must NOT silently fall through to the in-memory store. If it did,
+ * `resolveSsoForFlow` would pick the primary (wrong) IdP, and the
+ * subsequent `takeFlowState` — which retries Redis and succeeds — would
+ * consume the state while token exchange happened against the wrong
+ * client_secret, turning a recoverable blip into a guaranteed auth failure.
+ * Throwing here causes the callback to redirect to the failure page without
+ * consuming the flow state, so the user can retry.
  */
 export async function peekFlowState(state: string): Promise<OidcFlowState | null> {
   const client = getRedis();
   if (client) {
-    try {
-      return await peekRedis(client, state);
-    } catch (err) {
-      logger.warn(
-        { err: err instanceof Error ? err.message : String(err) },
-        'sso flow-store: redis peek failed, falling back to in-memory',
-      );
-    }
+    // Intentionally no try/catch: propagate Redis errors to the caller so
+    // the OIDC callback fails closed rather than proceeding with the wrong IdP.
+    return await peekRedis(client, state);
   }
   memPrune(Date.now());
   const entry = memStore.get(memKey(state));
