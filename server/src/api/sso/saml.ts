@@ -21,9 +21,13 @@
  * the request is unsigned — sufficient for permissive IdPs but rejected
  * by federation-grade IdPs (UKAMF). See `lib/sp-signing.ts`.
  */
+import { promisify } from 'node:util';
+import { inflateRaw } from 'node:zlib';
 import { SAML, ValidateInResponseTo, type SamlConfig } from '@node-saml/node-saml';
 import { getSamlAcsUrl, getSpEntityId } from '../../lib/sso-config';
 import { getSpSigningMaterial } from '../../lib/sp-signing';
+
+const inflateRawAsync = promisify(inflateRaw);
 
 export interface TenantSamlConfig {
   /** IdP's entityID (e.g. `https://idp.example.ac.uk/saml/idp`). */
@@ -89,7 +93,9 @@ export async function buildAuthnRequestUrl(
  * Returns `{ slug, idpId? }`. Legacy callers send just the slug; new
  * multi-IdP callers send `<slug>:<idpId>`.
  */
-export function parseRelayState(relayState: string | undefined): { slug: string; idpId?: string } | null {
+export function parseRelayState(
+  relayState: string | undefined,
+): { slug: string; idpId?: string } | null {
   if (!relayState) return null;
   const idx = relayState.indexOf(':');
   if (idx < 0) return { slug: relayState };
@@ -149,6 +155,13 @@ export async function validateSamlResponse(
  * Returns the asserted NameID + (optional) SessionIndex; the caller's
  * SLO handler then revokes every session matching that subject.
  *
+ * Phase 11.15 — also surfaces `requestId` (the LogoutRequest's `ID`
+ * attribute, sourced from node-saml's parsed `profile.ID`) and the
+ * raw `notOnOrAfter` ISO timestamp lifted from the inflated XML so
+ * the controller can scope a per-request replay cache. Replay
+ * protection lives in `slo-replay-cache.ts`; this helper just exposes
+ * the inputs.
+ *
  * `query` should be the express `req.query` object as-is; node-saml
  * needs all of `SAMLRequest`, `RelayState`, `SigAlg`, `Signature` to
  * verify the redirect-binding signature.
@@ -158,7 +171,7 @@ export async function validateLogoutRequest(
   idp: TenantSamlConfig,
   query: Record<string, unknown>,
   originalQuery: string,
-): Promise<{ nameId: string; sessionIndex?: string }> {
+): Promise<{ nameId: string; sessionIndex?: string; requestId: string; notOnOrAfter?: string }> {
   const saml = buildSaml(institutionSlug, idp);
   // node-saml's `validateRedirectAsync` expects an Express ParsedQs;
   // the Record<string, unknown> shape we accept matches the runtime
@@ -175,7 +188,39 @@ export async function validateLogoutRequest(
   if (!nameId || typeof nameId !== 'string') {
     throw new Error('SAML LogoutRequest missing NameID');
   }
-  const sessionIndex =
-    typeof profile.sessionIndex === 'string' ? profile.sessionIndex : undefined;
-  return { nameId, sessionIndex };
+  const requestId = typeof profile.ID === 'string' ? profile.ID : undefined;
+  if (!requestId) {
+    // node-saml's processValidlySignedPostRequestAsync already throws
+    // when the LogoutRequest XML is missing an ID, so reaching this
+    // branch indicates a contract drift in the upstream library.
+    throw new Error('SAML LogoutRequest missing ID');
+  }
+  const sessionIndex = typeof profile.sessionIndex === 'string' ? profile.sessionIndex : undefined;
+  const notOnOrAfter = await extractNotOnOrAfter(query);
+  return { nameId, sessionIndex, requestId, notOnOrAfter };
+}
+
+/**
+ * Extract the `NotOnOrAfter` attribute from the inflated LogoutRequest
+ * XML when present. Used to bound the replay cache TTL — node-saml
+ * verifies the timestamp internally but does not surface it on the
+ * profile, so we re-inflate the same SAMLRequest payload (the work is
+ * cheap: a few hundred bytes) and pull the attribute via regex rather
+ * than a full XML parse, since we only need a single attribute value
+ * and the surrounding XML has already been trust-validated upstream.
+ *
+ * Returns undefined when the SAMLRequest is missing, can't be inflated,
+ * or carries no NotOnOrAfter — the cache then uses the default TTL.
+ */
+async function extractNotOnOrAfter(query: Record<string, unknown>): Promise<string | undefined> {
+  const samlRequestRaw = query['SAMLRequest'];
+  if (typeof samlRequestRaw !== 'string' || !samlRequestRaw) return undefined;
+  try {
+    const buf = Buffer.from(samlRequestRaw, 'base64');
+    const inflated = (await inflateRawAsync(buf)).toString('utf8');
+    const match = /\bNotOnOrAfter\s*=\s*"([^"]+)"/i.exec(inflated);
+    return match?.[1];
+  } catch {
+    return undefined;
+  }
 }

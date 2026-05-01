@@ -105,17 +105,26 @@ export async function putFlowState(state: string, value: OidcFlowState): Promise
   });
 }
 
+/**
+ * Atomic single-use read of a flow record. Fail-closed when Redis is
+ * configured: a transient Redis error during take must NOT silently
+ * fall back to the in-memory Map.
+ *
+ * The original `take`-falls-through-to-memStore behaviour was a Phase
+ * 11.13 oversight (peek already fails closed for the same reason).
+ * The risk: the put-side stored the record in Redis, the take-side
+ * Redis call blips, the fallback hits the (empty) memStore, and the
+ * caller treats the state as unknown — racing with a retry that
+ * succeeds against Redis once the blip clears. Throwing here causes
+ * the OIDC callback to redirect to the failure page without consuming
+ * the flow state; the user retries cleanly.
+ */
 export async function takeFlowState(state: string): Promise<OidcFlowState | null> {
   const client = getRedis();
   if (client) {
-    try {
-      return await takeRedis(client, state);
-    } catch (err) {
-      logger.warn(
-        { err: err instanceof Error ? err.message : String(err) },
-        'sso flow-store: redis take failed, falling back to in-memory',
-      );
-    }
+    // Intentionally no try/catch when Redis is configured: propagate
+    // the error to the caller. peekFlowState uses the same posture.
+    return await takeRedis(client, state);
   }
   memPrune(Date.now());
   const k = memKey(state);
