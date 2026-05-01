@@ -32,8 +32,23 @@ interface CachedConfig {
 const TTL_MS = 60 * 60 * 1000;
 const configCache = new Map<string, CachedConfig>();
 
+/**
+ * Phase 11.13 follow-up (Bugbot HIGH on PR #75) — cache key includes
+ * `clientId` so two OIDC IdPs sharing an issuer (e.g. two Azure AD
+ * apps in the same Entra tenant) don't collide. Each `Configuration`
+ * embeds the clientId/clientSecret it was discovered with; keying on
+ * issuer alone would let the second IdP pick up the first's cached
+ * Configuration and emit the wrong client_id (or send the wrong
+ * client_secret on token exchange). clientId-not-secret keeps the
+ * secret out of any cache-debug log line.
+ */
+function configCacheKey(idp: TenantOidcConfig): string {
+  return `${idp.oidcIssuer}|${idp.oidcClientId}`;
+}
+
 async function getConfig(idp: TenantOidcConfig): Promise<oidc.Configuration> {
-  const hit = configCache.get(idp.oidcIssuer);
+  const cacheKey = configCacheKey(idp);
+  const hit = configCache.get(cacheKey);
   if (hit && Date.now() - hit.fetchedAt < TTL_MS) {
     return hit.config;
   }
@@ -53,7 +68,7 @@ async function getConfig(idp: TenantOidcConfig): Promise<oidc.Configuration> {
     undefined,
     allowInsecure ? { execute: [oidc.allowInsecureRequests] } : undefined,
   );
-  configCache.set(idp.oidcIssuer, { config, fetchedAt: Date.now() });
+  configCache.set(cacheKey, { config, fetchedAt: Date.now() });
   return config;
 }
 
