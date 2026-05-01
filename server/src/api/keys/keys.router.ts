@@ -17,7 +17,9 @@ router.use(authenticateJWT, requirePaidTier(['enterprise']));
 
 const createKeySchema = z.object({
   name: z.string().min(1).max(100),
-  permissions: z.array(z.enum(['read:systems', 'read:capabilities', 'read:scores', 'read:baskets'])).min(1),
+  permissions: z
+    .array(z.enum(['read:systems', 'read:capabilities', 'read:scores', 'read:baskets', 'admin:scim']))
+    .min(1),
   expiresAt: z.string().optional(),
 });
 
