@@ -61,18 +61,39 @@ function buildSaml(institutionSlug: string, idp: TenantSamlConfig): SAML {
 /**
  * Build the URL the user-agent should be 302'd to so they can
  * authenticate at the IdP. The `relayState` round-trips back to the
- * ACS — we use it to carry the institution slug so the ACS can re-load
- * config without trusting any field in the SAMLResponse to do it.
+ * ACS — we use it to carry the institution slug + (Phase 11.13) the
+ * idpId so the ACS can re-load the EXACT IdP that issued this
+ * AuthnRequest. Without the idpId in relayState, an institution with
+ * multiple IdPs would always resolve the highest-priority row at ACS
+ * time, validating responses with the wrong cert.
+ *
+ * RelayState format: `<institutionSlug>` (legacy single-IdP case) or
+ * `<institutionSlug>:<idpId>` (multi-IdP). The ACS parser falls back
+ * to the legacy shape when no `:` is present.
  */
 export async function buildAuthnRequestUrl(
   institutionSlug: string,
   idp: TenantSamlConfig,
+  idpId?: string,
 ): Promise<string> {
   const saml = buildSaml(institutionSlug, idp);
+  const relayState = idpId ? `${institutionSlug}:${idpId}` : institutionSlug;
   // node-saml's signature is (relayState, host, options). The host
   // argument is only consulted for a niche signing path we don't
   // exercise — undefined is fine.
-  return saml.getAuthorizeUrlAsync(institutionSlug, undefined, {});
+  return saml.getAuthorizeUrlAsync(relayState, undefined, {});
+}
+
+/**
+ * Phase 11.13 — parse the RelayState value posted back to the ACS.
+ * Returns `{ slug, idpId? }`. Legacy callers send just the slug; new
+ * multi-IdP callers send `<slug>:<idpId>`.
+ */
+export function parseRelayState(relayState: string | undefined): { slug: string; idpId?: string } | null {
+  if (!relayState) return null;
+  const idx = relayState.indexOf(':');
+  if (idx < 0) return { slug: relayState };
+  return { slug: relayState.slice(0, idx), idpId: relayState.slice(idx + 1) };
 }
 
 export interface SamlAssertion {

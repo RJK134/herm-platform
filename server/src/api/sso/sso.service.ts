@@ -50,20 +50,38 @@ export type ResolvedIdp = SsoIdentityProvider & {
  * testing without provisioning an Enterprise subscription. There is
  * no per-user / SUPER_ADMIN bypass here; the gate is institution-tier
  * because the caller is anonymous on this code path.
+ *
+ * Phase 11.13 (multi-IdP): when an `idpId` is supplied, the lookup
+ * narrows to that specific row (still required to be enabled and to
+ * belong to the institution). When omitted, the highest-priority
+ * enabled row wins — same back-compat shape the single-IdP era had.
+ * The lookup throws the same opaque 404 in either case so a probe
+ * can't distinguish "wrong idpId" from "no SSO".
  */
-export async function resolveSsoForFlow(institutionSlug: string): Promise<ResolvedIdp> {
-  const institution = await prisma.institution.findUnique({
-    where: { slug: institutionSlug },
+export async function resolveSsoForFlow(
+  institutionSlug: string,
+  idpId?: string,
+): Promise<ResolvedIdp> {
+  // Single-row query: fetches only the one IdP we need (highest-priority
+  // enabled row, or the specific row if `idpId` is supplied). This avoids
+  // loading every enabled IdP's secrets when an institution has multiple
+  // IdPs — only the chosen row's encrypted fields are materialised.
+  const provider = await prisma.ssoIdentityProvider.findFirst({
+    where: {
+      enabled: true,
+      institution: { slug: institutionSlug },
+      ...(idpId ? { id: idpId } : {}),
+    },
+    orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
     include: {
-      subscription: true,
-      ssoProvider: true,
+      institution: {
+        include: { subscription: true },
+      },
     },
   });
-  if (
-    !institution ||
-    !institution.ssoProvider ||
-    !institution.ssoProvider.enabled
-  ) {
+  if (!provider) {
+    // Covers: institution not found, no enabled IdP row, wrong idpId.
+    // Same opaque 404 in all cases — never confirm which of these applies.
     throw new AppError(
       404,
       'SSO_NOT_CONFIGURED',
@@ -71,14 +89,14 @@ export async function resolveSsoForFlow(institutionSlug: string): Promise<Resolv
     );
   }
   const tier = resolveEffectiveTier(
-    institution.subscription?.tier?.toLowerCase() ?? 'free',
+    provider.institution.subscription?.tier?.toLowerCase() ?? 'free',
   );
   if (tier !== 'enterprise') {
     // Same opaque 404 to avoid leaking tier state across the boundary.
     // The institution admin who wired SSO already knows their plan;
     // an outside probe doesn't need to.
     logger.warn(
-      { institutionId: institution.id, tier },
+      { institutionId: provider.institution.id, tier },
       'sso flow rejected: institution not on enterprise tier',
     );
     throw new AppError(
@@ -94,13 +112,13 @@ export async function resolveSsoForFlow(institutionSlug: string): Promise<Resolv
   let samlCert: string | null;
   let oidcClientSecret: string | null;
   try {
-    samlCert = decryptSecret(institution.ssoProvider.samlCert) ?? null;
-    oidcClientSecret = decryptSecret(institution.ssoProvider.oidcClientSecret) ?? null;
+    samlCert = decryptSecret(provider.samlCert) ?? null;
+    oidcClientSecret = decryptSecret(provider.oidcClientSecret) ?? null;
   } catch (err) {
     logger.error(
       {
-        institutionId: institution.id,
-        idpId: institution.ssoProvider.id,
+        institutionId: provider.institution.id,
+        idpId: provider.id,
         err: err instanceof Error ? err.message : String(err),
       },
       'sso flow rejected: secret decryption failed',
@@ -115,14 +133,37 @@ export async function resolveSsoForFlow(institutionSlug: string): Promise<Resolv
     );
   }
   return {
-    ...institution.ssoProvider,
+    ...provider,
     samlCert,
     oidcClientSecret,
     institution: {
-      ...institution,
-      subscription: institution.subscription,
+      ...provider.institution,
+      subscription: provider.institution.subscription,
     },
   };
+}
+
+/**
+ * Per-institution discovery: returns every enabled IdP for a slug,
+ * sorted by priority. Used by the discovery endpoints to surface a
+ * chooser when an institution has more than one IdP. Returns an empty
+ * array when no IdPs are configured (the controllers translate that
+ * into the same opaque 404 the single-IdP era used).
+ */
+export async function listEnabledIdpsForSlug(
+  institutionSlug: string,
+): Promise<Array<{ id: string; protocol: 'SAML' | 'OIDC'; displayName: string; priority: number }>> {
+  const institution = await prisma.institution.findUnique({
+    where: { slug: institutionSlug },
+    select: {
+      ssoProviders: {
+        where: { enabled: true },
+        orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+        select: { id: true, protocol: true, displayName: true, priority: true },
+      },
+    },
+  });
+  return institution?.ssoProviders ?? [];
 }
 
 /**

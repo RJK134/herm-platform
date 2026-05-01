@@ -87,23 +87,28 @@ const ENTERPRISE_INSTITUTION = {
   name: 'Acme University',
   domain: 'acme.test',
   subscription: { tier: 'ENTERPRISE' },
-  ssoProvider: {
-    id: 'idp-acme',
-    institutionId: 'inst-acme',
-    protocol: 'SAML',
-    displayName: 'Acme SAML',
-    samlEntityId: 'https://idp.acme.test/saml',
-    samlSsoUrl: 'https://idp.acme.test/sso',
-    samlCert: '-----BEGIN CERTIFICATE-----\nMIIDazCCAlOgAwIBAgIUaaaaaaaaaaaaaaaaaaaaaaaa\n-----END CERTIFICATE-----',
-    oidcIssuer: null,
-    oidcClientId: null,
-    oidcClientSecret: null,
-    jitProvisioning: true,
-    defaultRole: 'VIEWER',
-    enabled: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
+  // Phase 11.13 — `ssoProvider` (singular 1:1) became `ssoProviders`
+  // (1:N array). Single-IdP fixtures wrap the row in an array.
+  ssoProviders: [
+    {
+      id: 'idp-acme',
+      institutionId: 'inst-acme',
+      protocol: 'SAML',
+      displayName: 'Acme SAML',
+      samlEntityId: 'https://idp.acme.test/saml',
+      samlSsoUrl: 'https://idp.acme.test/sso',
+      samlCert: '-----BEGIN CERTIFICATE-----\nMIIDazCCAlOgAwIBAgIUaaaaaaaaaaaaaaaaaaaaaaaa\n-----END CERTIFICATE-----',
+      oidcIssuer: null,
+      oidcClientId: null,
+      oidcClientSecret: null,
+      jitProvisioning: true,
+      defaultRole: 'VIEWER',
+      enabled: true,
+      priority: 100,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  ],
 };
 
 function buildApp(): express.Express {

@@ -94,11 +94,11 @@ model Capability {
 // ── Platform Core ────────────────────────────────────────────────────────────
 
 model Institution {
-  id                 String               @id @default(cuid())
+  id                 String                @id @default(cuid())
   name               String
-  slug               String               @unique
+  slug               String                @unique
   country            String
-  tier               String               @default("free")
+  tier               String                @default("free")
   logoUrl            String?
   domain             String?
   // Phase 11.14 — soft-delete cascade. When an Institution is removed
@@ -118,23 +118,27 @@ model Institution {
   subscription       Subscription?
   evaluationProjects EvaluationProject[]
   apiKeys            ApiKey[]
-  ssoProvider        SsoIdentityProvider?
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
+  ssoProviders       SsoIdentityProvider[]
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
 
   @@index([deletedAt])
 }
 
-// Phase 10.7 (scaffold): per-institution SSO identity-provider config.
-// One row per institution that has SSO enabled — institutions without a
-// row authenticate via password.  The actual SAML/OIDC flows are not
-// yet implemented; this model captures the contract so the discovery
-// endpoint and the upcoming auth flows have a stable shape to read
-// from.  See docs/adr/0001-sso-architecture.md for the design and the
-// open questions for the implementing engineer.
+// Phase 10.7 (scaffold) + Phase 11.13 (multi-IdP per tenant): per-
+// institution SSO identity-provider config. Originally 1:1 (one IdP
+// per institution); Phase 11.13 dropped the unique constraint on
+// `institutionId` and added `priority` so a tenant can register
+// multiple IdPs (main university + a department's IdP, or a SAML
+// federation IdP alongside a vendor-managed OIDC backstop). Discovery
+// returns every enabled row sorted by priority; the login flow accepts
+// an `idpId` query parameter to disambiguate.
+//
+// See docs/adr/0001-sso-architecture.md (Q8) for the original
+// out-of-scope-for-v1 framing and the migration rationale.
 model SsoIdentityProvider {
   id               String      @id @default(cuid())
-  institutionId    String      @unique
+  institutionId    String
   institution      Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
   // SAML or OIDC. The flow paths in /api/sso branch on this column.
   protocol         SsoProtocol
@@ -163,8 +167,15 @@ model SsoIdentityProvider {
   // Default role assigned to JIT-provisioned users.
   defaultRole      UserRole    @default(VIEWER)
   enabled          Boolean     @default(false)
+  // Phase 11.13 — sort order for discovery + the "primary IdP" the
+  // bare `/api/sso/:slug/login` endpoint redirects to when no `idpId`
+  // is given. Lower = higher priority. Default 100 leaves room for
+  // operators to insert higher-priority overrides without renumbering.
+  priority         Int         @default(100)
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
+
+  @@index([institutionId, enabled, priority])
 }
 
 enum SsoProtocol {

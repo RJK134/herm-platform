@@ -55,6 +55,7 @@ vi.mock('../lib/redis', () => ({ getRedis: () => null }));
 const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
     institution: { findUnique: vi.fn(), findFirst: vi.fn() },
+    ssoIdentityProvider: { findFirst: vi.fn() },
     user: { findUnique: vi.fn(), update: vi.fn(), create: vi.fn() },
     auditLog: { create: vi.fn(async () => ({})) },
   },
@@ -82,29 +83,30 @@ function buildApp() {
   return app;
 }
 
-function institutionWithLiveOidc() {
+function idpWithLiveOidc() {
   return {
-    id: 'inst-live-1',
-    slug: 'uni-live',
-    name: 'Live OIDC University',
-    subscription: { tier: 'ENTERPRISE' },
-    ssoProvider: {
-      id: 'idp-live-1',
-      institutionId: 'inst-live-1',
-      protocol: 'OIDC',
-      enabled: true,
-      displayName: 'Sign in with Live IdP',
-      samlEntityId: null,
-      samlSsoUrl: null,
-      samlCert: null,
-      // The mock server uses its own JWKS — these three are the SP-side
-      // values our controller reads. The clientId/Secret fields are
-      // accepted by oauth2-mock-server without configuration.
-      oidcIssuer: '',
-      oidcClientId: 'herm-live-test-client',
-      oidcClientSecret: 'herm-live-test-secret',
-      jitProvisioning: true,
-      defaultRole: 'VIEWER',
+    id: 'idp-live-1',
+    institutionId: 'inst-live-1',
+    protocol: 'OIDC',
+    enabled: true,
+    displayName: 'Sign in with Live IdP',
+    samlEntityId: null,
+    samlSsoUrl: null,
+    samlCert: null,
+    // The mock server uses its own JWKS — these three are the SP-side
+    // values our controller reads. The clientId/Secret fields are
+    // accepted by oauth2-mock-server without configuration.
+    oidcIssuer: '',
+    oidcClientId: 'herm-live-test-client',
+    oidcClientSecret: 'herm-live-test-secret',
+    jitProvisioning: true,
+    defaultRole: 'VIEWER',
+    priority: 100,
+    institution: {
+      id: 'inst-live-1',
+      slug: 'uni-live',
+      name: 'Live OIDC University',
+      subscription: { tier: 'ENTERPRISE' },
     },
   };
 }
@@ -142,9 +144,9 @@ beforeEach(() => {
 
 describe('OIDC end-to-end through oauth2-mock-server', () => {
   it('completes the full discovery → authorize → token → callback dance', async () => {
-    const inst = institutionWithLiveOidc();
-    inst.ssoProvider.oidcIssuer = issuerUrl;
-    prismaMock.institution.findUnique.mockResolvedValue(inst);
+    const idp = idpWithLiveOidc();
+    idp.oidcIssuer = issuerUrl;
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(idp);
 
     // The user the IdP asserts doesn't exist yet — exercise the JIT
     // provisioning path so completeSsoSignIn ends in a User.create.
@@ -154,11 +156,11 @@ describe('OIDC end-to-end through oauth2-mock-server', () => {
       email: TEST_USER_EMAIL,
       name: 'Live OIDC Tester',
       role: 'VIEWER',
-      institutionId: inst.id,
+      institutionId: idp.institution.id,
       mfaEnabledAt: null,
       institution: {
-        id: inst.id,
-        name: inst.name,
+        id: idp.institution.id,
+        name: idp.institution.name,
         subscription: { tier: 'ENTERPRISE' },
       },
     });
@@ -208,7 +210,7 @@ describe('OIDC end-to-end through oauth2-mock-server', () => {
     expect(tokenStr).toBeTruthy();
     const decoded = jwt.verify(tokenStr as string, SECRET) as Record<string, unknown>;
     expect(decoded['email']).toBe(TEST_USER_EMAIL);
-    expect(decoded['institutionId']).toBe(inst.id);
+    expect(decoded['institutionId']).toBe(idp.institution.id);
     expect(decoded['role']).toBe('VIEWER');
     expect(decoded['tier']).toBe('enterprise');
 
@@ -220,9 +222,9 @@ describe('OIDC end-to-end through oauth2-mock-server', () => {
   }, 30_000);
 
   it('rejects an unknown state at the callback (replay / mismatched-flow defence)', async () => {
-    const inst = institutionWithLiveOidc();
-    inst.ssoProvider.oidcIssuer = issuerUrl;
-    prismaMock.institution.findUnique.mockResolvedValue(inst);
+    const idp = idpWithLiveOidc();
+    idp.oidcIssuer = issuerUrl;
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(idp);
 
     const app = buildApp();
     const res = await request(app)
