@@ -43,8 +43,10 @@ import {
 import {
   buildAuthnRequestUrl,
   validateSamlResponse,
+  validateLogoutRequest,
   type TenantSamlConfig,
 } from './saml';
+import { revokeBySamlSubject } from '../../lib/session-store';
 import {
   buildOidcAuthorizeUrl,
   completeOidcCallback,
@@ -362,3 +364,85 @@ export const oidcCallback = async (req: Request, res: Response, next: NextFuncti
 function failureRedirect(): string {
   return `${getFrontendBaseUrl()}/login?error=sso_failed`;
 }
+
+// ── SAML Single Logout (IdP-initiated) ─────────────────────────────────────
+
+/**
+ * IdP-initiated SAML Single Logout (Phase 11.12).
+ *
+ * The IdP sends a `<LogoutRequest>` via HTTP-Redirect — `SAMLRequest`,
+ * `RelayState`, `SigAlg`, and `Signature` arrive as query parameters.
+ * We verify the signature against the institution's stored cert, find
+ * every active session for the asserted NameID (+ SessionIndex if
+ * present), revoke them, and 302 the browser to the frontend's
+ * post-logout landing.
+ *
+ * We do NOT mint a `<LogoutResponse>` back to the IdP for v1; most
+ * federation IdPs treat the absence of a response as "best-effort SLO"
+ * and don't error on it. A future hardening pass can add the signed
+ * LogoutResponse + SAMLResponse redirect back to the IdP's SLO URL.
+ *
+ * Failures audit `auth.sso.slo_fail` and 302 to the frontend without
+ * leaking the underlying error (signature / NameID / etc).
+ */
+export const samlSlo = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { institutionSlug } = req.params;
+    if (!institutionSlug) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'institutionSlug is required');
+    }
+    const idp = await resolveSsoForFlow(institutionSlug);
+    if (idp.protocol !== 'SAML' || !idp.samlEntityId || !idp.samlSsoUrl || !idp.samlCert) {
+      throw new AppError(400, 'SSO_MISCONFIGURED', 'IdP is not configured for SAML');
+    }
+
+    const samlConfig: TenantSamlConfig = {
+      samlEntityId: idp.samlEntityId,
+      samlSsoUrl: idp.samlSsoUrl,
+      samlCert: idp.samlCert,
+    };
+
+    const originalQuery = req.url.includes('?') ? req.url.split('?')[1]! : '';
+
+    let parsed: { nameId: string; sessionIndex?: string };
+    try {
+      parsed = await validateLogoutRequest(
+        institutionSlug,
+        samlConfig,
+        req.query as Record<string, unknown>,
+        originalQuery,
+      );
+    } catch (err) {
+      logger.warn(
+        { institutionSlug, err: err instanceof Error ? err.message : String(err) },
+        'sso.saml.slo validation failed',
+      );
+      await audit(req, {
+        action: 'auth.sso.slo_fail',
+        entityType: 'SsoIdentityProvider',
+        entityId: idp.id,
+        changes: { reason: 'validation_failed' },
+      });
+      res.redirect(failureRedirect());
+      return;
+    }
+
+    const revoked = await revokeBySamlSubject(idp.institutionId, parsed.nameId, parsed.sessionIndex);
+
+    await audit(req, {
+      action: 'auth.sso.slo_success',
+      entityType: 'SsoIdentityProvider',
+      entityId: idp.id,
+      changes: {
+        institutionId: idp.institutionId,
+        samlNameId: parsed.nameId,
+        ...(parsed.sessionIndex ? { samlSessionIndex: parsed.sessionIndex } : {}),
+        revokedSessionCount: revoked,
+      },
+    });
+
+    res.redirect(`${getFrontendBaseUrl()}/login?logged_out=sso`);
+  } catch (err) {
+    next(err);
+  }
+};

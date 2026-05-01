@@ -1,7 +1,9 @@
 import jwt from 'jsonwebtoken';
+import { randomUUID } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
 import type { VendorJwtPayload } from '../api/vendor-portal/vendor-portal.service';
 import prisma from '../utils/prisma';
+import { isRevoked, recordSession } from '../lib/session-store';
 
 if (!process.env['JWT_SECRET']) {
   if (process.env['NODE_ENV'] === 'production') {
@@ -39,6 +41,24 @@ export interface JwtPayload {
   tier: string;
   /** Set when the bearer is impersonating; absent on normal sessions. */
   impersonator?: ImpersonatorClaim;
+  /**
+   * Phase 11.12 — JWT id, populated by `generateToken`. Tokens minted
+   * before this phase have no `jti`; the revocation check in
+   * `authenticateJWT` skips when the claim is absent so legacy tokens
+   * keep working until natural expiry.
+   */
+  jti?: string;
+}
+
+/**
+ * Optional SAML attributes carried alongside `JwtPayload` when a session
+ * is minted via SAML SSO. Not embedded in the JWT itself — they live on
+ * the session store row keyed by `jti`, so the back-channel SLO endpoint
+ * can find every session matching a given (institutionId, NameID).
+ */
+export interface SsoSessionAttributes {
+  samlNameId?: string;
+  samlSessionIndex?: string;
 }
 
 declare global {
@@ -148,6 +168,19 @@ export async function authenticateJWT(
       });
       return;
     }
+    // Phase 11.12 — SAML SLO revocation. Run BEFORE the soft-delete
+    // lookup so a revoked / stolen token short-circuits without
+    // touching Postgres. Tokens minted before this phase have no
+    // `jti` claim; we skip the check for them so legacy bearers keep
+    // working until natural expiry. New tokens always carry a jti and
+    // so can be revoked back-channel by the IdP.
+    if (decoded.jti && (await isRevoked(decoded.jti))) {
+      res.status(401).json({
+        success: false,
+        error: { code: 'AUTHENTICATION_ERROR', message: 'Invalid or expired token' },
+      });
+      return;
+    }
     // Phase 11.9 — revoke the session as soon as the User row is
     // soft-deleted (GDPR erasure or admin removal). The check is
     // cached for SOFT_DELETE_CACHE_TTL_MS to keep the per-request
@@ -172,7 +205,7 @@ export async function authenticateJWT(
   }
 }
 
-export function optionalJWT(req: Request, _res: Response, next: NextFunction): void {
+export async function optionalJWT(req: Request, _res: Response, next: NextFunction): Promise<void> {
   const token = extractToken(req);
   if (token) {
     try {
@@ -185,9 +218,25 @@ export function optionalJWT(req: Request, _res: Response, next: NextFunction): v
       // req.user to a partial object whose downstream consumers
       // (rate-limiter key, tierGate, frameworkContext) operate on
       // undefined — a real defence-in-depth gap.
-      if (!decoded.purpose) {
-        req.user = decoded;
+      if (decoded.purpose) {
+        next();
+        return;
       }
+      // Phase 11.12 follow-up: SAML SLO revocation must apply to
+      // `optionalJWT` too. This middleware runs at the app level on
+      // every /api request, so a revoked JWT would otherwise still
+      // populate req.user for downstream middleware (apiRateLimiter,
+      // tierGate, frameworkContext, requireRole guard chains that
+      // start with optionalJWT). After IdP-initiated SLO revokes a
+      // jti, the bearer must appear anonymous on every path, not just
+      // the ones guarded by `authenticateJWT`. Tokens minted before
+      // Phase 11.12 have no `jti` claim — they keep working until
+      // natural expiry, mirroring the authenticateJWT behaviour.
+      if (decoded.jti && (await isRevoked(decoded.jti))) {
+        next();
+        return;
+      }
+      req.user = decoded;
     } catch {
       // proceed as anonymous
     }
@@ -220,8 +269,31 @@ export function requireRole(roles: string[]) {
   };
 }
 
-export function generateToken(payload: JwtPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+const TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+/**
+ * Mint a JWT and record the session in the store so SAML SLO can
+ * revoke it. Optional `sso` attributes carry the SAML NameID +
+ * SessionIndex; when present, the session row is indexed by them so
+ * an IdP-initiated LogoutRequest can find every session for that
+ * subject.
+ *
+ * Session-store writes are best-effort — failures are logged but
+ * never thrown so a Redis hiccup at issue time can't block login.
+ */
+export function generateToken(payload: JwtPayload, sso?: SsoSessionAttributes): string {
+  const jti = randomUUID();
+  const token = jwt.sign({ ...payload, jti }, JWT_SECRET, { expiresIn: TOKEN_TTL_SECONDS });
+  // Fire-and-forget; recordSession swallows its own errors.
+  void recordSession({
+    jti,
+    userId: payload.userId,
+    institutionId: payload.institutionId,
+    ...(sso?.samlNameId ? { samlNameId: sso.samlNameId } : {}),
+    ...(sso?.samlSessionIndex ? { samlSessionIndex: sso.samlSessionIndex } : {}),
+    expiresAt: Date.now() + TOKEN_TTL_SECONDS * 1000,
+  });
+  return token;
 }
 
 /**

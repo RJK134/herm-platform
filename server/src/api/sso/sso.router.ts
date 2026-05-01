@@ -28,6 +28,7 @@ import {
   login,
   samlAcs,
   oidcCallback,
+  samlSlo,
 } from './sso.controller';
 
 const router = Router();
@@ -45,5 +46,11 @@ router.post(
   samlAcs,
 );
 router.get('/:institutionSlug/oidc/callback', oidcCallback);
+
+// Phase 11.12 — IdP-initiated SAML Single Logout. The IdP sends a
+// LogoutRequest via HTTP-Redirect; we verify the signature, look up
+// every active session for the asserted NameID + SessionIndex, and
+// revoke them through the session store.
+router.get('/:institutionSlug/saml/slo', samlSlo);
 
 export default router;

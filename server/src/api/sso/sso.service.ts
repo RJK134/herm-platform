@@ -152,6 +152,13 @@ export function encryptIdpSecretsForWrite<
 interface AssertedIdentity {
   email: string;
   name?: string;
+  /**
+   * Phase 11.12 — when the assertion arrived via SAML, propagate the
+   * NameID + SessionIndex so the session-store row can be indexed by
+   * them. The IdP-initiated LogoutRequest will carry the same values.
+   */
+  samlNameId?: string;
+  samlSessionIndex?: string;
 }
 
 /**
@@ -307,7 +314,14 @@ export async function completeSsoSignIn(
     institutionName: user.institution.name,
     tier,
   };
-  const token = generateToken(payload);
+  // Phase 11.12 — propagate SAML NameID + SessionIndex into the
+  // session-store row (via generateToken's optional second arg) so
+  // an IdP-initiated LogoutRequest can find this session by subject.
+  // Falls through cleanly for OIDC sessions (the values are undefined).
+  const token = generateToken(payload, {
+    ...(assertion.samlNameId ? { samlNameId: assertion.samlNameId } : {}),
+    ...(assertion.samlSessionIndex ? { samlSessionIndex: assertion.samlSessionIndex } : {}),
+  });
 
   await audit(req, {
     action: 'auth.sso.success',
