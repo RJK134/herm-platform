@@ -77,21 +77,25 @@ describe('SAML end-to-end through an in-process signing IdP', () => {
       slug: 'uni-saml',
       name: 'SAML University',
       subscription: { tier: 'ENTERPRISE' },
-      ssoProvider: {
-        id: 'idp-saml-1',
-        institutionId: 'inst-saml-1',
-        protocol: 'SAML',
-        enabled: true,
-        displayName: 'Sign in with Live SAML',
-        samlEntityId: idp.entityId,
-        samlSsoUrl: 'https://idp.live.test/saml/sso',
-        samlCert: idp.cert,
-        oidcIssuer: null,
-        oidcClientId: null,
-        oidcClientSecret: null,
-        jitProvisioning: true,
-        defaultRole: 'VIEWER',
-      },
+      // Phase 11.13 — singular ssoProvider became an array.
+      ssoProviders: [
+        {
+          id: 'idp-saml-1',
+          institutionId: 'inst-saml-1',
+          protocol: 'SAML',
+          enabled: true,
+          displayName: 'Sign in with Live SAML',
+          samlEntityId: idp.entityId,
+          samlSsoUrl: 'https://idp.live.test/saml/sso',
+          samlCert: idp.cert,
+          oidcIssuer: null,
+          oidcClientId: null,
+          oidcClientSecret: null,
+          jitProvisioning: true,
+          defaultRole: 'VIEWER',
+          priority: 100,
+        },
+      ],
     });
     prismaMock.user.findUnique.mockResolvedValue(null);
     prismaMock.user.create.mockResolvedValue({
@@ -151,21 +155,24 @@ describe('SAML end-to-end through an in-process signing IdP', () => {
       slug: 'uni-saml-tamper',
       name: 'SAML University',
       subscription: { tier: 'ENTERPRISE' },
-      ssoProvider: {
-        id: 'idp-saml-2',
-        institutionId: 'inst-saml-2',
-        protocol: 'SAML',
-        enabled: true,
-        displayName: 'Sign in with Live SAML',
-        samlEntityId: idp.entityId,
-        samlSsoUrl: 'https://idp.live.test/saml/sso',
-        samlCert: idp.cert,
-        oidcIssuer: null,
-        oidcClientId: null,
-        oidcClientSecret: null,
-        jitProvisioning: true,
-        defaultRole: 'VIEWER',
-      },
+      ssoProviders: [
+        {
+          id: 'idp-saml-2',
+          institutionId: 'inst-saml-2',
+          protocol: 'SAML',
+          enabled: true,
+          displayName: 'Sign in with Live SAML',
+          samlEntityId: idp.entityId,
+          samlSsoUrl: 'https://idp.live.test/saml/sso',
+          samlCert: idp.cert,
+          oidcIssuer: null,
+          oidcClientId: null,
+          oidcClientSecret: null,
+          jitProvisioning: true,
+          defaultRole: 'VIEWER',
+          priority: 100,
+        },
+      ],
     });
 
     const responseXml = idp.buildSamlResponse({
@@ -203,21 +210,24 @@ describe('SAML end-to-end through an in-process signing IdP', () => {
       slug: 'uni-saml-rogue',
       name: 'SAML University',
       subscription: { tier: 'ENTERPRISE' },
-      ssoProvider: {
-        id: 'idp-saml-3',
-        institutionId: 'inst-saml-3',
-        protocol: 'SAML',
-        enabled: true,
-        displayName: 'Sign in with Live SAML',
-        samlEntityId: realIdp.entityId,
-        samlSsoUrl: 'https://idp.live.test/saml/sso',
-        samlCert: realIdp.cert, // SP trusts only the real IdP's cert
-        oidcIssuer: null,
-        oidcClientId: null,
-        oidcClientSecret: null,
-        jitProvisioning: true,
-        defaultRole: 'VIEWER',
-      },
+      ssoProviders: [
+        {
+          id: 'idp-saml-3',
+          institutionId: 'inst-saml-3',
+          protocol: 'SAML',
+          enabled: true,
+          displayName: 'Sign in with Live SAML',
+          samlEntityId: realIdp.entityId,
+          samlSsoUrl: 'https://idp.live.test/saml/sso',
+          samlCert: realIdp.cert, // SP trusts only the real IdP's cert
+          oidcIssuer: null,
+          oidcClientId: null,
+          oidcClientSecret: null,
+          jitProvisioning: true,
+          defaultRole: 'VIEWER',
+          priority: 100,
+        },
+      ],
     });
 
     // Attacker generates a valid-looking response signed with a

@@ -88,24 +88,29 @@ function institutionWithLiveOidc() {
     slug: 'uni-live',
     name: 'Live OIDC University',
     subscription: { tier: 'ENTERPRISE' },
-    ssoProvider: {
-      id: 'idp-live-1',
-      institutionId: 'inst-live-1',
-      protocol: 'OIDC',
-      enabled: true,
-      displayName: 'Sign in with Live IdP',
-      samlEntityId: null,
-      samlSsoUrl: null,
-      samlCert: null,
-      // The mock server uses its own JWKS — these three are the SP-side
-      // values our controller reads. The clientId/Secret fields are
-      // accepted by oauth2-mock-server without configuration.
-      oidcIssuer: '',
-      oidcClientId: 'herm-live-test-client',
-      oidcClientSecret: 'herm-live-test-secret',
-      jitProvisioning: true,
-      defaultRole: 'VIEWER',
-    },
+    // Phase 11.13 — `ssoProvider` (singular 1:1) became `ssoProviders`
+    // (1:N array). Single-IdP fixtures wrap the row in an array.
+    ssoProviders: [
+      {
+        id: 'idp-live-1',
+        institutionId: 'inst-live-1',
+        protocol: 'OIDC',
+        enabled: true,
+        displayName: 'Sign in with Live IdP',
+        samlEntityId: null,
+        samlSsoUrl: null,
+        samlCert: null,
+        // The mock server uses its own JWKS — these three are the SP-side
+        // values our controller reads. The clientId/Secret fields are
+        // accepted by oauth2-mock-server without configuration.
+        oidcIssuer: '',
+        oidcClientId: 'herm-live-test-client',
+        oidcClientSecret: 'herm-live-test-secret',
+        jitProvisioning: true,
+        defaultRole: 'VIEWER',
+        priority: 100,
+      },
+    ],
   };
 }
 
@@ -143,7 +148,7 @@ beforeEach(() => {
 describe('OIDC end-to-end through oauth2-mock-server', () => {
   it('completes the full discovery → authorize → token → callback dance', async () => {
     const inst = institutionWithLiveOidc();
-    inst.ssoProvider.oidcIssuer = issuerUrl;
+    inst.ssoProviders[0]!.oidcIssuer = issuerUrl;
     prismaMock.institution.findUnique.mockResolvedValue(inst);
 
     // The user the IdP asserts doesn't exist yet — exercise the JIT
@@ -221,7 +226,7 @@ describe('OIDC end-to-end through oauth2-mock-server', () => {
 
   it('rejects an unknown state at the callback (replay / mismatched-flow defence)', async () => {
     const inst = institutionWithLiveOidc();
-    inst.ssoProvider.oidcIssuer = issuerUrl;
+    inst.ssoProviders[0]!.oidcIssuer = issuerUrl;
     prismaMock.institution.findUnique.mockResolvedValue(inst);
 
     const app = buildApp();

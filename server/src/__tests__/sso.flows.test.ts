@@ -102,27 +102,40 @@ function buildApp() {
 // otherwise infer literal types for the null fields and refuse the
 // OIDC variant's overrides. The runtime shape is what the controller
 // reads, not the inferred type.
+//
+// Phase 11.13 — `ssoProvider` (singular) became `ssoProviders` (array)
+// with the multi-IdP refactor. Tests construct fixtures with a single
+// element; production reads the highest-priority enabled row from the
+// array. Use the `primary()` helper to mutate the row in-place.
+type FakeIdpRow = {
+  id: string;
+  institutionId: string;
+  protocol: string;
+  enabled: boolean;
+  displayName: string;
+  samlEntityId: string | null;
+  samlSsoUrl: string | null;
+  samlCert: string | null;
+  oidcIssuer: string | null;
+  oidcClientId: string | null;
+  oidcClientSecret: string | null;
+  jitProvisioning: boolean;
+  defaultRole: string;
+  priority: number;
+};
+
 type FakeInstitutionRow = {
   id: string;
   slug: string;
   name: string;
   subscription: { tier: string } | null;
-  ssoProvider: {
-    id: string;
-    institutionId: string;
-    protocol: string;
-    enabled: boolean;
-    displayName: string;
-    samlEntityId: string | null;
-    samlSsoUrl: string | null;
-    samlCert: string | null;
-    oidcIssuer: string | null;
-    oidcClientId: string | null;
-    oidcClientSecret: string | null;
-    jitProvisioning: boolean;
-    defaultRole: string;
-  };
+  ssoProviders: FakeIdpRow[];
 };
+
+/** Mutate-in-place helper: returns the primary IdP row of a fixture. */
+function primary(inst: FakeInstitutionRow): FakeIdpRow {
+  return inst.ssoProviders[0]!;
+}
 
 function enterpriseInstitutionWithSamlIdp(): FakeInstitutionRow {
   return {
@@ -130,33 +143,37 @@ function enterpriseInstitutionWithSamlIdp(): FakeInstitutionRow {
     slug: 'uni-1',
     name: 'University One',
     subscription: { tier: 'ENTERPRISE' },
-    ssoProvider: {
-      id: 'idp-1',
-      institutionId: 'inst-1',
-      protocol: 'SAML',
-      enabled: true,
-      displayName: 'Sign in with University One',
-      samlEntityId: 'https://idp.uni.test/saml',
-      samlSsoUrl: 'https://idp.uni.test/saml/sso',
-      samlCert: '-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----',
-      oidcIssuer: null,
-      oidcClientId: null,
-      oidcClientSecret: null,
-      jitProvisioning: true,
-      defaultRole: 'VIEWER',
-    },
+    ssoProviders: [
+      {
+        id: 'idp-1',
+        institutionId: 'inst-1',
+        protocol: 'SAML',
+        enabled: true,
+        displayName: 'Sign in with University One',
+        samlEntityId: 'https://idp.uni.test/saml',
+        samlSsoUrl: 'https://idp.uni.test/saml/sso',
+        samlCert: '-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----',
+        oidcIssuer: null,
+        oidcClientId: null,
+        oidcClientSecret: null,
+        jitProvisioning: true,
+        defaultRole: 'VIEWER',
+        priority: 100,
+      },
+    ],
   };
 }
 
 function enterpriseInstitutionWithOidcIdp(): FakeInstitutionRow {
   const inst = enterpriseInstitutionWithSamlIdp();
-  inst.ssoProvider.protocol = 'OIDC';
-  inst.ssoProvider.samlEntityId = null;
-  inst.ssoProvider.samlSsoUrl = null;
-  inst.ssoProvider.samlCert = null;
-  inst.ssoProvider.oidcIssuer = 'https://idp.uni.test';
-  inst.ssoProvider.oidcClientId = 'client-1';
-  inst.ssoProvider.oidcClientSecret = 'secret-1';
+  const idp = primary(inst);
+  idp.protocol = 'OIDC';
+  idp.samlEntityId = null;
+  idp.samlSsoUrl = null;
+  idp.samlCert = null;
+  idp.oidcIssuer = 'https://idp.uni.test';
+  idp.oidcClientId = 'client-1';
+  idp.oidcClientSecret = 'secret-1';
   return inst;
 }
 
@@ -509,9 +526,9 @@ describe('SSO secret-at-rest encryption', () => {
 
   it('decrypts oidcClientSecret before passing it to openid-client.discovery', async () => {
     const inst = enterpriseInstitutionWithOidcIdp();
-    const plaintextSecret = inst.ssoProvider.oidcClientSecret as string;
-    inst.ssoProvider.oidcClientSecret = encryptSecret(plaintextSecret);
-    expect(inst.ssoProvider.oidcClientSecret.startsWith('enc:v1:')).toBe(true);
+    const plaintextSecret = primary(inst).oidcClientSecret as string;
+    primary(inst).oidcClientSecret = encryptSecret(plaintextSecret);
+    expect(primary(inst).oidcClientSecret!.startsWith('enc:v1:')).toBe(true);
 
     prismaMock.institution.findUnique.mockResolvedValue(inst);
     oidcMock.discovery.mockResolvedValueOnce({} as unknown);
@@ -535,9 +552,9 @@ describe('SSO secret-at-rest encryption', () => {
     samlCtor.mockClear();
 
     const inst = enterpriseInstitutionWithSamlIdp();
-    const plaintextCert = inst.ssoProvider.samlCert as string;
-    inst.ssoProvider.samlCert = encryptSecret(plaintextCert);
-    expect(inst.ssoProvider.samlCert.startsWith('enc:v1:')).toBe(true);
+    const plaintextCert = primary(inst).samlCert as string;
+    primary(inst).samlCert = encryptSecret(plaintextCert);
+    expect(primary(inst).samlCert!.startsWith('enc:v1:')).toBe(true);
 
     prismaMock.institution.findUnique.mockResolvedValue(inst);
     samlInstance.getAuthorizeUrlAsync.mockResolvedValueOnce(
@@ -555,7 +572,7 @@ describe('SSO secret-at-rest encryption', () => {
   it('legacy plaintext rows still resolve when SSO_SECRET_KEY is set (back-compat)', async () => {
     // Row written before this PR shipped: oidcClientSecret stored as plaintext.
     const inst = enterpriseInstitutionWithOidcIdp();
-    const plaintextSecret = inst.ssoProvider.oidcClientSecret as string;
+    const plaintextSecret = primary(inst).oidcClientSecret as string;
     expect(plaintextSecret.startsWith('enc:v1:')).toBe(false);
 
     prismaMock.institution.findUnique.mockResolvedValue(inst);
@@ -572,7 +589,7 @@ describe('SSO secret-at-rest encryption', () => {
 
   it('returns the opaque 404 when an encrypted row cannot be decrypted (wrong key)', async () => {
     const inst = enterpriseInstitutionWithOidcIdp();
-    inst.ssoProvider.oidcClientSecret = encryptSecret(inst.ssoProvider.oidcClientSecret as string);
+    primary(inst).oidcClientSecret = encryptSecret(primary(inst).oidcClientSecret as string);
     prismaMock.institution.findUnique.mockResolvedValue(inst);
 
     // Rotate the master key to a different (also-low-entropy, not-a-secret)
@@ -706,23 +723,29 @@ describe('SAML SP signing keypair', () => {
 
 describe('GET /api/sso/discover?email=', () => {
   it('resolves Institution by domain and returns the SSO config', async () => {
-    prismaMock.institution.findFirst.mockResolvedValue({
-      slug: 'uni-1',
-      ssoProvider: {
-        enabled: true,
-        protocol: 'SAML',
-        displayName: 'Sign in with University One',
-      },
+    // Phase 11.13 — discoverByEmail now does two reads: findFirst by
+    // domain (for the slug) then findUnique by slug (for the
+    // ssoProviders array, via listEnabledIdpsForSlug).
+    prismaMock.institution.findFirst.mockResolvedValue({ slug: 'uni-1' });
+    prismaMock.institution.findUnique.mockResolvedValue({
+      ssoProviders: [
+        {
+          id: 'idp-1',
+          enabled: true,
+          protocol: 'SAML',
+          displayName: 'Sign in with University One',
+          priority: 100,
+        },
+      ],
     });
 
     const res = await request(buildApp()).get('/api/sso/discover?email=jane@uni.test');
     expect(res.status).toBe(200);
-    expect(res.body.data).toEqual({
-      institutionSlug: 'uni-1',
-      protocol: 'SAML',
-      displayName: 'Sign in with University One',
-      loginUrl: '/api/sso/uni-1/login',
-    });
+    expect(res.body.data.institutionSlug).toBe('uni-1');
+    expect(res.body.data.protocol).toBe('SAML');
+    expect(res.body.data.displayName).toBe('Sign in with University One');
+    expect(res.body.data.loginUrl).toBe('/api/sso/uni-1/login');
+    expect(res.body.data.options).toHaveLength(1);
   });
 
   it('returns 404 SSO_NOT_CONFIGURED when the domain has no IdP', async () => {

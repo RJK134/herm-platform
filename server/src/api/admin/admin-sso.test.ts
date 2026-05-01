@@ -10,9 +10,15 @@ vi.mock('../../lib/logger', () => ({
 const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
     ssoIdentityProvider: {
+      // Phase 11.13 — admin code now uses findFirst (since institutionId
+      // is no longer @unique on SsoIdentityProvider) and split upsert into
+      // update / create. findUnique is kept for the legacy mocks below.
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
       findMany: vi.fn(),
       upsert: vi.fn(),
+      update: vi.fn(),
+      create: vi.fn(),
       delete: vi.fn(),
     },
     institution: {
@@ -91,7 +97,7 @@ describe('GET /api/admin/sso/me', () => {
   });
 
   it('returns null when no IdP row exists', async () => {
-    prismaMock.ssoIdentityProvider.findUnique.mockResolvedValue(null);
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(null);
     const res = await request(buildApp())
       .get('/api/admin/sso/me')
       .set('Authorization', `Bearer ${makeToken()}`);
@@ -100,7 +106,7 @@ describe('GET /api/admin/sso/me', () => {
   });
 
   it('returns the IdP row WITHOUT secrets and with hasX flags', async () => {
-    prismaMock.ssoIdentityProvider.findUnique.mockResolvedValue(baseRow);
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(baseRow);
     const res = await request(buildApp())
       .get('/api/admin/sso/me')
       .set('Authorization', `Bearer ${makeToken()}`);
@@ -116,7 +122,7 @@ describe('GET /api/admin/sso/me', () => {
 
 describe('PUT /api/admin/sso/me', () => {
   it('rejects creation without protocol + displayName', async () => {
-    prismaMock.ssoIdentityProvider.findUnique.mockResolvedValue(null);
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(null);
     const res = await request(buildApp())
       .put('/api/admin/sso/me')
       .set('Authorization', `Bearer ${makeToken()}`)
@@ -134,8 +140,10 @@ describe('PUT /api/admin/sso/me', () => {
     const { _resetCipherKeyCache } = await import('../../lib/secret-cipher');
     _resetCipherKeyCache();
     try {
-      prismaMock.ssoIdentityProvider.findUnique.mockResolvedValue(null);
-      prismaMock.ssoIdentityProvider.upsert.mockResolvedValue({
+      prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(null);
+      // Phase 11.13 — admin code split upsert into update / create.
+      // findFirst returning null → create path fires.
+      prismaMock.ssoIdentityProvider.create.mockResolvedValue({
         ...baseRow,
         enabled: true,
       });
@@ -166,30 +174,30 @@ describe('PUT /api/admin/sso/me', () => {
   });
 
   it('preserves existing samlCert when the field is omitted on update', async () => {
-    prismaMock.ssoIdentityProvider.findUnique.mockResolvedValue({ ...baseRow, samlCert: 'old-cert' });
-    prismaMock.ssoIdentityProvider.upsert.mockResolvedValue({ ...baseRow, samlCert: 'old-cert' });
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue({ ...baseRow, samlCert: 'old-cert' });
+    prismaMock.ssoIdentityProvider.update.mockResolvedValue({ ...baseRow, samlCert: 'old-cert' });
     await request(buildApp())
       .put('/api/admin/sso/me')
       .set('Authorization', `Bearer ${makeToken()}`)
       .send({ enabled: true });
-    const upsertArgs = prismaMock.ssoIdentityProvider.upsert.mock.calls[0]?.[0] as
-      | { update: Record<string, unknown> }
+    const updateArgs = prismaMock.ssoIdentityProvider.update.mock.calls[0]?.[0] as
+      | { data: Record<string, unknown> }
       | undefined;
-    expect(upsertArgs?.update).toBeDefined();
-    expect('samlCert' in (upsertArgs?.update ?? {})).toBe(false);
+    expect(updateArgs?.data).toBeDefined();
+    expect('samlCert' in (updateArgs?.data ?? {})).toBe(false);
   });
 
   it('clears samlCert when the field is sent as null', async () => {
-    prismaMock.ssoIdentityProvider.findUnique.mockResolvedValue({ ...baseRow, samlCert: 'old-cert' });
-    prismaMock.ssoIdentityProvider.upsert.mockResolvedValue({ ...baseRow, samlCert: null });
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue({ ...baseRow, samlCert: 'old-cert' });
+    prismaMock.ssoIdentityProvider.update.mockResolvedValue({ ...baseRow, samlCert: null });
     await request(buildApp())
       .put('/api/admin/sso/me')
       .set('Authorization', `Bearer ${makeToken()}`)
       .send({ samlCert: null });
-    const upsertArgs = prismaMock.ssoIdentityProvider.upsert.mock.calls[0]?.[0] as
-      | { update: Record<string, unknown> }
+    const updateArgs = prismaMock.ssoIdentityProvider.update.mock.calls[0]?.[0] as
+      | { data: Record<string, unknown> }
       | undefined;
-    expect(upsertArgs?.update.samlCert).toBeNull();
+    expect(updateArgs?.data.samlCert).toBeNull();
   });
 
   it('encrypts a provided oidcClientSecret on the way to Prisma when SSO_SECRET_KEY is set', async () => {
@@ -198,16 +206,16 @@ describe('PUT /api/admin/sso/me', () => {
     const { _resetCipherKeyCache } = await import('../../lib/secret-cipher');
     _resetCipherKeyCache();
     try {
-      prismaMock.ssoIdentityProvider.findUnique.mockResolvedValue(baseRow);
-      prismaMock.ssoIdentityProvider.upsert.mockResolvedValue({ ...baseRow });
+      prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(baseRow);
+      prismaMock.ssoIdentityProvider.update.mockResolvedValue({ ...baseRow });
       await request(buildApp())
         .put('/api/admin/sso/me')
         .set('Authorization', `Bearer ${makeToken()}`)
         .send({ oidcClientSecret: 'fresh-secret' });
-      const upsertArgs = prismaMock.ssoIdentityProvider.upsert.mock.calls[0]?.[0] as
-        | { update: { oidcClientSecret?: string } }
+      const updateArgs = prismaMock.ssoIdentityProvider.update.mock.calls[0]?.[0] as
+        | { data: { oidcClientSecret?: string } }
         | undefined;
-      const persisted = upsertArgs?.update.oidcClientSecret as string | undefined;
+      const persisted = updateArgs?.data.oidcClientSecret as string | undefined;
       expect(persisted).toBeDefined();
       expect(persisted).not.toBe('fresh-secret');
       expect(persisted?.startsWith('enc:v1:')).toBe(true);
@@ -221,7 +229,7 @@ describe('PUT /api/admin/sso/me', () => {
 
 describe('DELETE /api/admin/sso/me', () => {
   it('returns 404 when no row exists', async () => {
-    prismaMock.ssoIdentityProvider.findUnique.mockResolvedValue(null);
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(null);
     const res = await request(buildApp())
       .delete('/api/admin/sso/me')
       .set('Authorization', `Bearer ${makeToken()}`);
@@ -229,14 +237,15 @@ describe('DELETE /api/admin/sso/me', () => {
   });
 
   it('deletes the row and audits', async () => {
-    prismaMock.ssoIdentityProvider.findUnique.mockResolvedValue(baseRow);
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(baseRow);
     prismaMock.ssoIdentityProvider.delete.mockResolvedValue(baseRow);
     const res = await request(buildApp())
       .delete('/api/admin/sso/me')
       .set('Authorization', `Bearer ${makeToken()}`);
     expect(res.status).toBe(204);
+    // Phase 11.13 — delete by row id, not institutionId.
     expect(prismaMock.ssoIdentityProvider.delete).toHaveBeenCalledWith({
-      where: { institutionId: 'inst-1' },
+      where: { id: 'idp-1' },
     });
     const [createCall] = prismaMock.auditLog.create.mock.calls;
     const auditData = (createCall as unknown as [{ data: { action: string } }])[0].data;
@@ -290,7 +299,7 @@ describe('GET /api/admin/sso/institutions/:id', () => {
   });
 
   it('returns null when the IdP row does not exist', async () => {
-    prismaMock.ssoIdentityProvider.findUnique.mockResolvedValue(null);
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(null);
     const res = await request(buildApp())
       .get('/api/admin/sso/institutions/inst-empty')
       .set('Authorization', `Bearer ${makeToken({ role: 'SUPER_ADMIN' })}`);
@@ -299,7 +308,7 @@ describe('GET /api/admin/sso/institutions/:id', () => {
   });
 
   it('returns the IdP with institution metadata when it exists', async () => {
-    prismaMock.ssoIdentityProvider.findUnique.mockResolvedValue({
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue({
       ...baseRow,
       institution: { name: 'College Two', slug: 'college-two' },
     });
@@ -332,10 +341,12 @@ describe('PUT /api/admin/sso/institutions/:id', () => {
         displayName: 'X',
       });
     expect(res.status).toBe(404);
-    expect(prismaMock.ssoIdentityProvider.upsert).not.toHaveBeenCalled();
+    // Phase 11.13 — upsert was split; neither create nor update should fire.
+    expect(prismaMock.ssoIdentityProvider.create).not.toHaveBeenCalled();
+    expect(prismaMock.ssoIdentityProvider.update).not.toHaveBeenCalled();
   });
 
-  it('upserts an IdP for any institution as SUPER_ADMIN and audits', async () => {
+  it('creates an IdP for any institution as SUPER_ADMIN and audits', async () => {
     const originalKey = process.env['SSO_SECRET_KEY'];
     process.env['SSO_SECRET_KEY'] = '42'.repeat(32);
     const { _resetCipherKeyCache } = await import('../../lib/secret-cipher');
@@ -346,8 +357,9 @@ describe('PUT /api/admin/sso/institutions/:id', () => {
         name: 'College Two',
         slug: 'college-two',
       });
-      prismaMock.ssoIdentityProvider.findUnique.mockResolvedValue(null);
-      prismaMock.ssoIdentityProvider.upsert.mockResolvedValue({
+      prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(null);
+      // Phase 11.13 — findFirst returning null means create fires.
+      prismaMock.ssoIdentityProvider.create.mockResolvedValue({
         ...baseRow,
         institutionId: 'inst-2',
         enabled: true,
@@ -364,12 +376,11 @@ describe('PUT /api/admin/sso/institutions/:id', () => {
           oidcClientSecret: 'super-secret-2',
         });
       expect(res.status).toBe(200);
-      // Upsert was scoped to the path institutionId, not the caller's.
-      const upsertArgs = prismaMock.ssoIdentityProvider.upsert.mock.calls[0]?.[0] as
-        | { where: { institutionId: string }; create: Record<string, unknown> }
+      // Create was scoped to the path institutionId, not the caller's.
+      const createArgs = prismaMock.ssoIdentityProvider.create.mock.calls[0]?.[0] as
+        | { data: { institutionId: string } }
         | undefined;
-      expect(upsertArgs?.where.institutionId).toBe('inst-2');
-      expect(upsertArgs?.create.institutionId).toBe('inst-2');
+      expect(createArgs?.data.institutionId).toBe('inst-2');
       const [createCall] = prismaMock.auditLog.create.mock.calls;
       const auditData = (createCall as unknown as [{ data: { action: string; changes: { institutionId: string } } }])[0].data;
       expect(auditData.action).toBe('admin.sso.create');
@@ -401,7 +412,7 @@ describe('DELETE /api/admin/sso/institutions/:id', () => {
   });
 
   it('deletes another institution\'s IdP as SUPER_ADMIN', async () => {
-    prismaMock.ssoIdentityProvider.findUnique.mockResolvedValue({
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue({
       ...baseRow,
       institutionId: 'inst-2',
     });
@@ -413,8 +424,9 @@ describe('DELETE /api/admin/sso/institutions/:id', () => {
       .delete('/api/admin/sso/institutions/inst-2')
       .set('Authorization', `Bearer ${makeToken({ role: 'SUPER_ADMIN' })}`);
     expect(res.status).toBe(204);
+    // Phase 11.13 — delete by row id, not institutionId.
     expect(prismaMock.ssoIdentityProvider.delete).toHaveBeenCalledWith({
-      where: { institutionId: 'inst-2' },
+      where: { id: 'idp-1' },
     });
   });
 });

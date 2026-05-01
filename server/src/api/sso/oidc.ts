@@ -61,10 +61,17 @@ async function getConfig(idp: TenantOidcConfig): Promise<oidc.Configuration> {
  * Begin an OIDC sign-in: builds the authorize URL and persists the
  * flow state keyed by `state`. The caller redirects the user-agent to
  * the returned URL.
+ *
+ * Phase 11.13 — when an institution has multiple enabled IdPs the
+ * caller passes `idpId` so the callback resolves the EXACT IdP that
+ * issued this flow (otherwise an institution with two OIDC providers
+ * would always pick the highest-priority one at callback time and
+ * exchange the code with the wrong client_secret).
  */
 export async function buildOidcAuthorizeUrl(
   institutionSlug: string,
   idp: TenantOidcConfig,
+  idpId?: string,
 ): Promise<string> {
   const config = await getConfig(idp);
   const codeVerifier = oidc.randomPKCECodeVerifier();
@@ -77,6 +84,7 @@ export async function buildOidcAuthorizeUrl(
     slug: institutionSlug,
     codeVerifier,
     nonce,
+    ...(idpId ? { idpId } : {}),
   };
   await putFlowState(state, flow);
 
@@ -90,6 +98,7 @@ export async function buildOidcAuthorizeUrl(
   });
   return url.href;
 }
+
 
 export interface OidcAssertion {
   email: string;
