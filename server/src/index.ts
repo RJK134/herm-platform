@@ -9,6 +9,10 @@ import { createApp } from './app';
 import { PRODUCT } from './lib/branding';
 import { logger } from './lib/logger';
 import { startRetentionScheduler, stopRetentionScheduler } from './services/retention/scheduler';
+import {
+  startUkamfRotationScheduler,
+  stopUkamfRotationScheduler,
+} from './services/sso/ukamf-cert-rotation';
 
 const app = createApp();
 const PORT = Number(process.env['PORT'] ?? 3002);
@@ -55,11 +59,17 @@ const server = app.listen(PORT, () => {
   // purge soft-deleted rows. The first sweep runs on the next tick;
   // subsequent sweeps follow RETENTION_SWEEP_INTERVAL_MS (default 6 h).
   startRetentionScheduler();
+  // Phase 11.10 — UKAMF cert auto-rotation. Opt-in via
+  // UKAMF_ROTATION_ENABLED=true (and UKAMF_METADATA_URL set). First
+  // sweep runs on the next tick; subsequent sweeps follow
+  // UKAMF_ROTATION_INTERVAL_MS (default 24 h).
+  startUkamfRotationScheduler();
 });
 
 function shutdown(signal: string): void {
   logger.info({ signal }, 'shutting down gracefully');
   stopRetentionScheduler();
+  stopUkamfRotationScheduler();
   server.close(async () => {
     // Drain Sentry before disconnecting from Postgres — once $disconnect
     // resolves we may be killed at any moment, and queued exception events
