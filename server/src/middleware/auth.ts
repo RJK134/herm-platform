@@ -205,7 +205,7 @@ export async function authenticateJWT(
   }
 }
 
-export function optionalJWT(req: Request, _res: Response, next: NextFunction): void {
+export async function optionalJWT(req: Request, _res: Response, next: NextFunction): Promise<void> {
   const token = extractToken(req);
   if (token) {
     try {
@@ -218,9 +218,25 @@ export function optionalJWT(req: Request, _res: Response, next: NextFunction): v
       // req.user to a partial object whose downstream consumers
       // (rate-limiter key, tierGate, frameworkContext) operate on
       // undefined — a real defence-in-depth gap.
-      if (!decoded.purpose) {
-        req.user = decoded;
+      if (decoded.purpose) {
+        next();
+        return;
       }
+      // Phase 11.12 follow-up: SAML SLO revocation must apply to
+      // `optionalJWT` too. This middleware runs at the app level on
+      // every /api request, so a revoked JWT would otherwise still
+      // populate req.user for downstream middleware (apiRateLimiter,
+      // tierGate, frameworkContext, requireRole guard chains that
+      // start with optionalJWT). After IdP-initiated SLO revokes a
+      // jti, the bearer must appear anonymous on every path, not just
+      // the ones guarded by `authenticateJWT`. Tokens minted before
+      // Phase 11.12 have no `jti` claim — they keep working until
+      // natural expiry, mirroring the authenticateJWT behaviour.
+      if (decoded.jti && (await isRevoked(decoded.jti))) {
+        next();
+        return;
+      }
+      req.user = decoded;
     } catch {
       // proceed as anonymous
     }

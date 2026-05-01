@@ -256,7 +256,17 @@ export async function recordSession(rec: SessionRecord): Promise<void> {
   memory.recordSession(rec);
 }
 
-/** Synchronous in-memory revocation check (used by paths that can't await). */
+/**
+ * Synchronous revocation check against the in-memory backend ONLY.
+ *
+ * With the Redis-vs-memory exclusivity model (a Redis-configured
+ * deployment writes only to Redis), this function returns false for
+ * every jti in production — the in-memory backend has nothing to
+ * check. Useful only in dev / test setups (where Redis is unset and
+ * memory IS the source of truth) or as a fast-path "definitely revoked
+ * locally" hint. Authentication paths that need a correct answer in
+ * production MUST use the async `isRevoked()` instead.
+ */
 export function isRevokedSync(jti: string): boolean {
   return memory.isRevoked(jti);
 }

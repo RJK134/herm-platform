@@ -65,9 +65,11 @@ vi.mock('../lib/session-store', () => ({
   _resetSessionStoreForTests: vi.fn(),
 }));
 
+import type { Request, Response } from 'express';
 import ssoRouter from '../api/sso/sso.router';
 import authRouter from '../api/auth/auth.router';
 import { errorHandler } from '../middleware/errorHandler';
+import { optionalJWT } from '../middleware/auth';
 
 // `vitest.config.ts` sets `fileParallelism: false`, so a module-scope
 // mutation of `process.env` would leak into later test files. Use
@@ -294,6 +296,98 @@ describe('authenticateJWT — revocation check', () => {
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(200);
+    expect(isRevokedMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('optionalJWT — revocation check', () => {
+  // optionalJWT runs at app level on every /api request. If a revoked
+  // JWT slipped through, downstream middleware (rate limiter, tier
+  // gate, framework context, role guards layered after optionalJWT)
+  // would still see `req.user` populated. SAML SLO would only
+  // invalidate the token on `authenticateJWT`-guarded paths, leaving
+  // the rest of the app un-revoked — a real defence-in-depth gap
+  // (Bugbot finding on PR #74).
+  //
+  // Tests invoke the middleware directly rather than through the HTTP
+  // surface so we exercise the exact code path without coupling to a
+  // particular route.
+  function makeReq(authHeader?: string): Request {
+    return {
+      headers: authHeader ? { authorization: authHeader } : {},
+      // optionalJWT only reads `headers`; cast covers the rest.
+    } as unknown as Request;
+  }
+
+  function makeToken(over: Partial<Record<string, unknown>> = {}): string {
+    return jwt.sign(
+      {
+        userId: 'usr-1',
+        email: 'user@acme.test',
+        name: 'User',
+        role: 'VIEWER',
+        institutionId: 'inst-acme',
+        institutionName: 'Acme',
+        tier: 'enterprise',
+        ...over,
+      },
+      process.env['JWT_SECRET']!,
+    );
+  }
+
+  it('does NOT populate req.user when the bearer jti has been revoked', async () => {
+    isRevokedMock.mockResolvedValue(true);
+    const req = makeReq(`Bearer ${makeToken({ jti: 'revoked-by-slo' })}`);
+    const next = vi.fn();
+    await optionalJWT(req, {} as Response, next);
+    expect(isRevokedMock).toHaveBeenCalledWith('revoked-by-slo');
+    expect(req.user).toBeUndefined();
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('does populate req.user when the bearer jti is not revoked', async () => {
+    isRevokedMock.mockResolvedValue(false);
+    const req = makeReq(`Bearer ${makeToken({ jti: 'live-jti' })}`);
+    const next = vi.fn();
+    await optionalJWT(req, {} as Response, next);
+    expect(isRevokedMock).toHaveBeenCalledWith('live-jti');
+    expect(req.user).toBeDefined();
+    expect(req.user?.userId).toBe('usr-1');
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('skips the revocation check for a purpose-tagged token (rejected by purpose gate first)', async () => {
+    const req = makeReq(`Bearer ${makeToken({ purpose: 'mfa_challenge', jti: 'challenge-jti' })}`);
+    const next = vi.fn();
+    await optionalJWT(req, {} as Response, next);
+    expect(isRevokedMock).not.toHaveBeenCalled();
+    expect(req.user).toBeUndefined();
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('skips the revocation check for a legacy token without a jti (back-compat)', async () => {
+    const req = makeReq(`Bearer ${makeToken()}`);
+    const next = vi.fn();
+    await optionalJWT(req, {} as Response, next);
+    expect(isRevokedMock).not.toHaveBeenCalled();
+    expect(req.user).toBeDefined();
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('treats a totally invalid JWT as anonymous (no throw)', async () => {
+    const req = makeReq('Bearer not-a-jwt');
+    const next = vi.fn();
+    await optionalJWT(req, {} as Response, next);
+    expect(req.user).toBeUndefined();
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('passes through unauthenticated requests cleanly', async () => {
+    const req = makeReq(undefined);
+    const next = vi.fn();
+    await optionalJWT(req, {} as Response, next);
+    expect(req.user).toBeUndefined();
+    expect(next).toHaveBeenCalled();
     expect(isRevokedMock).not.toHaveBeenCalled();
   });
 });
