@@ -11,19 +11,24 @@
  * get to map our SCIM surface for free.
  */
 import type { Request, Response } from 'express';
+import { getSpBaseUrl } from '../../lib/sso-config';
 import { USER_RESOURCE_SCHEMA } from './scim.mappers';
 
 const SP_CONFIG_SCHEMA = 'urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig';
 const RESOURCE_TYPE_SCHEMA = 'urn:ietf:params:scim:schemas:core:2.0:ResourceType';
 const SCHEMA_SCHEMA = 'urn:ietf:params:scim:schemas:core:2.0:Schema';
 
-function baseUrl(req: Request): string {
-  const proto = req.get('x-forwarded-proto') ?? req.protocol;
-  const host = req.get('x-forwarded-host') ?? req.get('host') ?? '';
-  return `${proto}://${host}`;
+/**
+ * Public base URL for SCIM `meta.location`. Sourced from `SP_BASE_URL`
+ * env (the same trusted value SAML/OIDC use). Trusting `x-forwarded-*`
+ * headers without `app.set('trust proxy', …)` configured would let a
+ * direct caller spoof the URL; sourcing from env removes the surface.
+ */
+function baseUrl(_req: Request): string {
+  return getSpBaseUrl();
 }
 
-export function serviceProviderConfig(_req: Request, res: Response): void {
+export function serviceProviderConfig(req: Request, res: Response): void {
   res.type('application/scim+json').json({
     schemas: [SP_CONFIG_SCHEMA],
     documentationUri: 'https://docs.herm.com/scim',
@@ -35,13 +40,18 @@ export function serviceProviderConfig(_req: Request, res: Response): void {
     etag: { supported: false },
     authenticationSchemes: [
       {
-        type: 'httpbasic',
-        name: 'API Key (Bearer)',
+        // SCIM clients (Okta, Entra) use this to choose the right auth
+        // strategy. The HERM scheme is `Authorization: Bearer herm_pk_…`,
+        // which maps to the SCIM-standard `oauthbearertoken` type — NOT
+        // `httpbasic` (that's the user:pass scheme, which we do not
+        // implement).
+        type: 'oauthbearertoken',
+        name: 'HERM API Key (Bearer)',
         description: 'HERM API keys with admin:scim permission, sent as `Authorization: Bearer herm_pk_…`.',
         primary: true,
       },
     ],
-    meta: { resourceType: 'ServiceProviderConfig', location: `${baseUrl(_req)}/scim/v2/ServiceProviderConfig` },
+    meta: { resourceType: 'ServiceProviderConfig', location: `${baseUrl(req)}/scim/v2/ServiceProviderConfig` },
   });
 }
 

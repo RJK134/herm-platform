@@ -28,8 +28,9 @@ import type { NextFunction, Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../../utils/prisma';
 import { audit } from '../../lib/audit';
+import { getSpBaseUrl } from '../../lib/sso-config';
 import { sendScimError, sendScimZodError } from './scim.errors';
-import { userToScim, joinScimName, pickPrimaryEmail, USER_RESOURCE_SCHEMA } from './scim.mappers';
+import { userToScim, joinScimName, pickPrimaryEmail } from './scim.mappers';
 import { parseFilter } from './scim.filter';
 
 const SCIM_LIST_SCHEMA = 'urn:ietf:params:scim:api:messages:2.0:ListResponse';
@@ -40,17 +41,37 @@ function institutionId(req: Request): string | null {
   return req.apiUser?.institutionId ?? null;
 }
 
-function baseUrl(req: Request): string {
-  // Prefer the proxy-forwarded scheme/host so SCIM `meta.location`
-  // points at the externally-reachable URL even behind a load balancer.
-  const proto = req.get('x-forwarded-proto') ?? req.protocol;
-  const host = req.get('x-forwarded-host') ?? req.get('host') ?? '';
-  return `${proto}://${host}`;
+/**
+ * Public base URL for SCIM `meta.location`. Sourced from `SP_BASE_URL`
+ * env (the same trusted value SAML/OIDC use). Previously trusted
+ * `x-forwarded-proto`/`x-forwarded-host` headers, which can be spoofed
+ * by a direct client when the app does not configure Express
+ * `trust proxy` — so a malicious caller could inject host/proto into
+ * discovery metadata. Sourcing from env removes the attack surface.
+ */
+function baseUrl(_req: Request): string {
+  return getSpBaseUrl();
+}
+
+/**
+ * Tombstone an email address for soft-delete. Format mirrors the
+ * GDPR right-to-erasure path in `gdpr.controller.ts`:
+ * `deleted+<id>@deleted.invalid`. The `.invalid` TLD is reserved by
+ * RFC 2606 so it can never collide with a real domain. The local-part
+ * is RFC 5322-safe (no `:` characters that earlier `now.toISOString()`
+ * variants produced — those would have failed `zod.string().email()`).
+ */
+function tombstoneEmail(userId: string): string {
+  return `deleted+${userId}@deleted.invalid`;
 }
 
 const scimUserCreateSchema = z.object({
   schemas: z.array(z.string()).optional(),
-  userName: z.string().min(3).max(255),
+  // userName is the canonical SCIM identifier and the value we persist
+  // as `User.email`. Validate it as an email so we never write a row
+  // whose email would later fail `zod.string().email()` checks elsewhere
+  // in the platform (auth.service / GDPR / notification dispatch).
+  userName: z.string().email().max(255),
   externalId: z.string().max(255).optional(),
   name: z
     .object({
@@ -88,6 +109,13 @@ export async function listUsers(req: Request, res: Response, next: NextFunction)
     const filterRaw = typeof req.query['filter'] === 'string' ? (req.query['filter'] as string) : undefined;
 
     let extraWhere: Record<string, unknown> = {};
+    // The default list view returns active rows only. When a filter is
+    // present, we still default to active rows unless the filter
+    // explicitly targets `active eq false` — otherwise a `userName eq`
+    // / `externalId eq` query would silently surface soft-deleted rows,
+    // which is inconsistent with the no-filter behaviour and with SCIM
+    // `active` semantics.
+    let includeDeleted = false;
     if (filterRaw) {
       const parsed = parseFilter(filterRaw);
       if (!parsed) {
@@ -102,10 +130,15 @@ export async function listUsers(req: Request, res: Response, next: NextFunction)
       else if (parsed.attribute === 'externalId') extraWhere = { externalId: parsed.value };
       else if (parsed.attribute === 'active') {
         extraWhere = parsed.value ? { deletedAt: null } : { deletedAt: { not: null } };
+        includeDeleted = true; // the filter itself decides the deletedAt condition
       }
     }
 
-    const where = { institutionId: inst, ...(filterRaw ? extraWhere : { deletedAt: null }) };
+    const where = {
+      institutionId: inst,
+      ...(includeDeleted ? {} : { deletedAt: null }),
+      ...extraWhere,
+    };
     const [total, rows] = await Promise.all([
       prisma.user.count({ where }),
       prisma.user.findMany({
@@ -197,6 +230,24 @@ export async function createUser(req: Request, res: Response, next: NextFunction
       }
     }
 
+    // Refuse `active=false` on create. SCIM `active` is the User's
+    // administrative status — a created-disabled user with `deletedAt`
+    // would also be picked up by the retention scheduler and hard-
+    // deleted after the grace window, which is not what an IdP toggling
+    // active=false typically wants. Until we have a separate "disabled"
+    // field, the right contract is: create active, then PUT with
+    // active=false to deprovision (which runs the same scrub-and-soft-
+    // delete path as DELETE).
+    if (data.active === false) {
+      sendScimError(res, {
+        status: 400,
+        detail:
+          'Creating a user with active=false is not supported. Create the user, then PUT with active=false to deprovision.',
+        scimType: 'invalidValue',
+      });
+      return;
+    }
+
     const user = await prisma.user.create({
       data: {
         email,
@@ -207,12 +258,10 @@ export async function createUser(req: Request, res: Response, next: NextFunction
         // disabled. The IdP / SCIM client owns auth.
         passwordHash: '',
         passwordLoginDisabled: true,
-        // Some clients expect to create-as-disabled; honour `active=false`.
-        deletedAt: data.active === false ? new Date() : null,
       },
     });
 
-    await audit(undefined, {
+    await audit(req, {
       action: 'scim.user.create',
       entityType: 'User',
       entityId: user.id,
@@ -281,32 +330,64 @@ export async function replaceUser(req: Request, res: Response, next: NextFunctio
       }
     }
 
+    // Determine the active-state transition. Three branches:
+    //   1. active=false on a live row    → scrub-and-soft-delete (mirrors DELETE)
+    //   2. active=true on a soft-deleted → reject (revive isn't supported by SCIM
+    //                                       in v1; the row's PII has already been
+    //                                       scrubbed, so reviving would surface a
+    //                                       "[deleted user]" name to the IdP).
+    //   3. anything else                  → preserve existing.deletedAt
+    const transitioningToDeleted = data.active === false && existing.deletedAt === null;
+    const transitioningToActive = data.active === true && existing.deletedAt !== null;
+
+    if (transitioningToActive) {
+      sendScimError(res, {
+        status: 400,
+        detail:
+          'Reactivating a soft-deleted user via SCIM is not supported. The row\'s PII has been scrubbed; create a new user.',
+        scimType: 'invalidValue',
+      });
+      return;
+    }
+
+    const now = new Date();
+    const dataToWrite = transitioningToDeleted
+      ? {
+          // Same scrub the GDPR right-to-erasure path applies. Keeps
+          // soft-delete semantics consistent across DELETE / PUT and
+          // ensures the retention scheduler can hard-delete the row
+          // after the grace window without further action.
+          deletedAt: now,
+          email: tombstoneEmail(existing.id),
+          name: '[deleted user]',
+          passwordHash: '',
+          passwordLoginDisabled: true,
+          mfaSecret: null,
+          mfaEnabledAt: null,
+          externalId: data.externalId ?? null,
+        }
+      : {
+          email: newEmail,
+          name: newName,
+          externalId: data.externalId ?? null,
+          deletedAt: existing.deletedAt,
+        };
+
     const updated = await prisma.user.update({
       where: { id: existing.id },
-      data: {
-        email: newEmail,
-        name: newName,
-        externalId: data.externalId ?? null,
-        // active = false ⇒ soft-delete (or keep soft-deleted); active = true ⇒ revive
-        deletedAt:
-          data.active === false
-            ? existing.deletedAt ?? new Date()
-            : data.active === true
-              ? null
-              : existing.deletedAt,
-      },
+      data: dataToWrite,
     });
 
-    await audit(undefined, {
-      action: 'scim.user.replace',
+    await audit(req, {
+      action: transitioningToDeleted ? 'scim.user.deprovision' : 'scim.user.replace',
       entityType: 'User',
       entityId: updated.id,
       userId: null,
       changes: {
         institutionId: inst,
-        emailChanged: newEmail !== existing.email,
+        emailChanged: !transitioningToDeleted && newEmail !== existing.email,
         externalIdChanged: (data.externalId ?? null) !== existing.externalId,
-        activeChanged: existing.deletedAt !== updated.deletedAt,
+        deprovisioned: transitioningToDeleted,
         apiKeyId: req.apiUser?.id ?? null,
       },
     });
@@ -336,13 +417,11 @@ export async function deleteUser(req: Request, res: Response, next: NextFunction
     // Soft-delete + scrub PII, mirroring the GDPR right-to-erasure path
     // in `gdpr.controller.ts`. The retention scheduler hard-deletes
     // after the grace window.
-    const now = new Date();
-    const scrubbedEmail = `${now.toISOString()}+${existing.id}@deleted.invalid`;
     await prisma.user.update({
       where: { id: existing.id },
       data: {
-        deletedAt: now,
-        email: scrubbedEmail,
+        deletedAt: new Date(),
+        email: tombstoneEmail(existing.id),
         name: '[deleted user]',
         passwordHash: '',
         passwordLoginDisabled: true,
@@ -351,7 +430,7 @@ export async function deleteUser(req: Request, res: Response, next: NextFunction
       },
     });
 
-    await audit(undefined, {
+    await audit(req, {
       action: 'scim.user.delete',
       entityType: 'User',
       entityId: existing.id,

@@ -254,6 +254,29 @@ describe('POST /scim/v2/Users', () => {
     expect(res.status).toBe(400);
     expect(res.body.scimType).toBe('invalidSyntax');
   });
+
+  it('400 invalidSyntax when userName is not a valid email', async () => {
+    const res = await request(buildApp())
+      .post('/scim/v2/Users')
+      .set('Authorization', `Bearer ${VALID_KEY}`)
+      .send({ userName: 'not-an-email' });
+    expect(res.status).toBe(400);
+    expect(res.body.scimType).toBe('invalidSyntax');
+  });
+
+  it('400 invalidValue when active=false on create', async () => {
+    userMocks.findUnique.mockResolvedValue(null);
+    const res = await request(buildApp())
+      .post('/scim/v2/Users')
+      .set('Authorization', `Bearer ${VALID_KEY}`)
+      .send({
+        userName: 'disabled@acme.test',
+        active: false,
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.scimType).toBe('invalidValue');
+    expect(userMocks.create).not.toHaveBeenCalled();
+  });
 });
 
 describe('PUT /scim/v2/Users/:id', () => {
@@ -277,7 +300,7 @@ describe('PUT /scim/v2/Users/:id', () => {
     expect(res.body.userName).toBe('alice@acme.test');
   });
 
-  it('soft-deletes by setting active=false (deletedAt stamped)', async () => {
+  it('active=false transitions a live row to soft-deleted with PII scrub', async () => {
     userMocks.findFirst.mockResolvedValue(fakeUser());
     const stamped = new Date();
     userMocks.update.mockResolvedValue(fakeUser({ deletedAt: stamped }));
@@ -293,6 +316,26 @@ describe('PUT /scim/v2/Users/:id', () => {
     expect(res.body.active).toBe(false);
     const updateArgs = userMocks.update.mock.calls[0]?.[0]?.data;
     expect(updateArgs?.deletedAt).toBeInstanceOf(Date);
+    // Now: PII scrub matches DELETE / GDPR semantics
+    expect(updateArgs?.email).toMatch(/^deleted\+.*@deleted\.invalid$/);
+    expect(updateArgs?.name).toBe('[deleted user]');
+    expect(updateArgs?.passwordHash).toBe('');
+    expect(updateArgs?.mfaSecret).toBeNull();
+  });
+
+  it('400 invalidValue when trying to reactivate (active=true on a soft-deleted row)', async () => {
+    userMocks.findFirst.mockResolvedValue(fakeUser({ deletedAt: new Date() }));
+    const res = await request(buildApp())
+      .put('/scim/v2/Users/usr-1')
+      .set('Authorization', `Bearer ${VALID_KEY}`)
+      .send({
+        userName: 'alice@acme.test',
+        emails: [{ value: 'alice@acme.test', primary: true }],
+        active: true,
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.scimType).toBe('invalidValue');
+    expect(userMocks.update).not.toHaveBeenCalled();
   });
 
   it('409 when changing userName to one already registered', async () => {
@@ -315,14 +358,17 @@ describe('DELETE /scim/v2/Users/:id', () => {
     apiKeyFindUniqueMock.mockResolvedValue(authedKey());
   });
 
-  it('204 soft-deletes and scrubs PII', async () => {
-    userMocks.findFirst.mockResolvedValue(fakeUser());
+  it('204 soft-deletes and scrubs PII (deterministic tombstone email)', async () => {
+    userMocks.findFirst.mockResolvedValue(fakeUser({ id: 'usr-target' }));
     userMocks.update.mockResolvedValue(fakeUser({ deletedAt: new Date() }));
     const res = await request(buildApp()).delete('/scim/v2/Users/usr-1').set('Authorization', `Bearer ${VALID_KEY}`);
     expect(res.status).toBe(204);
     const updateArgs = userMocks.update.mock.calls[0]?.[0]?.data;
     expect(updateArgs?.deletedAt).toBeInstanceOf(Date);
-    expect(updateArgs?.email).toMatch(/@deleted\.invalid$/);
+    // Deterministic GDPR-aligned tombstone — no `:` characters that
+    // would have been produced by the earlier `now.toISOString()`-based
+    // approach (Copilot review #73).
+    expect(updateArgs?.email).toBe('deleted+usr-target@deleted.invalid');
     expect(updateArgs?.name).toBe('[deleted user]');
     expect(updateArgs?.passwordHash).toBe('');
     expect(updateArgs?.mfaSecret).toBeNull();
