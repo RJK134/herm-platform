@@ -29,14 +29,68 @@ import {
   deleteUser,
   patchUserNotImplemented,
 } from './scim.users.controller';
-import {
-  serviceProviderConfig,
-  resourceTypes,
-  schemas,
-} from './scim.config.controller';
+import { serviceProviderConfig, resourceTypes, schemas } from './scim.config.controller';
 
 const SCIM_PERMISSION = 'admin:scim';
 const API_KEY_PREFIX = 'herm_pk_';
+
+// ── Negative-cache LRU for SCIM bearer auth ────────────────────────────────
+//
+// Phase 11.15 hardening (M1). Each invalid bearer would otherwise hit
+// Postgres on every probe — combined with the fact that the SCIM mount
+// is now also rate-limited per IP (M2), an attacker probing keys still
+// burns one DB round-trip per attempt. The cache short-circuits a hash
+// that recently failed.
+//
+// Bounded by SCIM_NEGATIVE_CACHE_MAX entries with a 30s TTL. Eviction
+// is FIFO via Map insertion order — Map preserves insertion order in
+// JS, so on a `set` that exceeds capacity we delete the oldest key.
+// FIFO is sufficient here: the workload is "lots of probes for one
+// hash quickly, then move on", so recency-of-access doesn't help much
+// over insertion-time. Keeps the implementation small (no LRU lib).
+//
+// Crucially, only NEGATIVE results are cached. A positive lookup
+// (valid key) goes through to Prisma every time so a key revocation
+// or expiry takes effect immediately. Caching positive results would
+// keep a revoked key alive for up to TTL, which is unacceptable.
+const SCIM_NEGATIVE_CACHE_MAX = 256;
+const SCIM_NEGATIVE_CACHE_TTL_MS = 30_000;
+
+interface NegativeCacheEntry {
+  cachedAt: number;
+}
+
+const scimNegativeCache = new Map<string, NegativeCacheEntry>();
+
+function negativeCacheGet(keyHash: string): boolean {
+  const hit = scimNegativeCache.get(keyHash);
+  if (!hit) return false;
+  if (Date.now() - hit.cachedAt >= SCIM_NEGATIVE_CACHE_TTL_MS) {
+    scimNegativeCache.delete(keyHash);
+    return false;
+  }
+  return true;
+}
+
+function negativeCacheSet(keyHash: string): void {
+  // FIFO eviction once we exceed capacity. Map iterates in insertion
+  // order, so the first key from `keys()` is the oldest.
+  if (scimNegativeCache.size >= SCIM_NEGATIVE_CACHE_MAX) {
+    const oldest = scimNegativeCache.keys().next().value;
+    if (oldest !== undefined) scimNegativeCache.delete(oldest);
+  }
+  scimNegativeCache.set(keyHash, { cachedAt: Date.now() });
+}
+
+/** Test hook: clears the SCIM negative auth cache. */
+export function _resetScimNegativeCacheForTests(): void {
+  scimNegativeCache.clear();
+}
+
+/** Test hook: read current cache size. */
+export function _scimNegativeCacheSizeForTests(): number {
+  return scimNegativeCache.size;
+}
 
 /**
  * SCIM-specific API key auth.
@@ -46,6 +100,21 @@ const API_KEY_PREFIX = 'herm_pk_';
  * shape, which would break SCIM clients that parse responses by
  * `schemas: [...Error]`. Auth-success sets `req.apiUser` with the same
  * shape so the controllers do not need to distinguish.
+ *
+ * Phase 11.15 hardening:
+ *   - All boolean checks (active / expired / institution-soft-deleted)
+ *     are evaluated as a single combined boolean before branching, so
+ *     a timing side-channel can't distinguish "valid hash, inactive
+ *     key" from "valid hash, expired key" from "valid hash, tenant
+ *     soft-deleted" from "invalid hash, no row". The DB round-trip
+ *     dominates timing; this just removes the in-process JS branches
+ *     that would otherwise let an attacker discriminate post-lookup.
+ *   - A small negative cache short-circuits a hash that recently
+ *     failed, so an unauth probe storm doesn't hammer Postgres.
+ *   - The `Institution.deletedAt` check fixes H3: SCIM provisioning
+ *     into a tombstoned tenant during the retention grace window is
+ *     refused with the same opaque "invalid token" envelope so an
+ *     outside probe can't tell that the institution still has rows.
  */
 async function scimApiKeyAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const header = req.headers.authorization;
@@ -56,15 +125,58 @@ async function scimApiKeyAuth(req: Request, res: Response, next: NextFunction): 
   }
   try {
     const keyHash = crypto.createHash('sha256').update(token).digest('hex');
-    const apiKey = await prisma.apiKey.findUnique({ where: { keyHash } });
-    if (
-      !apiKey ||
-      !apiKey.isActive ||
-      (apiKey.expiresAt !== null && apiKey.expiresAt.getTime() < Date.now())
-    ) {
-      sendScimError(res, { status: 401, detail: 'API key invalid or expired' });
+
+    // Negative cache short-circuit. Only HASH-level misses are cached
+    // — a hash that hit the DB and resolved to an inactive/expired/
+    // tenant-deleted row is NOT cached (the row state can flip back
+    // to valid via admin action; we want that change visible at the
+    // next request, not after TTL). The cache exists purely to absorb
+    // probe storms with bogus tokens.
+    if (negativeCacheGet(keyHash)) {
+      sendScimError(res, { status: 401, detail: 'API key required' });
       return;
     }
+
+    // Single Prisma round-trip joining the parent institution so we
+    // can apply the H3 tenant-deletion gate without a second query.
+    // Selecting only the columns we need keeps the row narrow.
+    const apiKey = await prisma.apiKey.findUnique({
+      where: { keyHash },
+      select: {
+        id: true,
+        institutionId: true,
+        permissions: true,
+        isActive: true,
+        expiresAt: true,
+        institution: { select: { deletedAt: true } },
+      },
+    });
+
+    // Constant-time-ish acceptance. Build a single boolean and only
+    // branch once at the bottom — no early returns between the
+    // sub-checks. This still has a DB-vs-no-DB timing gap (mitigated
+    // by the negative cache + the rate limiter), but it removes the
+    // post-lookup JS branches that earlier let "valid hash, inactive
+    // key" be distinguished from "valid hash, expired key".
+    const now = Date.now();
+    const hasRow = apiKey !== null && apiKey !== undefined;
+    const isActive = hasRow && apiKey.isActive === true;
+    const notExpired = hasRow && (apiKey.expiresAt === null || apiKey.expiresAt.getTime() >= now);
+    const tenantLive =
+      hasRow &&
+      (apiKey.institution?.deletedAt === null || apiKey.institution?.deletedAt === undefined);
+    const accepted = hasRow && isActive && notExpired && tenantLive;
+
+    if (!accepted) {
+      // Cache only the "no matching row" case so admin-driven flips
+      // (revoke / restore tenant / extend expiry) take effect at the
+      // next request without waiting for TTL. A missing hash is the
+      // overwhelmingly common probe-storm path.
+      if (!hasRow) negativeCacheSet(keyHash);
+      sendScimError(res, { status: 401, detail: 'API key required' });
+      return;
+    }
+
     req.apiUser = {
       id: apiKey.id,
       institutionId: apiKey.institutionId,
@@ -108,12 +220,7 @@ function requireScimPermission(req: Request, res: Response, next: NextFunction):
  *
  * Express recognises this as an error handler via the 4-arg signature.
  */
-function scimErrorHandler(
-  err: unknown,
-  _req: Request,
-  res: Response,
-  _next: NextFunction,
-): void {
+function scimErrorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction): void {
   logger.error(
     { err: err instanceof Error ? err.message : String(err) },
     'scim handler unhandled error',
