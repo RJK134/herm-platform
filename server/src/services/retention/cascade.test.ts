@@ -123,6 +123,10 @@ describe('softDeleteInstitution', () => {
     expect(firstUserUpdate?.passwordHash).toBe('');
     expect(firstUserUpdate?.mfaSecret).toBeNull();
     expect(firstUserUpdate?.deletedAt).toBeInstanceOf(Date);
+    // Phase 11.14 follow-up (Bugbot HIGH) — externalId nulled so a
+    // SCIM re-provision after a restoreInstitution can reuse the same
+    // external identifier without colliding on the composite-unique.
+    expect(firstUserUpdate?.externalId).toBeNull();
 
     // Notifications deleted in bulk by institution.
     expect(notificationDeleteManyMock).toHaveBeenCalledWith({

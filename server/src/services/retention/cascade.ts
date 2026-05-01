@@ -149,6 +149,13 @@ export async function softDeleteInstitution(
         passwordLoginDisabled: true,
         mfaSecret: null,
         mfaEnabledAt: null,
+        // Phase 11.14 follow-up (Bugbot HIGH on PR #76) — also clear
+        // `externalId`. The SCIM DELETE + PUT-soft-delete paths both
+        // null it (because of the `@@unique([institutionId, externalId])`
+        // composite); the cascade must do the same so a SCIM
+        // re-provision into a restored institution isn't blocked by a
+        // tombstoned row holding the same external identifier.
+        externalId: null,
       },
     });
     usersScrubbed++;
