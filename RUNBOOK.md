@@ -94,6 +94,10 @@ The image is multi-stage:
 | `RETENTION_SWEEP_INTERVAL_MS` | optional (default `21_600_000` = 6 h) | How often the in-process scheduler runs. The window is days, so a 6-hour sweep is fine. |
 | `RETENTION_BATCH_SIZE` | optional (default `100`) | Per-sweep cap on rows hard-deleted, so a backlog cannot lock the DB. |
 | `ENABLE_SOFT_DELETE_AUTH_CHECK` | optional (test-only) | When `NODE_ENV=test`, the soft-delete revocation check in `authenticateJWT` is skipped by default to avoid consuming queued `prisma.user.findUnique` mocks across the existing suite. Set to `true` in tests that specifically pin the revocation behaviour. Has no effect outside test mode. |
+| `UKAMF_METADATA_URL` | optional | URL of a SAML 2.0 metadata aggregate (e.g. `https://metadata.ukfederation.org.uk/ukfederation-metadata.xml`). When set together with `UKAMF_ROTATION_ENABLED=true` (Phase 11.10), the in-process scheduler periodically polls the feed and rotates `SsoIdentityProvider.samlCert` rows whose `samlEntityId` appears in the feed with a different cert. Out-of-process equivalent: `npx tsx server/src/scripts/ukamf-rotate.ts [--dry-run]`. |
+| `UKAMF_ROTATION_ENABLED` | optional (default `false`) | Explicit opt-in for the in-process UKAMF rotation scheduler. Without it (or without `UKAMF_METADATA_URL`), the scheduler is a no-op at boot. |
+| `UKAMF_ROTATION_INTERVAL_MS` | optional (default `86_400_000` = 24 h) | Interval between sweeps when the scheduler is enabled. UKAMF cert rotations are rare; daily is plenty. |
+| `UKAMF_FETCH_TIMEOUT_MS` | optional (default `30_000` = 30 s) | HTTP timeout for the metadata fetch. The UKAMF feed is several MB; allow generous timeout. |
 
 ### Graceful shutdown
 SIGTERM/SIGINT → close HTTP listener → flush Sentry → `prisma.$disconnect()` → exit 0.
