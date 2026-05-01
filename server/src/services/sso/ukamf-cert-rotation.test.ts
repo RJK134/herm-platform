@@ -33,10 +33,15 @@ vi.mock('../../lib/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock('../../lib/secret-cipher', () => ({
-  encryptSecret: (s: string) => `enc:v1:${s}`,
-  decryptSecret: (s: string | null | undefined) =>
+const { encryptSecretMock, decryptSecretMock } = vi.hoisted(() => ({
+  encryptSecretMock: vi.fn((s: string) => `enc:v1:${s}`),
+  decryptSecretMock: vi.fn((s: string | null | undefined) =>
     typeof s === 'string' && s.startsWith('enc:v1:') ? s.slice('enc:v1:'.length) : s ?? null,
+  ),
+}));
+vi.mock('../../lib/secret-cipher', () => ({
+  encryptSecret: encryptSecretMock,
+  decryptSecret: decryptSecretMock,
 }));
 
 import {
@@ -99,6 +104,12 @@ beforeEach(() => {
   findManyMock.mockReset();
   updateMock.mockReset();
   auditLogCreateMock.mockReset();
+  encryptSecretMock.mockReset();
+  encryptSecretMock.mockImplementation((s: string) => `enc:v1:${s}`);
+  decryptSecretMock.mockReset();
+  decryptSecretMock.mockImplementation((s: string | null | undefined) =>
+    typeof s === 'string' && s.startsWith('enc:v1:') ? s.slice('enc:v1:'.length) : s ?? null,
+  );
 });
 
 afterEach(() => {
@@ -304,14 +315,22 @@ describe('rotateOnce', () => {
       'fetch',
       vi.fn(async () => new Response(FIXTURE_XML, { status: 200 })),
     );
+    decryptSecretMock.mockImplementationOnce(() => {
+      throw new Error('bad cipher text');
+    });
     findManyMock.mockResolvedValue([
       fakeIdp({ id: 'idp-a', samlEntityId: ENTITY_A, samlCert: `enc:v1:${pem(CERT_A_OLD)}` }),
     ]);
     updateMock.mockResolvedValue({});
     auditLogCreateMock.mockResolvedValue({});
 
+    const { logger } = await import('../../lib/logger');
     const stats = await rotateOnce({ feedUrl: 'https://example.test/feed.xml' });
     expect(stats.rotated).toBe(1);
+    expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+      expect.objectContaining({ idpId: 'idp-a' }),
+      'ukamf.rotate.decrypt-failed-overwriting',
+    );
   });
 
   it('counts a per-row error when prisma update throws but does not abort the sweep', async () => {
@@ -336,12 +355,15 @@ describe('isUkamfRotationEnabled', () => {
   const originals = {
     url: process.env['UKAMF_METADATA_URL'],
     enabled: process.env['UKAMF_ROTATION_ENABLED'],
+    secretKey: process.env['SSO_SECRET_KEY'],
   };
   afterEach(() => {
     if (originals.url === undefined) delete process.env['UKAMF_METADATA_URL'];
     else process.env['UKAMF_METADATA_URL'] = originals.url;
     if (originals.enabled === undefined) delete process.env['UKAMF_ROTATION_ENABLED'];
     else process.env['UKAMF_ROTATION_ENABLED'] = originals.enabled;
+    if (originals.secretKey === undefined) delete process.env['SSO_SECRET_KEY'];
+    else process.env['SSO_SECRET_KEY'] = originals.secretKey;
   });
 
   it('false when neither env is set', () => {
@@ -359,9 +381,16 @@ describe('isUkamfRotationEnabled', () => {
     process.env['UKAMF_ROTATION_ENABLED'] = 'true';
     expect(isUkamfRotationEnabled()).toBe(false);
   });
-  it('true when both are set', () => {
+  it('false when UKAMF vars are set but SSO_SECRET_KEY is unset', () => {
     process.env['UKAMF_METADATA_URL'] = 'https://example.test/feed.xml';
     process.env['UKAMF_ROTATION_ENABLED'] = 'true';
+    delete process.env['SSO_SECRET_KEY'];
+    expect(isUkamfRotationEnabled()).toBe(false);
+  });
+  it('true when both UKAMF vars and SSO_SECRET_KEY are set', () => {
+    process.env['UKAMF_METADATA_URL'] = 'https://example.test/feed.xml';
+    process.env['UKAMF_ROTATION_ENABLED'] = 'true';
+    process.env['SSO_SECRET_KEY'] = 'a'.repeat(64);
     expect(isUkamfRotationEnabled()).toBe(true);
   });
 });

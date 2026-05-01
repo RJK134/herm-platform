@@ -316,7 +316,15 @@ export async function rotateOnce(options: RotationOptions = {}): Promise<Rotatio
 let intervalHandle: NodeJS.Timeout | null = null;
 
 export function isUkamfRotationEnabled(): boolean {
-  return process.env['UKAMF_ROTATION_ENABLED'] === 'true' && !!process.env['UKAMF_METADATA_URL'];
+  if (process.env['UKAMF_ROTATION_ENABLED'] !== 'true') return false;
+  if (!process.env['UKAMF_METADATA_URL']) return false;
+  if (!process.env['SSO_SECRET_KEY']) {
+    logger.error(
+      'ukamf.scheduler: SSO_SECRET_KEY is not set; cert encryption would fail — rotation disabled',
+    );
+    return false;
+  }
+  return true;
 }
 
 /**
