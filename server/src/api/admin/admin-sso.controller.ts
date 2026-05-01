@@ -167,7 +167,17 @@ async function upsertForInstitution(
     );
   }
   const input = parsed.data;
-  const existing = await prisma.ssoIdentityProvider.findUnique({ where: { institutionId } });
+  // Phase 11.13 — admin operates on the institution's PRIMARY IdP
+  // (lowest priority, then earliest createdAt). Single-IdP tenants are
+  // unchanged; multi-IdP tenants would manage additional rows via a
+  // future row-id-based admin endpoint (deferred). The existence
+  // check + upsert pattern is replaced by an explicit findFirst +
+  // create-or-update split because Prisma's upsert needs a unique
+  // where clause and `institutionId` is no longer unique.
+  const existing = await prisma.ssoIdentityProvider.findFirst({
+    where: { institutionId },
+    orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+  });
 
   if (!existing) {
     if (!input.protocol || !input.displayName) {
@@ -200,35 +210,38 @@ async function upsertForInstitution(
     oidcClientSecret: oidcSecretOp.create,
   });
 
-  const row = await prisma.ssoIdentityProvider.upsert({
-    where: { institutionId },
-    update: {
-      ...(input.protocol !== undefined && { protocol: input.protocol }),
-      ...(input.displayName !== undefined && { displayName: input.displayName }),
-      ...(input.enabled !== undefined && { enabled: input.enabled }),
-      ...(input.jitProvisioning !== undefined && { jitProvisioning: input.jitProvisioning }),
-      ...(input.defaultRole !== undefined && { defaultRole: input.defaultRole }),
-      ...(input.samlEntityId !== undefined && { samlEntityId: input.samlEntityId }),
-      ...(input.samlSsoUrl !== undefined && { samlSsoUrl: input.samlSsoUrl }),
-      ...(input.oidcIssuer !== undefined && { oidcIssuer: input.oidcIssuer }),
-      ...(input.oidcClientId !== undefined && { oidcClientId: input.oidcClientId }),
-      ...encUpdate,
-    },
-    create: {
-      institutionId,
-      protocol: input.protocol!,
-      displayName: input.displayName!,
-      enabled: input.enabled ?? false,
-      jitProvisioning: input.jitProvisioning ?? true,
-      defaultRole: input.defaultRole ?? 'VIEWER',
-      samlEntityId: input.samlEntityId ?? null,
-      samlSsoUrl: input.samlSsoUrl ?? null,
-      oidcIssuer: input.oidcIssuer ?? null,
-      oidcClientId: input.oidcClientId ?? null,
-      samlCert: encCreate.samlCert ?? null,
-      oidcClientSecret: encCreate.oidcClientSecret ?? null,
-    },
-  });
+  const row = existing
+    ? await prisma.ssoIdentityProvider.update({
+        where: { id: existing.id },
+        data: {
+          ...(input.protocol !== undefined && { protocol: input.protocol }),
+          ...(input.displayName !== undefined && { displayName: input.displayName }),
+          ...(input.enabled !== undefined && { enabled: input.enabled }),
+          ...(input.jitProvisioning !== undefined && { jitProvisioning: input.jitProvisioning }),
+          ...(input.defaultRole !== undefined && { defaultRole: input.defaultRole }),
+          ...(input.samlEntityId !== undefined && { samlEntityId: input.samlEntityId }),
+          ...(input.samlSsoUrl !== undefined && { samlSsoUrl: input.samlSsoUrl }),
+          ...(input.oidcIssuer !== undefined && { oidcIssuer: input.oidcIssuer }),
+          ...(input.oidcClientId !== undefined && { oidcClientId: input.oidcClientId }),
+          ...encUpdate,
+        },
+      })
+    : await prisma.ssoIdentityProvider.create({
+        data: {
+          institutionId,
+          protocol: input.protocol!,
+          displayName: input.displayName!,
+          enabled: input.enabled ?? false,
+          jitProvisioning: input.jitProvisioning ?? true,
+          defaultRole: input.defaultRole ?? 'VIEWER',
+          samlEntityId: input.samlEntityId ?? null,
+          samlSsoUrl: input.samlSsoUrl ?? null,
+          oidcIssuer: input.oidcIssuer ?? null,
+          oidcClientId: input.oidcClientId ?? null,
+          samlCert: encCreate.samlCert ?? null,
+          oidcClientSecret: encCreate.oidcClientSecret ?? null,
+        },
+      });
 
   await audit(req, {
     action: existing ? 'admin.sso.update' : 'admin.sso.create',
@@ -252,7 +265,13 @@ async function upsertForInstitution(
 export const readMe = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const institutionId = callerInstitutionId(req);
-    const row = await prisma.ssoIdentityProvider.findUnique({ where: { institutionId } });
+    // Phase 11.13 — surface the PRIMARY IdP for this institution
+    // (lowest priority, then earliest createdAt). Multi-IdP tenants
+    // will get a list endpoint in a follow-up.
+    const row = await prisma.ssoIdentityProvider.findFirst({
+      where: { institutionId },
+      orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+    });
     if (!row) {
       res.json({ success: true, data: null });
       return;
@@ -278,11 +297,16 @@ export const upsertMe = async (req: Request, res: Response, next: NextFunction):
 // ── DELETE /api/admin/sso/me ───────────────────────────────────────────────
 
 async function deleteForInstitution(req: Request, institutionId: string): Promise<void> {
-  const existing = await prisma.ssoIdentityProvider.findUnique({ where: { institutionId } });
+  // Phase 11.13 — delete the PRIMARY IdP only. Multi-IdP tenants would
+  // need to delete additional rows via a future row-id-based endpoint.
+  const existing = await prisma.ssoIdentityProvider.findFirst({
+    where: { institutionId },
+    orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+  });
   if (!existing) {
     throw new AppError(404, 'NOT_FOUND', 'No SSO IdP row to delete.');
   }
-  await prisma.ssoIdentityProvider.delete({ where: { institutionId } });
+  await prisma.ssoIdentityProvider.delete({ where: { id: existing.id } });
   await audit(req, {
     action: 'admin.sso.delete',
     entityType: 'SsoIdentityProvider',
@@ -352,8 +376,11 @@ export const readByInstitution = async (
     if (!institutionId) {
       throw new AppError(400, 'VALIDATION_ERROR', 'institutionId is required');
     }
-    const row = await prisma.ssoIdentityProvider.findUnique({
+    // Phase 11.13 — return the PRIMARY IdP row. Multi-IdP tenants
+    // get the full set via a future list-by-institution endpoint.
+    const row = await prisma.ssoIdentityProvider.findFirst({
       where: { institutionId },
+      orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
       include: { institution: { select: { name: true, slug: true } } },
     });
     if (!row) {

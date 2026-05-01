@@ -44,6 +44,7 @@ import {
   buildAuthnRequestUrl,
   validateSamlResponse,
   validateLogoutRequest,
+  parseRelayState,
   type TenantSamlConfig,
 } from './saml';
 import { revokeBySamlSubject } from '../../lib/session-store';
@@ -52,10 +53,25 @@ import {
   completeOidcCallback,
   type TenantOidcConfig,
 } from './oidc';
-import { resolveSsoForFlow, completeSsoSignIn } from './sso.service';
+import { peekFlowState } from './flow-store';
+import { resolveSsoForFlow, completeSsoSignIn, listEnabledIdpsForSlug } from './sso.service';
 import { getSpSigningMaterial } from '../../lib/sp-signing';
 
 // ── Discovery ──────────────────────────────────────────────────────────────
+
+/**
+ * Phase 11.13 — discovery now returns an `options` array. For
+ * back-compat with single-IdP callers, the response also surfaces the
+ * highest-priority option's fields at the top level (`protocol`,
+ * `displayName`, `loginUrl` — same shape as the pre-multi-IdP era).
+ * Frontends that haven't been updated keep working; the new chooser
+ * UI consumes `options[]`.
+ */
+function pickPrimary<T extends { id: string; protocol: string; displayName: string; priority: number }>(
+  options: T[],
+): T | null {
+  return options[0] ?? null;
+}
 
 export const discover = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -64,35 +80,31 @@ export const discover = async (req: Request, res: Response, next: NextFunction):
       throw new AppError(400, 'VALIDATION_ERROR', 'institutionSlug is required');
     }
 
-    const institution = await prisma.institution.findUnique({
-      where: { slug: institutionSlug },
-      select: {
-        ssoProvider: {
-          select: {
-            enabled: true,
-            protocol: true,
-            displayName: true,
-          },
-        },
-      },
-    });
-
-    if (!institution || !institution.ssoProvider || !institution.ssoProvider.enabled) {
+    const options = await listEnabledIdpsForSlug(institutionSlug);
+    if (options.length === 0) {
       throw new AppError(
         404,
         'SSO_NOT_CONFIGURED',
         'SSO is not configured for this institution. Sign in with email and password instead.',
       );
     }
-
-    const idp = institution.ssoProvider;
-
+    const primary = pickPrimary(options)!;
     res.json({
       success: true,
       data: {
-        protocol: idp.protocol,
-        displayName: idp.displayName,
+        // Back-compat singular fields point at the highest-priority option.
+        protocol: primary.protocol,
+        displayName: primary.displayName,
         loginUrl: `/api/sso/${institutionSlug}/login`,
+        // Multi-IdP — every enabled option, sorted by priority.
+        // Each carries its own `loginUrl` with `?idpId=` so the chooser
+        // can target a specific row.
+        options: options.map((o) => ({
+          id: o.id,
+          protocol: o.protocol,
+          displayName: o.displayName,
+          loginUrl: `/api/sso/${institutionSlug}/login?idpId=${encodeURIComponent(o.id)}`,
+        })),
       },
     });
   } catch (err) {
@@ -122,32 +134,37 @@ export const discoverByEmail = async (req: Request, res: Response, next: NextFun
     }
     const institution = await prisma.institution.findFirst({
       where: { domain },
-      select: {
-        slug: true,
-        ssoProvider: {
-          select: { enabled: true, protocol: true, displayName: true },
-        },
-      },
+      select: { slug: true },
     });
-    if (
-      !institution ||
-      !institution.ssoProvider ||
-      !institution.ssoProvider.enabled
-    ) {
+    if (!institution) {
       throw new AppError(
         404,
         'SSO_NOT_CONFIGURED',
         'No SSO configured for this email domain.',
       );
     }
-    const idp = institution.ssoProvider;
+    const options = await listEnabledIdpsForSlug(institution.slug);
+    if (options.length === 0) {
+      throw new AppError(
+        404,
+        'SSO_NOT_CONFIGURED',
+        'No SSO configured for this email domain.',
+      );
+    }
+    const primary = pickPrimary(options)!;
     res.json({
       success: true,
       data: {
         institutionSlug: institution.slug,
-        protocol: idp.protocol,
-        displayName: idp.displayName,
+        protocol: primary.protocol,
+        displayName: primary.displayName,
         loginUrl: `/api/sso/${institution.slug}/login`,
+        options: options.map((o) => ({
+          id: o.id,
+          protocol: o.protocol,
+          displayName: o.displayName,
+          loginUrl: `/api/sso/${institution.slug}/login?idpId=${encodeURIComponent(o.id)}`,
+        })),
       },
     });
   } catch (err) {
@@ -191,13 +208,26 @@ export const spMetadata = (_req: Request, res: Response, next: NextFunction): vo
 
 // ── Login dispatch (SAML or OIDC) ──────────────────────────────────────────
 
+/**
+ * Read the optional `idpId` query parameter. Phase 11.13 — when an
+ * institution has multiple enabled IdPs, the discovery chooser sends
+ * the user-agent to `/login?idpId=<row-id>` so the right protocol /
+ * config is picked. Bare `/login` (no idpId) keeps the legacy
+ * single-IdP behaviour: the highest-priority enabled IdP wins.
+ */
+function readIdpIdParam(req: Request): string | undefined {
+  const raw = req.query['idpId'];
+  if (typeof raw !== 'string' || raw.length === 0) return undefined;
+  return raw;
+}
+
 export const login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { institutionSlug } = req.params;
     if (!institutionSlug) {
       throw new AppError(400, 'VALIDATION_ERROR', 'institutionSlug is required');
     }
-    const idp = await resolveSsoForFlow(institutionSlug);
+    const idp = await resolveSsoForFlow(institutionSlug, readIdpIdParam(req));
 
     if (idp.protocol === 'SAML') {
       if (!idp.samlEntityId || !idp.samlSsoUrl || !idp.samlCert) {
@@ -212,7 +242,11 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
         samlSsoUrl: idp.samlSsoUrl,
         samlCert: idp.samlCert,
       };
-      const url = await buildAuthnRequestUrl(institutionSlug, samlConfig);
+      // Phase 11.13 — embed `idp.id` in RelayState so the ACS resolves
+      // the SAME IdP row when validating the response. Otherwise an
+      // institution with multiple IdPs would always pick the highest-
+      // priority row at ACS time and validate with the wrong cert.
+      const url = await buildAuthnRequestUrl(institutionSlug, samlConfig, idp.id);
       res.redirect(url);
       return;
     }
@@ -230,7 +264,11 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
         oidcClientId: idp.oidcClientId,
         oidcClientSecret: idp.oidcClientSecret,
       };
-      const url = await buildOidcAuthorizeUrl(institutionSlug, oidcConfig);
+      // Phase 11.13 — record idp.id on the flow state so the callback
+      // resolves the SAME IdP (different OIDC IdPs in one tenant have
+      // different client_secrets — picking the wrong one fails token
+      // exchange).
+      const url = await buildOidcAuthorizeUrl(institutionSlug, oidcConfig, idp.id);
       res.redirect(url);
       return;
     }
@@ -258,7 +296,13 @@ export const samlAcs = async (req: Request, res: Response, next: NextFunction): 
     if (!institutionSlug) {
       throw new AppError(400, 'VALIDATION_ERROR', 'institutionSlug is required');
     }
-    const idp = await resolveSsoForFlow(institutionSlug);
+    // Phase 11.13 — read RelayState to find the EXACT IdP that issued
+    // this AuthnRequest. The slug-only fallback preserves the legacy
+    // single-IdP behaviour for tenants that haven't added a second row.
+    const relayStateRaw = (req.body as Record<string, unknown>)?.['RelayState'];
+    const relay = typeof relayStateRaw === 'string' ? parseRelayState(relayStateRaw) : null;
+    const idpId = relay?.idpId;
+    const idp = await resolveSsoForFlow(institutionSlug, idpId);
     if (idp.protocol !== 'SAML' || !idp.samlEntityId || !idp.samlSsoUrl || !idp.samlCert) {
       throw new AppError(400, 'SSO_MISCONFIGURED', 'IdP is not configured for SAML');
     }
@@ -310,14 +354,20 @@ export const oidcCallback = async (req: Request, res: Response, next: NextFuncti
     if (!institutionSlug) {
       throw new AppError(400, 'VALIDATION_ERROR', 'institutionSlug is required');
     }
-    const idp = await resolveSsoForFlow(institutionSlug);
-    if (idp.protocol !== 'OIDC' || !idp.oidcIssuer || !idp.oidcClientId || !idp.oidcClientSecret) {
-      throw new AppError(400, 'SSO_MISCONFIGURED', 'IdP is not configured for OIDC');
-    }
 
     const state = String(req.query['state'] ?? '');
     if (!state) {
       throw new AppError(400, 'VALIDATION_ERROR', 'Missing state');
+    }
+
+    // Phase 11.13 — peek the flow record to learn which IdP issued
+    // this flow. Non-destructive; `completeOidcCallback` still does
+    // the GETDEL on the same key. Falls back to the highest-priority
+    // IdP when no record exists or the record predates the field.
+    const flow = await peekFlowState(state);
+    const idp = await resolveSsoForFlow(institutionSlug, flow?.idpId);
+    if (idp.protocol !== 'OIDC' || !idp.oidcIssuer || !idp.oidcClientId || !idp.oidcClientSecret) {
+      throw new AppError(400, 'SSO_MISCONFIGURED', 'IdP is not configured for OIDC');
     }
 
     const oidcConfig: TenantOidcConfig = {
@@ -381,6 +431,16 @@ function failureRedirect(): string {
  * federation IdPs treat the absence of a response as "best-effort SLO"
  * and don't error on it. A future hardening pass can add the signed
  * LogoutResponse + SAMLResponse redirect back to the IdP's SLO URL.
+ *
+ * Phase 11.13 — multi-IdP limitation: the IdP-initiated LogoutRequest
+ * doesn't carry our `idpId`. The endpoint falls back to the highest-
+ * priority enabled IdP for the slug. When an institution has multiple
+ * SAML IdPs and the LogoutRequest comes from one that ISN'T the
+ * primary, signature validation fails and SLO 302s to the failure
+ * page. Deferred follow-up: parse the LogoutRequest's Issuer and try
+ * the matching IdP first, falling back to brute-force per-IdP cert
+ * validation. Most multi-IdP tenants use SAML+OIDC, not SAML+SAML, so
+ * the gap rarely bites.
  *
  * Failures audit `auth.sso.slo_fail` and 302 to the frontend without
  * leaking the underlying error (signature / NameID / etc).

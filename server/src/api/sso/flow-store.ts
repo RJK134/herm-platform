@@ -37,6 +37,13 @@ export interface OidcFlowState {
   slug: string;
   codeVerifier: string;
   nonce: string;
+  /**
+   * Phase 11.13 — when an institution has multiple enabled IdPs, the
+   * authorize-side captures `idpId` so the callback resolves the EXACT
+   * IdP that issued this flow. Optional for back-compat with single-IdP
+   * tenants whose flow records were written before the column existed.
+   */
+  idpId?: string;
 }
 
 const KEY_PREFIX = 'sso:oidc:flow';
@@ -61,6 +68,16 @@ async function putRedis(client: Redis, state: string, value: OidcFlowState): Pro
 async function takeRedis(client: Redis, state: string): Promise<OidcFlowState | null> {
   // GETDEL: atomic read-and-delete. Single-use; replay rejects.
   const raw = await client.getdel(memKey(state));
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as OidcFlowState;
+  } catch {
+    return null;
+  }
+}
+
+async function peekRedis(client: Redis, state: string): Promise<OidcFlowState | null> {
+  const raw = await client.get(memKey(state));
   if (!raw) return null;
   try {
     return JSON.parse(raw) as OidcFlowState;
@@ -106,6 +123,34 @@ export async function takeFlowState(state: string): Promise<OidcFlowState | null
   if (!entry) return null;
   memStore.delete(k);
   return entry.value;
+}
+
+/**
+ * Phase 11.13 — non-destructive read of a flow record. Used by the
+ * OIDC callback to learn which `idpId` issued the flow before the
+ * destructive `takeFlowState` call. Returns null when the state is
+ * unknown / expired. Does NOT extend the TTL — the subsequent take
+ * still has the original window to land within.
+ *
+ * Fail-closed when Redis is configured: a transient Redis error during
+ * peek must NOT silently fall through to the in-memory store. If it did,
+ * `resolveSsoForFlow` would pick the primary (wrong) IdP, and the
+ * subsequent `takeFlowState` — which retries Redis and succeeds — would
+ * consume the state while token exchange happened against the wrong
+ * client_secret, turning a recoverable blip into a guaranteed auth failure.
+ * Throwing here causes the callback to redirect to the failure page without
+ * consuming the flow state, so the user can retry.
+ */
+export async function peekFlowState(state: string): Promise<OidcFlowState | null> {
+  const client = getRedis();
+  if (client) {
+    // Intentionally no try/catch: propagate Redis errors to the caller so
+    // the OIDC callback fails closed rather than proceeding with the wrong IdP.
+    return await peekRedis(client, state);
+  }
+  memPrune(Date.now());
+  const entry = memStore.get(memKey(state));
+  return entry ? entry.value : null;
 }
 
 /** Test hook: drop the in-memory cache. */

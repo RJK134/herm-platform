@@ -64,6 +64,7 @@ vi.mock('../lib/redis', () => ({ getRedis: () => null }));
 const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
     institution: { findUnique: vi.fn(), findFirst: vi.fn() },
+    ssoIdentityProvider: { findFirst: vi.fn() },
     user: { findUnique: vi.fn(), update: vi.fn(), create: vi.fn() },
     auditLog: { create: vi.fn(async () => ({})) },
   },
@@ -102,62 +103,93 @@ function buildApp() {
 // otherwise infer literal types for the null fields and refuse the
 // OIDC variant's overrides. The runtime shape is what the controller
 // reads, not the inferred type.
-type FakeInstitutionRow = {
+//
+// Phase 11.13 — `resolveSsoForFlow` now uses `ssoIdentityProvider.findFirst`,
+// so the mock returns a single IdP row with the institution nested inside
+// (matching the Prisma `include: { institution: { include: { subscription } } }`
+// shape). The `FakeIdpWithInstitution` type mirrors that shape.
+type FakeIdpWithInstitution = {
   id: string;
-  slug: string;
-  name: string;
-  subscription: { tier: string } | null;
-  ssoProvider: {
+  institutionId: string;
+  protocol: string;
+  enabled: boolean;
+  displayName: string;
+  samlEntityId: string | null;
+  samlSsoUrl: string | null;
+  samlCert: string | null;
+  oidcIssuer: string | null;
+  oidcClientId: string | null;
+  oidcClientSecret: string | null;
+  jitProvisioning: boolean;
+  defaultRole: string;
+  priority: number;
+  institution: {
     id: string;
-    institutionId: string;
-    protocol: string;
-    enabled: boolean;
-    displayName: string;
-    samlEntityId: string | null;
-    samlSsoUrl: string | null;
-    samlCert: string | null;
-    oidcIssuer: string | null;
-    oidcClientId: string | null;
-    oidcClientSecret: string | null;
-    jitProvisioning: boolean;
-    defaultRole: string;
+    slug: string;
+    name: string;
+    subscription: { tier: string } | null;
   };
 };
 
-function enterpriseInstitutionWithSamlIdp(): FakeInstitutionRow {
+// Legacy type still used for `listEnabledIdpsForSlug` discovery mocks.
+type _FakeInstitutionRow = {
+  ssoProviders: Array<{
+    id: string;
+    enabled: boolean;
+    protocol: string;
+    displayName: string;
+    priority: number;
+  }>;
+};
+
+function enterpriseSamlIdpFixture(): FakeIdpWithInstitution {
   return {
-    id: 'inst-1',
-    slug: 'uni-1',
-    name: 'University One',
-    subscription: { tier: 'ENTERPRISE' },
-    ssoProvider: {
-      id: 'idp-1',
-      institutionId: 'inst-1',
-      protocol: 'SAML',
-      enabled: true,
-      displayName: 'Sign in with University One',
-      samlEntityId: 'https://idp.uni.test/saml',
-      samlSsoUrl: 'https://idp.uni.test/saml/sso',
-      samlCert: '-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----',
-      oidcIssuer: null,
-      oidcClientId: null,
-      oidcClientSecret: null,
-      jitProvisioning: true,
-      defaultRole: 'VIEWER',
+    id: 'idp-1',
+    institutionId: 'inst-1',
+    protocol: 'SAML',
+    enabled: true,
+    displayName: 'Sign in with University One',
+    samlEntityId: 'https://idp.uni.test/saml',
+    samlSsoUrl: 'https://idp.uni.test/saml/sso',
+    samlCert: '-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----',
+    oidcIssuer: null,
+    oidcClientId: null,
+    oidcClientSecret: null,
+    jitProvisioning: true,
+    defaultRole: 'VIEWER',
+    priority: 100,
+    institution: {
+      id: 'inst-1',
+      slug: 'uni-1',
+      name: 'University One',
+      subscription: { tier: 'ENTERPRISE' },
     },
   };
 }
 
-function enterpriseInstitutionWithOidcIdp(): FakeInstitutionRow {
-  const inst = enterpriseInstitutionWithSamlIdp();
-  inst.ssoProvider.protocol = 'OIDC';
-  inst.ssoProvider.samlEntityId = null;
-  inst.ssoProvider.samlSsoUrl = null;
-  inst.ssoProvider.samlCert = null;
-  inst.ssoProvider.oidcIssuer = 'https://idp.uni.test';
-  inst.ssoProvider.oidcClientId = 'client-1';
-  inst.ssoProvider.oidcClientSecret = 'secret-1';
-  return inst;
+function enterpriseOidcIdpFixture(): FakeIdpWithInstitution {
+  return {
+    id: 'idp-1',
+    institutionId: 'inst-1',
+    protocol: 'OIDC',
+    enabled: true,
+    displayName: 'Sign in with University One',
+    samlEntityId: null,
+    samlSsoUrl: null,
+    samlCert: null,
+    oidcIssuer: 'https://idp.uni.test',
+    oidcClientId: 'client-1',
+    oidcClientSecret: 'secret-1',
+    jitProvisioning: true,
+    defaultRole: 'VIEWER',
+    priority: 100,
+    institution: {
+      id: 'inst-1',
+      slug: 'uni-1',
+      name: 'University One',
+      subscription: { tier: 'ENTERPRISE' },
+    },
+  };
 }
 
 type AuditCall = [{ data: { action: string; changes?: Record<string, unknown> } }];
@@ -176,9 +208,9 @@ beforeEach(() => {
 
 describe('SSO tier-gating (Q7 — Enterprise only)', () => {
   it('rejects an institution on FREE tier with the same opaque 404 used for "no row"', async () => {
-    const inst = enterpriseInstitutionWithSamlIdp();
-    inst.subscription = { tier: 'FREE' };
-    prismaMock.institution.findUnique.mockResolvedValue(inst);
+    const idp = enterpriseSamlIdpFixture();
+    idp.institution.subscription = { tier: 'FREE' };
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(idp);
 
     const res = await request(buildApp()).get('/api/sso/uni-1/login');
     // Express error handler doesn't redirect on AppError — it returns
@@ -189,9 +221,9 @@ describe('SSO tier-gating (Q7 — Enterprise only)', () => {
   });
 
   it('rejects PROFESSIONAL tier the same way', async () => {
-    const inst = enterpriseInstitutionWithSamlIdp();
-    inst.subscription = { tier: 'PROFESSIONAL' };
-    prismaMock.institution.findUnique.mockResolvedValue(inst);
+    const idp = enterpriseSamlIdpFixture();
+    idp.institution.subscription = { tier: 'PROFESSIONAL' };
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(idp);
 
     const res = await request(buildApp()).get('/api/sso/uni-1/login');
     expect(res.status).toBe(404);
@@ -202,7 +234,7 @@ describe('SSO tier-gating (Q7 — Enterprise only)', () => {
 
 describe('GET /api/sso/:slug/login', () => {
   it('SAML — 302s to the AuthnRequest URL', async () => {
-    prismaMock.institution.findUnique.mockResolvedValue(enterpriseInstitutionWithSamlIdp());
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(enterpriseSamlIdpFixture());
     samlInstance.getAuthorizeUrlAsync.mockResolvedValueOnce(
       'https://idp.uni.test/saml/sso?SAMLRequest=base64encoded&RelayState=uni-1',
     );
@@ -213,7 +245,7 @@ describe('GET /api/sso/:slug/login', () => {
   });
 
   it('OIDC — 302s to the authorize URL with state + PKCE', async () => {
-    prismaMock.institution.findUnique.mockResolvedValue(enterpriseInstitutionWithOidcIdp());
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(enterpriseOidcIdpFixture());
     oidcMock.discovery.mockResolvedValueOnce({} as unknown);
     oidcMock.buildAuthorizationUrl.mockReturnValueOnce(
       new URL('https://idp.uni.test/authorize?state=state-test&code_challenge=challenge-test'),
@@ -223,13 +255,30 @@ describe('GET /api/sso/:slug/login', () => {
     expect(res.status).toBe(302);
     expect(res.headers['location']).toContain('state=state-test');
   });
+
+  it('SAML — embeds idpId in RelayState when ?idpId= is supplied (multi-IdP threading)', async () => {
+    // When a specific IdP is requested, the RelayState must carry
+    // `<slug>:<idpId>` so the ACS can re-load the same row and validate
+    // with its cert — not the primary IdP's cert.
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(enterpriseSamlIdpFixture());
+    samlInstance.getAuthorizeUrlAsync.mockResolvedValueOnce(
+      'https://idp.uni.test/saml/sso?SAMLRequest=base64encoded',
+    );
+
+    const res = await request(buildApp()).get('/api/sso/uni-1/login?idpId=idp-1');
+    expect(res.status).toBe(302);
+
+    // getAuthorizeUrlAsync is called with (relayState, host, options).
+    const relayState = samlInstance.getAuthorizeUrlAsync.mock.calls[0]?.[0];
+    expect(relayState).toBe('uni-1:idp-1');
+  });
 });
 
 // ── SAML ACS ───────────────────────────────────────────────────────────────
 
 describe('POST /api/sso/:slug/saml/acs', () => {
   it('verifies the assertion, JIT-provisions a new user, and 302s to the frontend with a token', async () => {
-    prismaMock.institution.findUnique.mockResolvedValue(enterpriseInstitutionWithSamlIdp());
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(enterpriseSamlIdpFixture());
     prismaMock.user.findUnique.mockResolvedValue(null); // unknown email
     prismaMock.user.create.mockResolvedValue({
       id: 'u-new',
@@ -269,7 +318,7 @@ describe('POST /api/sso/:slug/saml/acs', () => {
   });
 
   it('redirects to /login?error=sso_failed when the assertion is invalid', async () => {
-    prismaMock.institution.findUnique.mockResolvedValue(enterpriseInstitutionWithSamlIdp());
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(enterpriseSamlIdpFixture());
     samlInstance.validatePostResponseAsync.mockRejectedValueOnce(new Error('Invalid signature'));
 
     const res = await request(buildApp())
@@ -283,13 +332,56 @@ describe('POST /api/sso/:slug/saml/acs', () => {
     const actions = auditActions();
     expect(actions).toContain('auth.sso.fail');
   });
+
+  it('uses the cert from the IdP encoded in RelayState (multi-IdP correctness)', async () => {
+    // When RelayState carries `<slug>:<idpId>`, the ACS must resolve that
+    // specific IdP row — not the primary — so validation uses the right cert.
+    // Without this, a multi-SAML tenant's secondary IdP would always fail
+    // signature verification against the primary's cert.
+    const { SAML } = await import('@node-saml/node-saml');
+    const samlCtor = SAML as unknown as ReturnType<typeof vi.fn>;
+    samlCtor.mockClear();
+
+    const IDP2_CERT = '-----BEGIN CERTIFICATE-----\nMIIB-idp2...\n-----END CERTIFICATE-----';
+    const idp = enterpriseSamlIdpFixture();
+    idp.id = 'idp-2';
+    idp.samlCert = IDP2_CERT;
+
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(idp);
+    prismaMock.user.findUnique.mockResolvedValue(null);
+    prismaMock.user.create.mockResolvedValue({
+      id: 'u-idp2',
+      email: 'user@uni.test',
+      name: 'User',
+      role: 'VIEWER',
+      institutionId: 'inst-1',
+      mfaEnabledAt: null,
+      institution: { id: 'inst-1', name: 'University One', subscription: { tier: 'ENTERPRISE' } },
+    });
+    samlInstance.validatePostResponseAsync.mockResolvedValueOnce({
+      profile: { nameID: 'user@uni.test', attributes: {} },
+      loggedOut: false,
+    });
+
+    const res = await request(buildApp())
+      .post('/api/sso/uni-1/saml/acs')
+      .type('form')
+      .send({ SAMLResponse: 'base64encoded', RelayState: 'uni-1:idp-2' });
+
+    expect(res.status).toBe(302);
+    expect(res.headers['location']).toMatch(/\/login\/sso\?token=/);
+
+    // The SAML validator must have been initialized with idp-2's cert.
+    const config = samlCtor.mock.calls[0]?.[0] as { idpCert: string } | undefined;
+    expect(config?.idpCert).toBe(IDP2_CERT);
+  });
 });
 
 // ── Q3: account collision ──────────────────────────────────────────────────
 
 describe('Q3 account collision — existing password user signs in via SSO', () => {
   it('flips passwordLoginDisabled to true and audits auth.sso.account_linked', async () => {
-    prismaMock.institution.findUnique.mockResolvedValue(enterpriseInstitutionWithSamlIdp());
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(enterpriseSamlIdpFixture());
     prismaMock.user.findUnique.mockResolvedValue({
       id: 'u-existing',
       email: 'existing@uni.test',
@@ -322,7 +414,7 @@ describe('Q3 account collision — existing password user signs in via SSO', () 
   });
 
   it('does NOT audit account_linked twice on subsequent logins (idempotent)', async () => {
-    prismaMock.institution.findUnique.mockResolvedValue(enterpriseInstitutionWithSamlIdp());
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(enterpriseSamlIdpFixture());
     prismaMock.user.findUnique.mockResolvedValue({
       id: 'u-existing',
       email: 'existing@uni.test',
@@ -354,7 +446,7 @@ describe('Q3 account collision — existing password user signs in via SSO', () 
 
 describe('Cross-institution SSO is REFUSED — no account takeover via email', () => {
   it('rejects when the asserted email belongs to a User in a different institution', async () => {
-    prismaMock.institution.findUnique.mockResolvedValue(enterpriseInstitutionWithSamlIdp());
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(enterpriseSamlIdpFixture());
     // Existing user lives in a DIFFERENT institution from the asserting IdP.
     prismaMock.user.findUnique.mockResolvedValue({
       id: 'u-other-tenant',
@@ -396,7 +488,7 @@ describe('Cross-institution SSO is REFUSED — no account takeover via email', (
 
 describe('Q10 MFA bypass — SSO mints a session even when user has mfaEnabledAt', () => {
   it('returns a normal session JWT (no challenge), audits mfaBypassed', async () => {
-    prismaMock.institution.findUnique.mockResolvedValue(enterpriseInstitutionWithSamlIdp());
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(enterpriseSamlIdpFixture());
     prismaMock.user.findUnique.mockResolvedValue({
       id: 'u-mfa',
       email: 'mfa@uni.test',
@@ -441,7 +533,7 @@ describe('Q10 MFA bypass — SSO mints a session even when user has mfaEnabledAt
 
 describe('GET /api/sso/:slug/oidc/callback', () => {
   it('exchanges code for tokens, JIT-provisions, and 302s with a session token', async () => {
-    prismaMock.institution.findUnique.mockResolvedValue(enterpriseInstitutionWithOidcIdp());
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(enterpriseOidcIdpFixture());
     prismaMock.user.findUnique.mockResolvedValue(null);
     prismaMock.user.create.mockResolvedValue({
       id: 'u-oidc',
@@ -473,7 +565,7 @@ describe('GET /api/sso/:slug/oidc/callback', () => {
   });
 
   it('rejects when state is unknown or already consumed', async () => {
-    prismaMock.institution.findUnique.mockResolvedValue(enterpriseInstitutionWithOidcIdp());
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(enterpriseOidcIdpFixture());
 
     const res = await request(buildApp()).get(
       '/api/sso/uni-1/oidc/callback?state=unknown',
@@ -508,12 +600,12 @@ describe('SSO secret-at-rest encryption', () => {
   });
 
   it('decrypts oidcClientSecret before passing it to openid-client.discovery', async () => {
-    const inst = enterpriseInstitutionWithOidcIdp();
-    const plaintextSecret = inst.ssoProvider.oidcClientSecret as string;
-    inst.ssoProvider.oidcClientSecret = encryptSecret(plaintextSecret);
-    expect(inst.ssoProvider.oidcClientSecret.startsWith('enc:v1:')).toBe(true);
+    const idp = enterpriseOidcIdpFixture();
+    const plaintextSecret = idp.oidcClientSecret as string;
+    idp.oidcClientSecret = encryptSecret(plaintextSecret);
+    expect(idp.oidcClientSecret!.startsWith('enc:v1:')).toBe(true);
 
-    prismaMock.institution.findUnique.mockResolvedValue(inst);
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(idp);
     oidcMock.discovery.mockResolvedValueOnce({} as unknown);
     oidcMock.buildAuthorizationUrl.mockReturnValueOnce(
       new URL('https://idp.uni.test/authorize?state=state-test'),
@@ -534,12 +626,12 @@ describe('SSO secret-at-rest encryption', () => {
     const samlCtor = SAML as unknown as ReturnType<typeof vi.fn>;
     samlCtor.mockClear();
 
-    const inst = enterpriseInstitutionWithSamlIdp();
-    const plaintextCert = inst.ssoProvider.samlCert as string;
-    inst.ssoProvider.samlCert = encryptSecret(plaintextCert);
-    expect(inst.ssoProvider.samlCert.startsWith('enc:v1:')).toBe(true);
+    const idp = enterpriseSamlIdpFixture();
+    const plaintextCert = idp.samlCert as string;
+    idp.samlCert = encryptSecret(plaintextCert);
+    expect(idp.samlCert!.startsWith('enc:v1:')).toBe(true);
 
-    prismaMock.institution.findUnique.mockResolvedValue(inst);
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(idp);
     samlInstance.getAuthorizeUrlAsync.mockResolvedValueOnce(
       'https://idp.uni.test/saml/sso?SAMLRequest=base64',
     );
@@ -554,11 +646,11 @@ describe('SSO secret-at-rest encryption', () => {
 
   it('legacy plaintext rows still resolve when SSO_SECRET_KEY is set (back-compat)', async () => {
     // Row written before this PR shipped: oidcClientSecret stored as plaintext.
-    const inst = enterpriseInstitutionWithOidcIdp();
-    const plaintextSecret = inst.ssoProvider.oidcClientSecret as string;
+    const idp = enterpriseOidcIdpFixture();
+    const plaintextSecret = idp.oidcClientSecret as string;
     expect(plaintextSecret.startsWith('enc:v1:')).toBe(false);
 
-    prismaMock.institution.findUnique.mockResolvedValue(inst);
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(idp);
     oidcMock.discovery.mockResolvedValueOnce({} as unknown);
     oidcMock.buildAuthorizationUrl.mockReturnValueOnce(
       new URL('https://idp.uni.test/authorize?state=state-test'),
@@ -571,9 +663,9 @@ describe('SSO secret-at-rest encryption', () => {
   });
 
   it('returns the opaque 404 when an encrypted row cannot be decrypted (wrong key)', async () => {
-    const inst = enterpriseInstitutionWithOidcIdp();
-    inst.ssoProvider.oidcClientSecret = encryptSecret(inst.ssoProvider.oidcClientSecret as string);
-    prismaMock.institution.findUnique.mockResolvedValue(inst);
+    const idp = enterpriseOidcIdpFixture();
+    idp.oidcClientSecret = encryptSecret(idp.oidcClientSecret as string);
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(idp);
 
     // Rotate the master key to a different (also-low-entropy, not-a-secret)
     // value so the auth tag fails verification.
@@ -632,7 +724,7 @@ describe('SAML SP signing keypair', () => {
     const samlCtor = SAML as unknown as ReturnType<typeof vi.fn>;
     samlCtor.mockClear();
 
-    prismaMock.institution.findUnique.mockResolvedValue(enterpriseInstitutionWithSamlIdp());
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(enterpriseSamlIdpFixture());
     samlInstance.getAuthorizeUrlAsync.mockResolvedValueOnce(
       'https://idp.uni.test/saml/sso?SAMLRequest=base64',
     );
@@ -652,7 +744,7 @@ describe('SAML SP signing keypair', () => {
     const samlCtor = SAML as unknown as ReturnType<typeof vi.fn>;
     samlCtor.mockClear();
 
-    prismaMock.institution.findUnique.mockResolvedValue(enterpriseInstitutionWithSamlIdp());
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(enterpriseSamlIdpFixture());
     samlInstance.getAuthorizeUrlAsync.mockResolvedValueOnce(
       'https://idp.uni.test/saml/sso?SAMLRequest=base64',
     );
@@ -706,23 +798,29 @@ describe('SAML SP signing keypair', () => {
 
 describe('GET /api/sso/discover?email=', () => {
   it('resolves Institution by domain and returns the SSO config', async () => {
-    prismaMock.institution.findFirst.mockResolvedValue({
-      slug: 'uni-1',
-      ssoProvider: {
-        enabled: true,
-        protocol: 'SAML',
-        displayName: 'Sign in with University One',
-      },
+    // Phase 11.13 — discoverByEmail now does two reads: findFirst by
+    // domain (for the slug) then findUnique by slug (for the
+    // ssoProviders array, via listEnabledIdpsForSlug).
+    prismaMock.institution.findFirst.mockResolvedValue({ slug: 'uni-1' });
+    prismaMock.institution.findUnique.mockResolvedValue({
+      ssoProviders: [
+        {
+          id: 'idp-1',
+          enabled: true,
+          protocol: 'SAML',
+          displayName: 'Sign in with University One',
+          priority: 100,
+        },
+      ],
     });
 
     const res = await request(buildApp()).get('/api/sso/discover?email=jane@uni.test');
     expect(res.status).toBe(200);
-    expect(res.body.data).toEqual({
-      institutionSlug: 'uni-1',
-      protocol: 'SAML',
-      displayName: 'Sign in with University One',
-      loginUrl: '/api/sso/uni-1/login',
-    });
+    expect(res.body.data.institutionSlug).toBe('uni-1');
+    expect(res.body.data.protocol).toBe('SAML');
+    expect(res.body.data.displayName).toBe('Sign in with University One');
+    expect(res.body.data.loginUrl).toBe('/api/sso/uni-1/login');
+    expect(res.body.data.options).toHaveLength(1);
   });
 
   it('returns 404 SSO_NOT_CONFIGURED when the domain has no IdP', async () => {
