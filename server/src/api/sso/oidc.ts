@@ -59,8 +59,7 @@ async function getConfig(idp: TenantOidcConfig): Promise<oidc.Configuration> {
   // We only relax this when (a) we're explicitly outside production
   // AND (b) the issuer URL itself is http: — so a misconfigured prod
   // deploy can't accidentally talk to a plaintext IdP.
-  const allowInsecure =
-    process.env['NODE_ENV'] !== 'production' && issuerUrl.protocol === 'http:';
+  const allowInsecure = process.env['NODE_ENV'] !== 'production' && issuerUrl.protocol === 'http:';
   const config = await oidc.discovery(
     issuerUrl,
     idp.oidcClientId,
@@ -114,7 +113,6 @@ export async function buildOidcAuthorizeUrl(
   return url.href;
 }
 
-
 export interface OidcAssertion {
   email: string;
   name?: string;
@@ -162,6 +160,46 @@ export async function completeOidcCallback(
   const rawName = claims['name'];
   const name = typeof rawName === 'string' ? rawName : undefined;
   return { email, name, sub };
+}
+
+/**
+ * Drop the cache entry for a specific {issuer, clientId} pair.
+ *
+ * Phase 11.15 (P11) — write-side invalidation hook for the admin SSO
+ * upsert path. The cached `Configuration` object embeds the
+ * `clientSecret` it was discovered with, so a secret rotation via the
+ * admin UI would otherwise be invisible to this process for up to
+ * `TTL_MS` (1h) and every token-exchange in that window would 401 at
+ * the IdP — surfacing as the opaque `sso_failed` banner with no
+ * obvious cause. Writes that mutate `oidcIssuer`, `oidcClientId`, or
+ * `oidcClientSecret` (and disables / deletes) MUST call this so the
+ * next OIDC flow re-discovers and picks up the new credentials.
+ *
+ * Returns whether an entry was actually removed — useful for tests
+ * and metrics, but callers don't need to care about the return value
+ * in production.
+ *
+ * Edge cases:
+ *   - Issuer/clientId rotated: the cache key changed, so the OLD key
+ *     must be invalidated. Callers that rotate either field should
+ *     pass the old issuer + clientId here (the new key won't be in
+ *     the cache yet, so invalidating it is a defensive no-op).
+ *   - Secret-only rotation: the cache key is unchanged; pass the
+ *     current issuer + clientId.
+ *   - `null`/missing fields: silently no-ops (a row that has no
+ *     OIDC issuer/clientId can't have produced a cache entry).
+ */
+export function invalidateOidcConfigCacheByKey(args: {
+  oidcIssuer: string | null | undefined;
+  oidcClientId: string | null | undefined;
+}): boolean {
+  if (!args.oidcIssuer || !args.oidcClientId) return false;
+  const key = configCacheKey({
+    oidcIssuer: args.oidcIssuer,
+    oidcClientId: args.oidcClientId,
+    oidcClientSecret: '',
+  });
+  return configCache.delete(key);
 }
 
 /** Test hook: drop the in-memory discovery-config cache. */
