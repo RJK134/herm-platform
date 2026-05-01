@@ -123,7 +123,15 @@ class InMemoryStore {
       const rec = this.byJti.get(jti);
       if (!rec) continue;
       if (rec.expiresAt < Date.now()) continue;
-      if (sessionIndex && rec.samlSessionIndex && rec.samlSessionIndex !== sessionIndex) continue;
+      // SessionIndex narrowing: when the LogoutRequest carries an
+      // `<saml:SessionIndex>` element, only revoke sessions whose
+      // recorded SessionIndex matches exactly. A record without a
+      // recorded SessionIndex is NOT a match — we'd otherwise
+      // over-revoke (the IdP-targeted single session) every session
+      // for the subject. When `sessionIndex` is omitted (the
+      // LogoutRequest didn't carry one), we revoke every session for
+      // the subject, which is also the SAML-spec behaviour.
+      if (sessionIndex !== undefined && rec.samlSessionIndex !== sessionIndex) continue;
       out.push(rec);
     }
     return out;
@@ -202,7 +210,11 @@ async function findByNameIdInRedis(
     }
     try {
       const rec = JSON.parse(raw) as SessionRecord;
-      if (sessionIndex && rec.samlSessionIndex && rec.samlSessionIndex !== sessionIndex) continue;
+      // Same SessionIndex semantics as the in-memory backend:
+      // when the LogoutRequest carries a SessionIndex, require an
+      // exact match (a record without a recorded SessionIndex is
+      // NOT a match — over-revoking would defeat the narrow logout).
+      if (sessionIndex !== undefined && rec.samlSessionIndex !== sessionIndex) continue;
       recs.push(rec);
     } catch {
       // ignore corrupt row
@@ -220,19 +232,28 @@ async function findByNameIdInRedis(
  * session cannot be reached by SLO; that degrades SLO to "best-effort"
  * during Redis outages, which is the operationally-correct posture for
  * an opt-in feature.
+ *
+ * Redis-vs-memory exclusivity: when Redis is configured, ONLY Redis is
+ * written. The in-memory backend would otherwise retain every session
+ * forever (no TTL/pruning) and the process would leak memory under
+ * production load. When Redis is unset (dev / test), the in-memory
+ * backend is the source of truth — its TTLs are honoured by the
+ * read paths via the recorded `expiresAt`.
  */
 export async function recordSession(rec: SessionRecord): Promise<void> {
-  memory.recordSession(rec);
   const redis = getRedis();
-  if (!redis) return;
-  try {
-    await recordInRedis(redis, rec);
-  } catch (err) {
-    logger.warn(
-      { err: err instanceof Error ? err.message : String(err), jti: rec.jti },
-      'session-store.record failed',
-    );
+  if (redis) {
+    try {
+      await recordInRedis(redis, rec);
+    } catch (err) {
+      logger.warn(
+        { err: err instanceof Error ? err.message : String(err), jti: rec.jti },
+        'session-store.record failed',
+      );
+    }
+    return;
   }
+  memory.recordSession(rec);
 }
 
 /** Synchronous in-memory revocation check (used by paths that can't await). */
@@ -242,23 +263,25 @@ export function isRevokedSync(jti: string): boolean {
 
 /**
  * Revocation check used by `authenticateJWT`. Consults Redis when
- * available — otherwise falls back to the in-memory tombstone. Errors
- * default to "not revoked" so a Redis hiccup doesn't lock every user
- * out; the alternative (fail-closed) would be operationally worse.
+ * configured, the in-memory backend otherwise. Errors on the Redis
+ * path default to "not revoked" so a Redis hiccup doesn't lock every
+ * user out; the alternative (fail-closed) would be operationally
+ * worse.
  */
 export async function isRevoked(jti: string): Promise<boolean> {
-  if (memory.isRevoked(jti)) return true;
   const redis = getRedis();
-  if (!redis) return false;
-  try {
-    return await isRevokedInRedis(redis, jti);
-  } catch (err) {
-    logger.warn(
-      { err: err instanceof Error ? err.message : String(err), jti },
-      'session-store.isRevoked failed; defaulting to not-revoked',
-    );
-    return false;
+  if (redis) {
+    try {
+      return await isRevokedInRedis(redis, jti);
+    } catch (err) {
+      logger.warn(
+        { err: err instanceof Error ? err.message : String(err), jti },
+        'session-store.isRevoked failed; defaulting to not-revoked',
+      );
+      return false;
+    }
   }
+  return memory.isRevoked(jti);
 }
 
 /**
@@ -267,23 +290,30 @@ export async function isRevoked(jti: string): Promise<boolean> {
  * NameID + SessionIndex.
  */
 export async function revokeSession(jti: string): Promise<void> {
-  memory.revoke(jti);
   const redis = getRedis();
-  if (!redis) return;
-  try {
-    await revokeInRedis(redis, jti);
-  } catch (err) {
-    logger.warn(
-      { err: err instanceof Error ? err.message : String(err), jti },
-      'session-store.revoke failed',
-    );
+  if (redis) {
+    try {
+      await revokeInRedis(redis, jti);
+    } catch (err) {
+      logger.warn(
+        { err: err instanceof Error ? err.message : String(err), jti },
+        'session-store.revoke failed',
+      );
+    }
+    return;
   }
+  memory.revoke(jti);
 }
 
 /**
  * Revoke every session matching the SAML subject. Returns the number of
  * sessions revoked; callers (the SLO endpoint) audit the count and the
  * NameID for the operator's review.
+ *
+ * Redis-vs-memory exclusivity matches `recordSession`: a Redis-configured
+ * deployment uses ONLY Redis. The in-memory fallback path here would
+ * have been empty anyway (records were never written to it), so we
+ * surface the Redis failure instead of pretending we found zero.
  */
 export async function revokeBySamlSubject(
   institutionId: string,
@@ -298,9 +328,9 @@ export async function revokeBySamlSubject(
     } catch (err) {
       logger.warn(
         { err: err instanceof Error ? err.message : String(err), institutionId },
-        'session-store.findByNameId failed; falling back to in-memory',
+        'session-store.findByNameId failed; returning 0',
       );
-      candidates = memory.findByNameId(institutionId, nameId, sessionIndex);
+      return 0;
     }
   } else {
     candidates = memory.findByNameId(institutionId, nameId, sessionIndex);

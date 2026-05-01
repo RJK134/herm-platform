@@ -168,6 +168,19 @@ export async function authenticateJWT(
       });
       return;
     }
+    // Phase 11.12 — SAML SLO revocation. Run BEFORE the soft-delete
+    // lookup so a revoked / stolen token short-circuits without
+    // touching Postgres. Tokens minted before this phase have no
+    // `jti` claim; we skip the check for them so legacy bearers keep
+    // working until natural expiry. New tokens always carry a jti and
+    // so can be revoked back-channel by the IdP.
+    if (decoded.jti && (await isRevoked(decoded.jti))) {
+      res.status(401).json({
+        success: false,
+        error: { code: 'AUTHENTICATION_ERROR', message: 'Invalid or expired token' },
+      });
+      return;
+    }
     // Phase 11.9 — revoke the session as soon as the User row is
     // soft-deleted (GDPR erasure or admin removal). The check is
     // cached for SOFT_DELETE_CACHE_TTL_MS to keep the per-request
@@ -176,17 +189,6 @@ export async function authenticateJWT(
     // for any user not in the cache, then a single missed lookup
     // populates it.
     if (await isUserSoftDeleted(decoded.userId)) {
-      res.status(401).json({
-        success: false,
-        error: { code: 'AUTHENTICATION_ERROR', message: 'Invalid or expired token' },
-      });
-      return;
-    }
-    // Phase 11.12 — SAML SLO revocation. Tokens minted before this
-    // phase have no `jti` claim; we skip the check for them so legacy
-    // bearers keep working until natural expiry. New tokens always
-    // carry a jti and so can be revoked back-channel by the IdP.
-    if (decoded.jti && (await isRevoked(decoded.jti))) {
       res.status(401).json({
         success: false,
         error: { code: 'AUTHENTICATION_ERROR', message: 'Invalid or expired token' },

@@ -13,7 +13,7 @@
  *
  * Also covers the auth.logout endpoint's session-store revocation.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
@@ -69,9 +69,15 @@ import ssoRouter from '../api/sso/sso.router';
 import authRouter from '../api/auth/auth.router';
 import { errorHandler } from '../middleware/errorHandler';
 
-process.env['JWT_SECRET'] = process.env['JWT_SECRET'] ?? 'test-secret-must-be-long-enough-for-the-jwt-lib';
-process.env['SP_BASE_URL'] = 'https://herm.test';
-process.env['FRONTEND_URL'] = 'https://app.herm.test';
+// `vitest.config.ts` sets `fileParallelism: false`, so a module-scope
+// mutation of `process.env` would leak into later test files. Use
+// `vi.stubEnv` so the harness restores the originals on teardown.
+vi.stubEnv(
+  'JWT_SECRET',
+  process.env['JWT_SECRET'] ?? 'test-secret-must-be-long-enough-for-the-jwt-lib',
+);
+vi.stubEnv('SP_BASE_URL', 'https://herm.test');
+vi.stubEnv('FRONTEND_URL', 'https://app.herm.test');
 
 const ENTERPRISE_INSTITUTION = {
   id: 'inst-acme',
@@ -106,6 +112,13 @@ function buildApp(): express.Express {
   app.use(errorHandler);
   return app;
 }
+
+// Restore the original env so a later test file doesn't see leaked
+// values. `vi.unstubAllEnvs()` undoes every `vi.stubEnv` from this
+// file in one call.
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
 
 beforeEach(() => {
   samlInstance.validateRedirectAsync.mockReset();
