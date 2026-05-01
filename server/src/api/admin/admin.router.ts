@@ -17,6 +17,11 @@ import {
   upsertByInstitution as upsertSsoByInstitution,
   deleteByInstitution as deleteSsoByInstitution,
 } from './admin-sso.controller';
+import {
+  cascadeSoftDeleteInstitution,
+  cascadeRestoreInstitution,
+  cascadeRestoreUser,
+} from './admin-cascade.controller';
 
 const router = Router();
 
@@ -56,5 +61,14 @@ router.get('/sso/all', readSsoAll);
 router.get('/sso/institutions/:institutionId', readSsoByInstitution);
 router.put('/sso/institutions/:institutionId', upsertSsoByInstitution);
 router.delete('/sso/institutions/:institutionId', deleteSsoByInstitution);
+
+// Phase 11.14 — soft-delete cascade for an entire Institution
+// (subscription + users PII-scrubbed + SSO rows wiped). SUPER_ADMIN
+// only; the controller re-enforces the role guard. The matching
+// restore endpoints reverse `deletedAt` within the retention grace
+// window — User PII scrubbed by the cascade is NOT recoverable.
+router.delete('/institutions/:id', cascadeSoftDeleteInstitution);
+router.post('/institutions/:id/restore', cascadeRestoreInstitution);
+router.post('/users/:id/restore', cascadeRestoreUser);
 
 export default router;

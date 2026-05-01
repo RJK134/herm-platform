@@ -113,12 +113,19 @@ async function isUserSoftDeleted(userId: string): Promise<boolean> {
   if (hit && Date.now() - hit.cachedAt < SOFT_DELETE_CACHE_TTL_MS) {
     return hit.deleted;
   }
+  // Phase 11.14 — also check Institution.deletedAt. A SUPER_ADMIN who
+  // soft-deletes a tenant cascades to scrub each User row, but the
+  // cascade is N+1 writes; this check ensures that even before the
+  // per-User scrub commits (or if the cascade is interrupted), no
+  // existing JWT can transact against the soft-deleted institution.
+  // Loaded in the same round-trip as the per-User check via `include`.
   const row = await prisma.user.findUnique({
     where: { id: userId },
-    select: { deletedAt: true },
+    select: { deletedAt: true, institution: { select: { deletedAt: true } } },
   });
   // The check answers "is this user in the soft-delete grace window?"
   //   - row found with deletedAt non-null  → soft-deleted, reject.
+  //   - row found with institution.deletedAt non-null → tenant gone, reject.
   //   - row found with deletedAt null      → live user, allow.
   //   - row not found (already hard-deleted, or row never existed) →
   //     allow. This matches the pre-Phase-11.9 baseline where the JWT
@@ -133,7 +140,14 @@ async function isUserSoftDeleted(userId: string): Promise<boolean> {
   // `null` (no soft-delete recorded) and `undefined` (some test
   // mocks omit the field entirely) as "live", which keeps the
   // existing test surface intact.
-  const deleted = !!(row && row.deletedAt != null);
+  const userDeleted = !!(row && row.deletedAt != null);
+  // Phase 11.14 — same loose-equality treatment for institution.deletedAt
+  // so test mocks that omit the institution sub-object don't trip the
+  // gate. The `?.` chain handles `row.institution` being undefined
+  // (which `findUnique` may return when the relation isn't included
+  // by some narrower mock setup).
+  const tenantDeleted = !!(row && row.institution && row.institution.deletedAt != null);
+  const deleted = userDeleted || tenantDeleted;
   softDeleteCache.set(userId, { deleted, cachedAt: Date.now() });
   return deleted;
 }

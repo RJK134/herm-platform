@@ -101,6 +101,17 @@ model Institution {
   tier               String               @default("free")
   logoUrl            String?
   domain             String?
+  // Phase 11.14 — soft-delete cascade. When an Institution is removed
+  // by a SUPER_ADMIN, the row is kept for the retention grace window
+  // so the change can be reversed before the scheduler hard-deletes
+  // it. The cascade stamps `deletedAt` on the related Subscription
+  // and User rows (the latter via the same scrub-on-soft-delete
+  // pattern that the GDPR right-to-erasure path uses). The auth
+  // chokepoint (`authenticateJWT`) treats `Institution.deletedAt != null`
+  // as "no such tenant" so users from a soft-deleted institution can
+  // no longer transact even before their per-User `deletedAt`
+  // propagates through the cache.
+  deletedAt          DateTime?
   users              User[]
   baskets            CapabilityBasket[]
   projects           ProcurementProject[]
@@ -110,6 +121,8 @@ model Institution {
   ssoProvider        SsoIdentityProvider?
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
+
+  @@index([deletedAt])
 }
 
 // Phase 10.7 (scaffold): per-institution SSO identity-provider config.
@@ -176,9 +189,18 @@ model Subscription {
   stripeSubscriptionId String?
   currentPeriodStart   DateTime?
   currentPeriodEnd     DateTime?
+  // Phase 11.14 — soft-delete cascade. Stamped when the parent
+  // Institution is soft-deleted; the retention scheduler hard-deletes
+  // Subscription rows past the grace window. Stripe webhooks for a
+  // soft-deleted subscription are still recorded (the Stripe ID lives
+  // on this row) but the entitlements no longer apply because the
+  // Institution itself is gone.
+  deletedAt            DateTime?
   payments             Payment[]
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
+
+  @@index([deletedAt])
 }
 
 enum SubscriptionTier {
