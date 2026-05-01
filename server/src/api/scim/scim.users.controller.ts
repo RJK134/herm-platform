@@ -101,10 +101,18 @@ export async function listUsers(req: Request, res: Response, next: NextFunction)
       sendScimError(res, { status: 401, detail: 'API key required' });
       return;
     }
-    const startIndex = Math.max(1, Number.parseInt(String(req.query['startIndex'] ?? '1'), 10) || 1);
+    const startIndexRaw = Number.parseInt(String(req.query['startIndex'] ?? '1'), 10);
+    const startIndex = Math.max(1, Number.isFinite(startIndexRaw) ? startIndexRaw : 1);
+    // RFC 7644 §3.4.2.4: count=0 is a valid request meaning "return
+    // zero resources but include totalResults". The earlier
+    // `|| DEFAULT_PAGE_SIZE` fallback collapsed 0 to the default,
+    // breaking SCIM count-only queries — use an explicit Number.isFinite
+    // check so 0 stays 0 and only NaN/missing falls through to default.
+    const countRaw = req.query['count'];
+    const countParsed = countRaw === undefined ? DEFAULT_PAGE_SIZE : Number.parseInt(String(countRaw), 10);
     const count = Math.min(
       MAX_PAGE_SIZE,
-      Math.max(0, Number.parseInt(String(req.query['count'] ?? String(DEFAULT_PAGE_SIZE)), 10) || DEFAULT_PAGE_SIZE),
+      Math.max(0, Number.isFinite(countParsed) ? countParsed : DEFAULT_PAGE_SIZE),
     );
     const filterRaw = typeof req.query['filter'] === 'string' ? (req.query['filter'] as string) : undefined;
 
@@ -288,8 +296,14 @@ export async function replaceUser(req: Request, res: Response, next: NextFunctio
       return;
     }
     const id = String(req.params['id'] ?? '');
+    // Scope to live (non-soft-deleted) rows only. A PUT against a
+    // soft-deleted row that didn't transition active state would fall
+    // into the else branch below and write `newEmail`/`newName` over
+    // the scrubbed PII — silently restoring data the GDPR / DELETE path
+    // had already tombstoned. Treat soft-deleted users as 404 (matches
+    // GET / DELETE behaviour); reactivation isn't supported in v1.
     const existing = await prisma.user.findFirst({
-      where: { id, institutionId: inst },
+      where: { id, institutionId: inst, deletedAt: null },
     });
     if (!existing) {
       sendScimError(res, { status: 404, detail: `User ${id} not found` });
@@ -356,7 +370,10 @@ export async function replaceUser(req: Request, res: Response, next: NextFunctio
           // Same scrub the GDPR right-to-erasure path applies. Keeps
           // soft-delete semantics consistent across DELETE / PUT and
           // ensures the retention scheduler can hard-delete the row
-          // after the grace window without further action.
+          // after the grace window without further action. externalId
+          // is cleared so a re-provision with the same externalId
+          // (delete + re-add via SCIM) is not blocked by the composite
+          // unique index.
           deletedAt: now,
           email: tombstoneEmail(existing.id),
           name: '[deleted user]',
@@ -364,7 +381,7 @@ export async function replaceUser(req: Request, res: Response, next: NextFunctio
           passwordLoginDisabled: true,
           mfaSecret: null,
           mfaEnabledAt: null,
-          externalId: data.externalId ?? null,
+          externalId: null,
         }
       : {
           email: newEmail,
@@ -417,6 +434,11 @@ export async function deleteUser(req: Request, res: Response, next: NextFunction
     // Soft-delete + scrub PII, mirroring the GDPR right-to-erasure path
     // in `gdpr.controller.ts`. The retention scheduler hard-deletes
     // after the grace window.
+    //
+    // `externalId` is also cleared here — leaving it would block the
+    // common SCIM delete-then-re-provision workflow because of the
+    // composite unique index `(institutionId, externalId)`. The
+    // soft-deleted row's identity is now fully tombstoned.
     await prisma.user.update({
       where: { id: existing.id },
       data: {
@@ -427,6 +449,7 @@ export async function deleteUser(req: Request, res: Response, next: NextFunction
         passwordLoginDisabled: true,
         mfaSecret: null,
         mfaEnabledAt: null,
+        externalId: null,
       },
     });
 

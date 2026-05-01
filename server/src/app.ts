@@ -61,7 +61,15 @@ export function createApp(): Express {
   // affected.
   app.use('/api/subscriptions/webhook', express.raw({ type: 'application/json' }));
 
-  app.use(express.json({ limit: '1mb' }));
+  // RFC 7644 SCIM clients (Okta, Entra ID, OneLogin) send
+  // `Content-Type: application/scim+json`. Express's default JSON
+  // parser only matches `application/json`, so without this `type`
+  // override `req.body` would be undefined for every SCIM POST/PUT
+  // and the controllers' Zod parse would 400 with a misleading
+  // `invalidSyntax` error. Adding `application/scim+json` here keeps
+  // existing /api routes parsing identically while making /scim/v2
+  // work with real IdPs.
+  app.use(express.json({ limit: '1mb', type: ['application/json', 'application/scim+json'] }));
   app.use(express.urlencoded({ extended: true }));
 
   // Auth-context resolution for the rate limiter.

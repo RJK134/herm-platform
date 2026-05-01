@@ -51,7 +51,9 @@ const INVALID_KEY = 'herm_pk_invalid000000000000000000000000000000000000000000';
 
 function buildApp(): express.Express {
   const app = express();
-  app.use(express.json());
+  // Mirror app.ts so SCIM clients sending `application/scim+json`
+  // (Okta, Entra, OneLogin per RFC 7644) get parsed properly.
+  app.use(express.json({ type: ['application/json', 'application/scim+json'] }));
   app.use('/scim/v2', createScimRouter());
   return app;
 }
@@ -181,6 +183,19 @@ describe('GET /scim/v2/Users', () => {
     expect(res.status).toBe(400);
     expect(res.body.scimType).toBe('invalidFilter');
   });
+
+  it('count=0 returns zero resources but the totalResults header (RFC 7644 §3.4.2.4)', async () => {
+    userMocks.count.mockResolvedValue(42);
+    userMocks.findMany.mockResolvedValue([]);
+    const res = await request(buildApp())
+      .get('/scim/v2/Users?count=0')
+      .set('Authorization', `Bearer ${VALID_KEY}`);
+    expect(res.status).toBe(200);
+    expect(res.body.totalResults).toBe(42);
+    expect(res.body.Resources).toEqual([]);
+    // The Prisma findMany is called with `take: 0`, not the default cap.
+    expect(userMocks.findMany.mock.calls[0]?.[0]?.take).toBe(0);
+  });
 });
 
 describe('GET /scim/v2/Users/:id', () => {
@@ -277,6 +292,25 @@ describe('POST /scim/v2/Users', () => {
     expect(res.body.scimType).toBe('invalidValue');
     expect(userMocks.create).not.toHaveBeenCalled();
   });
+
+  it('parses application/scim+json content type (RFC 7644 §3.1)', async () => {
+    userMocks.findUnique.mockResolvedValue(null);
+    userMocks.create.mockResolvedValue(fakeUser({ email: 'real-idp@acme.test', name: 'Real IdP' }));
+    // Real SCIM clients (Okta, Entra) send Content-Type: application/scim+json.
+    // Without the type override on express.json(), req.body would be undefined
+    // and the controller's Zod parse would 400 invalidSyntax.
+    const res = await request(buildApp())
+      .post('/scim/v2/Users')
+      .set('Authorization', `Bearer ${VALID_KEY}`)
+      .set('Content-Type', 'application/scim+json')
+      .send(JSON.stringify({
+        userName: 'real-idp@acme.test',
+        emails: [{ value: 'real-idp@acme.test', primary: true }],
+      }));
+    expect(res.status).toBe(201);
+    expect(res.body.userName).toBe('real-idp@acme.test');
+    expect(userMocks.create).toHaveBeenCalled();
+  });
 });
 
 describe('PUT /scim/v2/Users/:id', () => {
@@ -323,18 +357,20 @@ describe('PUT /scim/v2/Users/:id', () => {
     expect(updateArgs?.mfaSecret).toBeNull();
   });
 
-  it('400 invalidValue when trying to reactivate (active=true on a soft-deleted row)', async () => {
-    userMocks.findFirst.mockResolvedValue(fakeUser({ deletedAt: new Date() }));
+  it('404 when targeting a soft-deleted row (PUT cannot restore PII over a tombstone)', async () => {
+    // The PUT lookup filters deletedAt: null to prevent silently
+    // restoring scrubbed PII over a tombstoned row. Soft-deleted users
+    // are invisible to PUT, mirroring GET / DELETE behaviour.
+    userMocks.findFirst.mockResolvedValue(null);
     const res = await request(buildApp())
-      .put('/scim/v2/Users/usr-1')
+      .put('/scim/v2/Users/usr-deleted')
       .set('Authorization', `Bearer ${VALID_KEY}`)
       .send({
         userName: 'alice@acme.test',
         emails: [{ value: 'alice@acme.test', primary: true }],
         active: true,
       });
-    expect(res.status).toBe(400);
-    expect(res.body.scimType).toBe('invalidValue');
+    expect(res.status).toBe(404);
     expect(userMocks.update).not.toHaveBeenCalled();
   });
 
@@ -358,20 +394,21 @@ describe('DELETE /scim/v2/Users/:id', () => {
     apiKeyFindUniqueMock.mockResolvedValue(authedKey());
   });
 
-  it('204 soft-deletes and scrubs PII (deterministic tombstone email)', async () => {
-    userMocks.findFirst.mockResolvedValue(fakeUser({ id: 'usr-target' }));
+  it('204 soft-deletes and scrubs PII (deterministic tombstone email + externalId cleared)', async () => {
+    userMocks.findFirst.mockResolvedValue(fakeUser({ id: 'usr-target', externalId: 'idp-side-id-42' }));
     userMocks.update.mockResolvedValue(fakeUser({ deletedAt: new Date() }));
     const res = await request(buildApp()).delete('/scim/v2/Users/usr-1').set('Authorization', `Bearer ${VALID_KEY}`);
     expect(res.status).toBe(204);
     const updateArgs = userMocks.update.mock.calls[0]?.[0]?.data;
     expect(updateArgs?.deletedAt).toBeInstanceOf(Date);
-    // Deterministic GDPR-aligned tombstone — no `:` characters that
-    // would have been produced by the earlier `now.toISOString()`-based
-    // approach (Copilot review #73).
+    // Deterministic GDPR-aligned tombstone — no `:` characters.
     expect(updateArgs?.email).toBe('deleted+usr-target@deleted.invalid');
     expect(updateArgs?.name).toBe('[deleted user]');
     expect(updateArgs?.passwordHash).toBe('');
     expect(updateArgs?.mfaSecret).toBeNull();
+    // externalId cleared so a SCIM delete-then-re-provision with the
+    // same externalId is not blocked by the composite unique index.
+    expect(updateArgs?.externalId).toBeNull();
   });
 
   it('404 when the user is in a different institution', async () => {
