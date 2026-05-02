@@ -98,15 +98,18 @@ function extractToken(req: Request): string | undefined {
  * eviction + opportunistic prune of expired entries on every set. The
  * earlier unbounded `Map` could grow without limit on a long-lived
  * node: every distinct authenticated userId left a residue, and the
- * lazy TTL check on line 113 only fires on lookup of the same key —
- * so a user who authenticates once, then never again until their JWT
- * naturally expires (or rotates) leaves an orphan entry forever.
- * FIFO over LRU because the workload is "one entry per active user"
- * — recency-of-access doesn't help much over insertion-time, and FIFO
- * skips the per-hit delete-and-reinsert overhead on the hot path.
+ * lazy TTL check inside `isUserSoftDeleted` only fires on lookup of
+ * the same key — so a user who authenticates once, then never again
+ * until their JWT naturally expires (or rotates), leaves an orphan
+ * entry forever. FIFO over LRU because the workload is "one entry per
+ * active user" — recency-of-access doesn't help much over insertion-
+ * time, and FIFO skips the per-hit delete-and-reinsert overhead on
+ * the hot path.
+ *
+ * `MAX_CACHE_SIZE` is exported for tests that need to drive the cap.
  */
 const SOFT_DELETE_CACHE_TTL_MS = 30_000;
-const MAX_CACHE_SIZE = 4096;
+export const MAX_CACHE_SIZE = 4096;
 const softDeleteCache = new Map<string, { deleted: boolean; cachedAt: number }>();
 
 /**

@@ -31,6 +31,7 @@ import {
   authenticateJWT,
   _resetSoftDeleteCacheForTests,
   _softDeleteCacheSizeForTests,
+  MAX_CACHE_SIZE,
 } from '../middleware/auth';
 import { errorHandler } from '../middleware/errorHandler';
 import { requestId } from '../middleware/requestId';
@@ -127,18 +128,20 @@ describe('authenticateJWT — soft-delete revocation', () => {
   it('caps cache size at MAX_CACHE_SIZE and FIFO-evicts the oldest entry on overflow', async () => {
     findUniqueMock.mockResolvedValue({ deletedAt: null });
     const app = buildApp();
-    // The cap is 4096. Drive 4100 distinct users through the auth chain;
-    // size should plateau at 4096 (oldest entries evicted FIFO).
-    for (let i = 0; i < 4100; i++) {
+    // Drive just past the cap so the test exercises overflow but stays
+    // cheap. `MAX_CACHE_SIZE + 4` keeps the count close to the boundary
+    // and the test auto-scales if the cap is later tuned.
+    const TOTAL = MAX_CACHE_SIZE + 4;
+    for (let i = 0; i < TOTAL; i++) {
       await request(app)
         .get('/probe')
         .set('Authorization', `Bearer ${tokenFor(`u-bulk-${i}`)}`);
     }
-    expect(_softDeleteCacheSizeForTests()).toBeLessThanOrEqual(4096);
+    expect(_softDeleteCacheSizeForTests()).toBeLessThanOrEqual(MAX_CACHE_SIZE);
 
     // The very first user (u-bulk-0) was inserted before any of the
-    // last 4096 — it should be evicted, so a re-probe forces a fresh
-    // Prisma round-trip.
+    // last MAX_CACHE_SIZE — it should be evicted, so a re-probe forces
+    // a fresh Prisma round-trip.
     const callsBefore = findUniqueMock.mock.calls.length;
     await request(app)
       .get('/probe')
