@@ -287,7 +287,9 @@ async function main() {
   });
   await prisma.user.upsert({
     where: { email: 'priya@midshire.ac.uk' },
-    update: {},
+    // Rotate the hash on rerun so a DEMO_PASSWORD env change actually
+    // takes effect for an already-seeded persona.
+    update: { passwordHash: personaHash, role: 'PROCUREMENT_LEAD', institutionId: priyaInst.id },
     create: {
       email: 'priya@midshire.ac.uk',
       name: 'Priya Sharma',
@@ -315,7 +317,7 @@ async function main() {
   });
   await prisma.user.upsert({
     where: { email: 'marcus@newport-met.ac.uk' },
-    update: {},
+    update: { passwordHash: personaHash, role: 'EVALUATOR', institutionId: marcusInst.id },
     create: {
       email: 'marcus@newport-met.ac.uk',
       name: 'Marcus Webb',
@@ -343,7 +345,7 @@ async function main() {
   });
   await prisma.user.upsert({
     where: { email: 'rachel@wessex-colleges.ac.uk' },
-    update: {},
+    update: { passwordHash: personaHash, role: 'PROCUREMENT_LEAD', institutionId: rachelInst.id },
     create: {
       email: 'rachel@wessex-colleges.ac.uk',
       name: 'Rachel Okonkwo',
@@ -353,37 +355,46 @@ async function main() {
     },
   });
 
-  // Daniel — vendor side. Lives in his own "vendor" institution row so
-  // tenant-scoped queries don't accidentally surface him to the buyer
-  // personas. Role is VENDOR_ADMIN so he can hit the vendor portal.
-  const danielInst = await prisma.institution.upsert({
-    where: { slug: 'apex-software-vendor' },
-    update: {},
+  // Daniel — vendor side. The vendor portal authenticates against the
+  // separate VendorUser/VendorAccount tables (see vendor-portal.service
+  // login flow), NOT the buyer-side User table. Seeding him as a User
+  // with role VENDOR_ADMIN would let him through `/auth/login` but he
+  // could not actually use the portal because `/vendor-portal/login`
+  // queries `prisma.vendorUser`. So we create both halves of the vendor
+  // identity here.
+  const danielAccount = await prisma.vendorAccount.upsert({
+    where: { contactEmail: 'daniel@apex-software.com' },
+    update: { status: 'approved', tier: 'PREMIUM' },
     create: {
-      name: 'Apex Software (Vendor)',
-      slug: 'apex-software-vendor',
-      country: 'UK',
-      tier: 'free',
+      companyName: 'Apex Software',
+      contactEmail: 'daniel@apex-software.com',
+      contactName: 'Daniel Hartley',
+      websiteUrl: 'https://apex-software.example.com',
+      description: 'UAT vendor persona — solutions architect for an HE SIS supplier.',
+      status: 'approved',
+      tier: 'PREMIUM',
+      approvedAt: new Date(),
     },
   });
-  await prisma.user.upsert({
+  await prisma.vendorUser.upsert({
     where: { email: 'daniel@apex-software.com' },
-    update: {},
+    update: { passwordHash: personaHash, role: 'admin', vendorAccountId: danielAccount.id },
     create: {
       email: 'daniel@apex-software.com',
       name: 'Daniel Hartley',
       passwordHash: personaHash,
-      role: 'VENDOR_ADMIN',
-      institutionId: danielInst.id,
+      role: 'admin',
+      vendorAccountId: danielAccount.id,
     },
   });
 
   console.log('UAT personas seeded:');
-  console.log('  priya@midshire.ac.uk           PROCUREMENT_LEAD  Enterprise   (Russell Group HE)');
-  console.log('  marcus@newport-met.ac.uk       EVALUATOR         Professional (post-92 HE)');
-  console.log('  rachel@wessex-colleges.ac.uk   PROCUREMENT_LEAD  Enterprise   (FE college group)');
-  console.log('  daniel@apex-software.com       VENDOR_ADMIN      —            (Vendor portal)');
-  console.log('  Password for all four: same as the demo user (DEMO_PASSWORD env or default)');
+  console.log('  priya@midshire.ac.uk           PROCUREMENT_LEAD  Enterprise   (Russell Group HE)     /login');
+  console.log('  marcus@newport-met.ac.uk       EVALUATOR         Professional (post-92 HE)           /login');
+  console.log('  rachel@wessex-colleges.ac.uk   PROCUREMENT_LEAD  Enterprise   (FE college group)     /login');
+  console.log('  daniel@apex-software.com       admin (vendor)    PREMIUM      (Apex Software)        /vendor-portal/login');
+  console.log('  Password for all four: same as the demo user (DEMO_PASSWORD env or default).');
+  console.log('  Note: Daniel logs in via the vendor portal — the buyer /login page will not authenticate him.');
 
   // ── Demo capability basket ────────────────────────────────────────────────
   const demoBasket = await prisma.capabilityBasket.upsert({
