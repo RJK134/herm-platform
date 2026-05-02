@@ -717,3 +717,92 @@ describe('DELETE /api/admin/sso/me — OIDC cache invalidation', () => {
     expect(invalidateMock).not.toHaveBeenCalled();
   });
 });
+
+// ── Phase 11.16 (L1) — read-side audit logging ─────────────────────────────
+//
+// SSO config reads were previously unaudited despite revealing sensitive
+// configuration (which IdPs each tenant has, against which issuers).
+// L1 adds audit calls on all three GET endpoints with action namespaces
+// `admin.sso.read_self` / `read_all` / `read_by_institution`.
+
+describe('admin SSO read auditing (L1)', () => {
+  function findAuditCall(action: string): Record<string, unknown> | undefined {
+    // The mock's typed args are `[]` because the inline `vi.fn(async () => ({}))`
+    // declaration in `prismaMock` gives TS no parameter info; widen via
+    // `as unknown[][]` so we can index into the call's first arg.
+    const calls = prismaMock.auditLog.create.mock.calls as unknown as unknown[][];
+    const call = calls.find(
+      (c) => ((c[0] as { data?: { action?: string } } | undefined)?.data?.action) === action,
+    );
+    return (call?.[0] as { data?: Record<string, unknown> } | undefined)?.data;
+  }
+
+  it('GET /me audits with admin.sso.read_self when an IdP row exists', async () => {
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(baseRow);
+    await request(buildApp())
+      .get('/api/admin/sso/me')
+      .set('Authorization', `Bearer ${makeToken()}`);
+    const data = findAuditCall('admin.sso.read_self');
+    expect(data).toBeDefined();
+    expect(data?.['entityId']).toBe(baseRow.id);
+    const changes = data?.['changes'] as { hasIdp: boolean; institutionId: string };
+    expect(changes.hasIdp).toBe(true);
+    expect(changes.institutionId).toBe('inst-1');
+  });
+
+  it('GET /me audits with hasIdp=false when no row exists (negative result is itself notable)', async () => {
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(null);
+    await request(buildApp())
+      .get('/api/admin/sso/me')
+      .set('Authorization', `Bearer ${makeToken()}`);
+    const data = findAuditCall('admin.sso.read_self');
+    expect(data).toBeDefined();
+    expect(data?.['entityId']).toBeNull();
+    const changes = data?.['changes'] as { hasIdp: boolean };
+    expect(changes.hasIdp).toBe(false);
+  });
+
+  it('GET /all audits with admin.sso.read_all + rowCount (highest-value cross-tenant read)', async () => {
+    const rowsWithInst = [
+      { ...baseRow, institution: { name: 'Uni One', slug: 'uni-1' } },
+      { ...baseRow, id: 'idp-2', institution: { name: 'Uni Two', slug: 'uni-2' } },
+    ];
+    prismaMock.ssoIdentityProvider.findMany.mockResolvedValue(rowsWithInst);
+    await request(buildApp())
+      .get('/api/admin/sso/all')
+      .set('Authorization', `Bearer ${makeToken({ role: 'SUPER_ADMIN' })}`);
+    const data = findAuditCall('admin.sso.read_all');
+    expect(data).toBeDefined();
+    const changes = data?.['changes'] as { rowCount: number };
+    expect(changes.rowCount).toBe(2);
+  });
+
+  it('GET /institutions/:id audits with admin.sso.read_by_institution + the queried institutionId', async () => {
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue({
+      ...baseRow,
+      institution: { name: 'Uni One', slug: 'uni-1' },
+    });
+    await request(buildApp())
+      .get('/api/admin/sso/institutions/inst-target')
+      .set('Authorization', `Bearer ${makeToken({ role: 'SUPER_ADMIN' })}`);
+    const data = findAuditCall('admin.sso.read_by_institution');
+    expect(data).toBeDefined();
+    expect(data?.['entityId']).toBe(baseRow.id);
+    const changes = data?.['changes'] as { hasIdp: boolean; institutionId: string };
+    expect(changes.institutionId).toBe('inst-target');
+    expect(changes.hasIdp).toBe(true);
+  });
+
+  it('GET /institutions/:id still audits when the institution has no IdP (negative read)', async () => {
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(null);
+    await request(buildApp())
+      .get('/api/admin/sso/institutions/inst-empty')
+      .set('Authorization', `Bearer ${makeToken({ role: 'SUPER_ADMIN' })}`);
+    const data = findAuditCall('admin.sso.read_by_institution');
+    expect(data).toBeDefined();
+    expect(data?.['entityId']).toBeNull();
+    const changes = data?.['changes'] as { hasIdp: boolean; institutionId: string };
+    expect(changes.hasIdp).toBe(false);
+    expect(changes.institutionId).toBe('inst-empty');
+  });
+});

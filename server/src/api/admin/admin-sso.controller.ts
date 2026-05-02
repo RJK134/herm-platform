@@ -313,6 +313,20 @@ export const readMe = async (req: Request, res: Response, next: NextFunction): P
       where: { institutionId },
       orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
     });
+    // Phase 11.16 (L1) — audit reads of SSO config. The response shape
+    // never includes the encrypted secret material (samlCert /
+    // oidcClientSecret are excluded by `toReadShape`), but knowing
+    // which IdP an institution has configured is itself a sensitive
+    // disclosure: it tells an outside-of-band observer who looks at
+    // audit logs which tenants run SAML vs OIDC and against which
+    // issuer. Auditing reads gives the tenant admin a tamper-evident
+    // record of every config inspection.
+    await audit(req, {
+      action: 'admin.sso.read_self',
+      entityType: 'SsoIdentityProvider',
+      entityId: row?.id ?? null,
+      changes: { institutionId, hasIdp: !!row },
+    });
     if (!row) {
       res.json({ success: true, data: null });
       return;
@@ -412,6 +426,15 @@ export const readAll = async (req: Request, res: Response, next: NextFunction): 
       institutionName: row.institution.name,
       institutionSlug: row.institution.slug,
     }));
+    // Phase 11.16 (L1) — SUPER_ADMIN cross-institution dump is the
+    // highest-value audit target on the SSO surface: one read returns
+    // the entire IdP map for every tenant. `entityId` is omitted (no
+    // single row), and `changes` carries the row count for triage.
+    await audit(req, {
+      action: 'admin.sso.read_all',
+      entityType: 'SsoIdentityProvider',
+      changes: { rowCount: rows.length },
+    });
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -435,6 +458,16 @@ export const readByInstitution = async (
       where: { institutionId },
       orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
       include: { institution: { select: { name: true, slug: true } } },
+    });
+    // Phase 11.16 (L1) — audit per-tenant SUPER_ADMIN reads. Even when
+    // no IdP exists for the queried institution, the read is itself
+    // notable (negative results tell an admin which tenants are
+    // un-provisioned).
+    await audit(req, {
+      action: 'admin.sso.read_by_institution',
+      entityType: 'SsoIdentityProvider',
+      entityId: row?.id ?? null,
+      changes: { institutionId, hasIdp: !!row },
     });
     if (!row) {
       res.json({ success: true, data: null });

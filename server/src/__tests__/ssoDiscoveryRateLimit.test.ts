@@ -85,6 +85,7 @@ describe('discoveryRateLimiter — wiring', () => {
     // wiring in sso.router.ts changes. We do not need to execute any
     // controller logic; checking the route stack is enough to verify
     // that discoveryRateLimiter is attached to the intended routes.
+    // The router is exported as default; destructure to a local name.
     const { default: ssoRouter } = await import('../api/sso/sso.router');
     const { discoveryRateLimiter } = await import('../middleware/security');
 

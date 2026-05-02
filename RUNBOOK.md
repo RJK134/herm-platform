@@ -3,6 +3,11 @@
 Day-two operations for Future Horizons ASPT. Commands assume the repo root and a
 configured `.env` (see `.env.example`).
 
+For first-time deploys to Vercel + Railway + Neon (the demo / UAT
+stack), see [`docs/DEPLOY.md`](docs/DEPLOY.md). For the persona-driven
+testing brief colleagues use after deploy, see
+[`docs/USER_TESTING_BRIEF.md`](docs/USER_TESTING_BRIEF.md).
+
 ## Start / stop
 
 ### Local dev
