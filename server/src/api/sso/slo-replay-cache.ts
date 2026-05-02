@@ -9,7 +9,7 @@
  * victim's sessions on each replay. Bounded to logout (no
  * impersonation), but a stable nuisance vector.
  *
- * This cache records `slo:replay:{institutionId}:{requestId}` with a
+ * This cache records `sso:slo:replay:{institutionId}:{requestId}` with a
  * TTL bounded by the LogoutRequest's NotOnOrAfter when present, or a
  * default 300s window otherwise. Inserts use Redis `SET ... EX NX` so
  * a duplicate write returns null and the caller can reject. Mirror of
