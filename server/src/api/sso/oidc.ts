@@ -16,6 +16,7 @@
  * `"type": "module"`. Node 22 baseline (we run 22+ in CI and prod).
  */
 import * as oidc from 'openid-client';
+import { createHash } from 'node:crypto';
 import { putFlowState, takeFlowState, type OidcFlowState } from './flow-store';
 import { getOidcCallbackUrl } from '../../lib/sso-config';
 
@@ -33,17 +34,30 @@ const TTL_MS = 60 * 60 * 1000;
 const configCache = new Map<string, CachedConfig>();
 
 /**
- * Phase 11.13 follow-up (Bugbot HIGH on PR #75) — cache key includes
- * `clientId` so two OIDC IdPs sharing an issuer (e.g. two Azure AD
- * apps in the same Entra tenant) don't collide. Each `Configuration`
- * embeds the clientId/clientSecret it was discovered with; keying on
- * issuer alone would let the second IdP pick up the first's cached
+ * Phase 11.13 follow-up — cache key includes `clientId` so two OIDC
+ * IdPs sharing an issuer (e.g. two Azure AD apps in the same Entra
+ * tenant) don't collide. Each `Configuration` embeds the
+ * clientId/clientSecret it was discovered with; keying on issuer
+ * alone would let the second IdP pick up the first's cached
  * Configuration and emit the wrong client_id (or send the wrong
- * client_secret on token exchange). clientId-not-secret keeps the
- * secret out of any cache-debug log line.
+ * client_secret on token exchange).
+ *
+ * Phase 11.16 follow-up (Copilot review on PR #77) — also include a
+ * non-reversible fingerprint of the client_secret. Without it, an
+ * IdP that rotates its secret (same issuer + same clientId, new
+ * secret) would keep using the old secret from cache for up to
+ * `TTL_MS` (1 hour) and every token exchange would 401. The
+ * fingerprint is the first 16 hex chars of SHA-256(secret) — short
+ * enough to keep the key small, long enough to make collisions
+ * practically impossible, and never reveals the raw secret in any
+ * cache-debug log line.
  */
 function configCacheKey(idp: TenantOidcConfig): string {
-  return `${idp.oidcIssuer}|${idp.oidcClientId}`;
+  const secretFingerprint = createHash('sha256')
+    .update(idp.oidcClientSecret)
+    .digest('hex')
+    .slice(0, 16);
+  return `${idp.oidcIssuer}|${idp.oidcClientId}|${secretFingerprint}`;
 }
 
 async function getConfig(idp: TenantOidcConfig): Promise<oidc.Configuration> {
@@ -163,43 +177,47 @@ export async function completeOidcCallback(
 }
 
 /**
- * Drop the cache entry for a specific {issuer, clientId} pair.
+ * Drop all cache entries for a specific {issuer, clientId} pair.
  *
  * Phase 11.15 (P11) — write-side invalidation hook for the admin SSO
- * upsert path. The cached `Configuration` object embeds the
- * `clientSecret` it was discovered with, so a secret rotation via the
- * admin UI would otherwise be invisible to this process for up to
- * `TTL_MS` (1h) and every token-exchange in that window would 401 at
- * the IdP — surfacing as the opaque `sso_failed` banner with no
- * obvious cause. Writes that mutate `oidcIssuer`, `oidcClientId`, or
- * `oidcClientSecret` (and disables / deletes) MUST call this so the
- * next OIDC flow re-discovers and picks up the new credentials.
+ * upsert path. Writes that rotate `oidcIssuer` or `oidcClientId` (and
+ * disables / deletes) call this with the OLD {issuer, clientId} so the
+ * stale cache entry doesn't survive until TTL expiry.
  *
- * Returns whether an entry was actually removed — useful for tests
- * and metrics, but callers don't need to care about the return value
- * in production.
+ * Phase 11.16 added a secret fingerprint to the cache key so a
+ * secret-only rotation automatically yields a cache miss without an
+ * explicit invalidation call. This function uses a prefix scan
+ * (`${issuer}|${clientId}|*`) so it correctly finds and removes entries
+ * regardless of which fingerprint they were stored under — covering
+ * both the issuer/clientId-rotation case and the delete case where the
+ * exact secret is no longer known.
+ *
+ * Returns whether at least one entry was actually removed — useful for
+ * tests and metrics, but callers don't need to care in production.
  *
  * Edge cases:
- *   - Issuer/clientId rotated: the cache key changed, so the OLD key
- *     must be invalidated. Callers that rotate either field should
- *     pass the old issuer + clientId here (the new key won't be in
- *     the cache yet, so invalidating it is a defensive no-op).
- *   - Secret-only rotation: the cache key is unchanged; pass the
- *     current issuer + clientId.
- *   - `null`/missing fields: silently no-ops (a row that has no
- *     OIDC issuer/clientId can't have produced a cache entry).
+ *   - Issuer/clientId rotated: pass the OLD issuer + clientId; the new
+ *     key won't be in the cache yet, so invalidating it is a no-op.
+ *   - Delete: pass the deleted row's issuer + clientId; removes the
+ *     lingering entry so a same-key re-create within the TTL window
+ *     doesn't surface stale config.
+ *   - `null`/missing fields: silently no-ops (a row without OIDC
+ *     issuer/clientId can't have produced a cache entry).
  */
 export function invalidateOidcConfigCacheByKey(args: {
   oidcIssuer: string | null | undefined;
   oidcClientId: string | null | undefined;
 }): boolean {
   if (!args.oidcIssuer || !args.oidcClientId) return false;
-  const key = configCacheKey({
-    oidcIssuer: args.oidcIssuer,
-    oidcClientId: args.oidcClientId,
-    oidcClientSecret: '',
-  });
-  return configCache.delete(key);
+  const prefix = `${args.oidcIssuer}|${args.oidcClientId}|`;
+  let removed = false;
+  for (const key of configCache.keys()) {
+    if (key.startsWith(prefix)) {
+      configCache.delete(key);
+      removed = true;
+    }
+  }
+  return removed;
 }
 
 /** Test hook: drop the in-memory discovery-config cache. */
