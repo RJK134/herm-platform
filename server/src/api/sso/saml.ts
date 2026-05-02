@@ -220,9 +220,10 @@ export async function validateLogoutRequest(
  * still accepts the assertion but the replay cache has already
  * expired.
  *
- * Exported for direct unit testing — the surrounding `validateLogout
- * Request` integration tests mock node-saml and never exercise the
- * inflate+regex path, so this is the only way to pin the contract.
+ * Exported for direct unit testing — the surrounding
+ * `validateLogoutRequest` integration tests mock node-saml and never
+ * exercise the inflate+regex path, so this is the only way to pin the
+ * contract.
  */
 export async function extractNotOnOrAfter(
   query: Record<string, unknown>,
