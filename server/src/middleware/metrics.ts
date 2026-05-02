@@ -24,9 +24,11 @@ import {
  * `req.route?.path`. Joining them gives a stable label like
  * `/api/users/:id` regardless of how the route is nested.
  *
- * Returns `__not_found` when no route matched (404) — a deliberate
- * sentinel so a probe storm of distinct URLs doesn't blow up the
- * metric cardinality.
+ * Returns `__not_found` when `req.route` is unset — typically a 404,
+ * but also covers requests served by middleware that never reaches
+ * the route layer (CORS preflight, helmet rejections, etc.). The
+ * sentinel keeps probe traffic from blowing up metric cardinality
+ * regardless of which path produced the unmatched response.
  */
 function resolveRouteLabel(req: Request): string {
   const routePath = req.route?.path;
