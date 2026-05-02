@@ -93,9 +93,34 @@ function extractToken(req: Request): string | undefined {
  * each cache for ~30 s after a soft-delete. If shorter convergence
  * matters operationally, drop `SOFT_DELETE_CACHE_TTL_MS` to 0 — the
  * tradeoff is one read per request.
+ *
+ * Phase 11.16 (M5) — bounded by `MAX_CACHE_SIZE` entries with FIFO
+ * eviction + opportunistic prune of expired entries on every set. The
+ * earlier unbounded `Map` could grow without limit on a long-lived
+ * node: every distinct authenticated userId left a residue, and the
+ * lazy TTL check on line 113 only fires on lookup of the same key —
+ * so a user who authenticates once, then never again until their JWT
+ * naturally expires (or rotates) leaves an orphan entry forever.
+ * FIFO over LRU because the workload is "one entry per active user"
+ * — recency-of-access doesn't help much over insertion-time, and FIFO
+ * skips the per-hit delete-and-reinsert overhead on the hot path.
  */
 const SOFT_DELETE_CACHE_TTL_MS = 30_000;
+const MAX_CACHE_SIZE = 4096;
 const softDeleteCache = new Map<string, { deleted: boolean; cachedAt: number }>();
+
+/**
+ * Walk the cache and drop entries older than TTL. Cheap (size is
+ * bounded by MAX_CACHE_SIZE) and runs only on the miss-set path so the
+ * hot read path stays branch-light. Without this, an entry whose user
+ * never re-authenticates after the original write would survive
+ * indefinitely on a long-running node.
+ */
+function pruneExpired(now: number): void {
+  for (const [k, v] of softDeleteCache) {
+    if (now - v.cachedAt >= SOFT_DELETE_CACHE_TTL_MS) softDeleteCache.delete(k);
+  }
+}
 
 async function isUserSoftDeleted(userId: string): Promise<boolean> {
   // Test-mode opt-out: the existing test suite mocks `prisma.user`
@@ -109,8 +134,9 @@ async function isUserSoftDeleted(userId: string): Promise<boolean> {
   ) {
     return false;
   }
+  const now = Date.now();
   const hit = softDeleteCache.get(userId);
-  if (hit && Date.now() - hit.cachedAt < SOFT_DELETE_CACHE_TTL_MS) {
+  if (hit && now - hit.cachedAt < SOFT_DELETE_CACHE_TTL_MS) {
     return hit.deleted;
   }
   // Phase 11.14 — also check Institution.deletedAt. Tenant soft-delete
@@ -152,13 +178,27 @@ async function isUserSoftDeleted(userId: string): Promise<boolean> {
   // by some narrower mock setup).
   const tenantDeleted = !!(row && row.institution && row.institution.deletedAt != null);
   const deleted = userDeleted || tenantDeleted;
-  softDeleteCache.set(userId, { deleted, cachedAt: Date.now() });
+  // Active prune + FIFO eviction before the new write so memory stays
+  // bounded under any access pattern. Map iterates in insertion order,
+  // so the first key from `keys()` is the oldest.
+  pruneExpired(now);
+  while (softDeleteCache.size >= MAX_CACHE_SIZE) {
+    const oldest = softDeleteCache.keys().next().value;
+    if (oldest === undefined) break;
+    softDeleteCache.delete(oldest);
+  }
+  softDeleteCache.set(userId, { deleted, cachedAt: now });
   return deleted;
 }
 
 /** Test hook: clears the soft-delete revocation cache. */
 export function _resetSoftDeleteCacheForTests(): void {
   softDeleteCache.clear();
+}
+
+/** Test hook: read current cache size for assertions. */
+export function _softDeleteCacheSizeForTests(): number {
+  return softDeleteCache.size;
 }
 
 export async function authenticateJWT(
