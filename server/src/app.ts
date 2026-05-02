@@ -2,7 +2,12 @@ import express, { type Express } from 'express';
 import cors from 'cors';
 import { checkEnvironment } from './utils/env-check';
 import { errorHandler } from './middleware/errorHandler';
-import { helmetMiddleware, apiRateLimiter, authRateLimiter } from './middleware/security';
+import {
+  helmetMiddleware,
+  apiRateLimiter,
+  authRateLimiter,
+  scimRateLimiter,
+} from './middleware/security';
 import { requestId } from './middleware/requestId';
 import { httpLogger } from './middleware/httpLogger';
 import healthRouter from './api/health/health.router';
@@ -151,7 +156,12 @@ export function createApp(): Express {
   // Google) reach a standard URL without HERM-specific prefixing. Auth
   // is API-key + `admin:scim` permission, not JWT — wired inside the
   // router itself. Skipped under /api/v1 because SCIM is its own spec.
-  app.use('/scim/v2', createScimRouter());
+  //
+  // Phase 11.15 (M2) — `scimRateLimiter` mounts BEFORE the router so
+  // unauthenticated probes can't hammer the SCIM auth chain. The auth
+  // check inside the router runs after this limiter, so per-IP is the
+  // right bucket (no stable apiKey id yet at this point).
+  app.use('/scim/v2', scimRateLimiter, createScimRouter());
 
   // Phase 10.8 — GDPR data-subject rights (data export, erasure).
   // Mounted at /me because they're personal rights, not admin actions.

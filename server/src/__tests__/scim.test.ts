@@ -20,19 +20,21 @@ vi.mock('../lib/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-const { userMocks, apiKeyFindUniqueMock, apiKeyUpdateMock, auditLogCreateMock } = vi.hoisted(() => ({
-  userMocks: {
-    findFirst: vi.fn(),
-    findUnique: vi.fn(),
-    findMany: vi.fn(),
-    count: vi.fn(),
-    create: vi.fn(),
-    update: vi.fn(),
-  },
-  apiKeyFindUniqueMock: vi.fn(),
-  apiKeyUpdateMock: vi.fn(),
-  auditLogCreateMock: vi.fn(),
-}));
+const { userMocks, apiKeyFindUniqueMock, apiKeyUpdateMock, auditLogCreateMock } = vi.hoisted(
+  () => ({
+    userMocks: {
+      findFirst: vi.fn(),
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      count: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+    },
+    apiKeyFindUniqueMock: vi.fn(),
+    apiKeyUpdateMock: vi.fn(),
+    auditLogCreateMock: vi.fn(),
+  }),
+);
 
 vi.mock('../utils/prisma', () => ({
   default: {
@@ -42,7 +44,7 @@ vi.mock('../utils/prisma', () => ({
   },
 }));
 
-import { createScimRouter } from '../api/scim/scim.router';
+import { createScimRouter, _resetScimNegativeCacheForTests } from '../api/scim/scim.router';
 
 const TEST_INSTITUTION_ID = 'inst-acme';
 const OTHER_INSTITUTION_ID = 'inst-other';
@@ -78,13 +80,21 @@ function fakeUser(over: Partial<Record<string, unknown>> = {}): Record<string, u
   };
 }
 
-function authedKey(permissions: string[] = ['admin:scim']): Record<string, unknown> {
+function authedKey(
+  permissions: string[] = ['admin:scim'],
+  over: Partial<Record<string, unknown>> = {},
+): Record<string, unknown> {
   return {
     id: 'key-1',
     institutionId: TEST_INSTITUTION_ID,
     permissions,
     isActive: true,
     expiresAt: null,
+    // Phase 11.15 (H3) — the SCIM auth chokepoint joins `institution`
+    // and refuses on `institution.deletedAt !== null`. Existing tests
+    // assume a live tenant, so the helper defaults `deletedAt: null`.
+    institution: { deletedAt: null },
+    ...over,
   };
 }
 
@@ -96,6 +106,10 @@ beforeEach(() => {
   // apiKeyAuth's "telemetry" lastUsedAt update should resolve cleanly.
   apiKeyUpdateMock.mockResolvedValue({});
   auditLogCreateMock.mockResolvedValue({});
+  // Phase 11.15 (M1) — clear the SCIM negative-auth cache between
+  // tests so a previous "no row" lookup doesn't short-circuit later
+  // tests that mock a different return.
+  _resetScimNegativeCacheForTests();
 });
 
 describe('SCIM auth gate', () => {
@@ -107,13 +121,17 @@ describe('SCIM auth gate', () => {
 
   it('401 when bearer is API-key-shaped but unknown', async () => {
     apiKeyFindUniqueMock.mockResolvedValue(null);
-    const res = await request(buildApp()).get('/scim/v2/Users').set('Authorization', `Bearer ${INVALID_KEY}`);
+    const res = await request(buildApp())
+      .get('/scim/v2/Users')
+      .set('Authorization', `Bearer ${INVALID_KEY}`);
     expect(res.status).toBe(401);
   });
 
   it('403 when the key lacks admin:scim permission', async () => {
     apiKeyFindUniqueMock.mockResolvedValue(authedKey(['read:systems']));
-    const res = await request(buildApp()).get('/scim/v2/Users').set('Authorization', `Bearer ${VALID_KEY}`);
+    const res = await request(buildApp())
+      .get('/scim/v2/Users')
+      .set('Authorization', `Bearer ${VALID_KEY}`);
     expect(res.status).toBe(403);
     expect(res.body.detail).toContain('admin:scim');
   });
@@ -129,7 +147,9 @@ describe('SCIM service-discovery', () => {
       .get('/scim/v2/ServiceProviderConfig')
       .set('Authorization', `Bearer ${VALID_KEY}`);
     expect(res.status).toBe(200);
-    expect(res.body.schemas).toContain('urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig');
+    expect(res.body.schemas).toContain(
+      'urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig',
+    );
     expect(res.body.patch.supported).toBe(false);
     expect(res.body.filter.supported).toBe(true);
   });
@@ -144,7 +164,9 @@ describe('SCIM service-discovery', () => {
   });
 
   it('GET /Schemas returns the User schema', async () => {
-    const res = await request(buildApp()).get('/scim/v2/Schemas').set('Authorization', `Bearer ${VALID_KEY}`);
+    const res = await request(buildApp())
+      .get('/scim/v2/Schemas')
+      .set('Authorization', `Bearer ${VALID_KEY}`);
     expect(res.status).toBe(200);
     expect(res.body.Resources[0].name).toBe('User');
   });
@@ -157,8 +179,13 @@ describe('GET /scim/v2/Users', () => {
 
   it('lists active users in the caller institution only', async () => {
     userMocks.count.mockResolvedValue(2);
-    userMocks.findMany.mockResolvedValue([fakeUser({ id: 'usr-1' }), fakeUser({ id: 'usr-2', email: 'bob@acme.test' })]);
-    const res = await request(buildApp()).get('/scim/v2/Users').set('Authorization', `Bearer ${VALID_KEY}`);
+    userMocks.findMany.mockResolvedValue([
+      fakeUser({ id: 'usr-1' }),
+      fakeUser({ id: 'usr-2', email: 'bob@acme.test' }),
+    ]);
+    const res = await request(buildApp())
+      .get('/scim/v2/Users')
+      .set('Authorization', `Bearer ${VALID_KEY}`);
     expect(res.status).toBe(200);
     expect(res.body.totalResults).toBe(2);
     expect(res.body.Resources).toHaveLength(2);
@@ -205,7 +232,9 @@ describe('GET /scim/v2/Users/:id', () => {
 
   it('200 with the SCIM user when the row is in the caller institution', async () => {
     userMocks.findFirst.mockResolvedValue(fakeUser());
-    const res = await request(buildApp()).get('/scim/v2/Users/usr-1').set('Authorization', `Bearer ${VALID_KEY}`);
+    const res = await request(buildApp())
+      .get('/scim/v2/Users/usr-1')
+      .set('Authorization', `Bearer ${VALID_KEY}`);
     expect(res.status).toBe(200);
     expect(res.body.userName).toBe('alice@acme.test');
     expect(res.body.active).toBe(true);
@@ -214,7 +243,9 @@ describe('GET /scim/v2/Users/:id', () => {
 
   it('404 when the row exists in a different institution', async () => {
     userMocks.findFirst.mockResolvedValue(null);
-    const res = await request(buildApp()).get('/scim/v2/Users/usr-other').set('Authorization', `Bearer ${VALID_KEY}`);
+    const res = await request(buildApp())
+      .get('/scim/v2/Users/usr-other')
+      .set('Authorization', `Bearer ${VALID_KEY}`);
     expect(res.status).toBe(404);
     expect(res.body.detail).toMatch(/not found/i);
   });
@@ -227,7 +258,9 @@ describe('POST /scim/v2/Users', () => {
 
   it('201 creates a new user with passwordLoginDisabled and SCIM-derived email/name', async () => {
     userMocks.findUnique.mockResolvedValue(null); // no existing email
-    userMocks.create.mockResolvedValue(fakeUser({ id: 'usr-new', email: 'carol@acme.test', name: 'Carol Carter' }));
+    userMocks.create.mockResolvedValue(
+      fakeUser({ id: 'usr-new', email: 'carol@acme.test', name: 'Carol Carter' }),
+    );
     const res = await request(buildApp())
       .post('/scim/v2/Users')
       .set('Authorization', `Bearer ${VALID_KEY}`)
@@ -303,10 +336,12 @@ describe('POST /scim/v2/Users', () => {
       .post('/scim/v2/Users')
       .set('Authorization', `Bearer ${VALID_KEY}`)
       .set('Content-Type', 'application/scim+json')
-      .send(JSON.stringify({
-        userName: 'real-idp@acme.test',
-        emails: [{ value: 'real-idp@acme.test', primary: true }],
-      }));
+      .send(
+        JSON.stringify({
+          userName: 'real-idp@acme.test',
+          emails: [{ value: 'real-idp@acme.test', primary: true }],
+        }),
+      );
     expect(res.status).toBe(201);
     expect(res.body.userName).toBe('real-idp@acme.test');
     expect(userMocks.create).toHaveBeenCalled();
@@ -395,9 +430,13 @@ describe('DELETE /scim/v2/Users/:id', () => {
   });
 
   it('204 soft-deletes and scrubs PII (deterministic tombstone email + externalId cleared)', async () => {
-    userMocks.findFirst.mockResolvedValue(fakeUser({ id: 'usr-target', externalId: 'idp-side-id-42' }));
+    userMocks.findFirst.mockResolvedValue(
+      fakeUser({ id: 'usr-target', externalId: 'idp-side-id-42' }),
+    );
     userMocks.update.mockResolvedValue(fakeUser({ deletedAt: new Date() }));
-    const res = await request(buildApp()).delete('/scim/v2/Users/usr-1').set('Authorization', `Bearer ${VALID_KEY}`);
+    const res = await request(buildApp())
+      .delete('/scim/v2/Users/usr-1')
+      .set('Authorization', `Bearer ${VALID_KEY}`);
     expect(res.status).toBe(204);
     const updateArgs = userMocks.update.mock.calls[0]?.[0]?.data;
     expect(updateArgs?.deletedAt).toBeInstanceOf(Date);
@@ -431,5 +470,94 @@ describe('PATCH /scim/v2/Users/:id', () => {
       .set('Authorization', `Bearer ${VALID_KEY}`)
       .send({ Operations: [{ op: 'replace', path: 'active', value: false }] });
     expect(res.status).toBe(501);
+  });
+});
+
+// Phase 11.15 (H3) — SCIM provisioning into a soft-deleted Institution.
+//
+// When an Institution is soft-deleted via the cascade in
+// `services/retention/cascade.ts`, the Institution row is stamped
+// `deletedAt` immediately but the linked `ApiKey` rows survive until
+// the retention scheduler hard-deletes the Institution at the end of
+// the grace window (typically `RETENTION_GRACE_DAYS=30`). Without an
+// explicit check at the SCIM auth chokepoint, the bearer would
+// continue to authorise and provisioning would write new User rows
+// into a tombstoned tenant — which the retention sweeper then reaps
+// silently, leaving an audit trail of bogus provisions.
+//
+// The fix mirrors the JWT chokepoint pattern in `middleware/auth.ts`
+// that already gates on `User.institution.deletedAt`. Refusing here
+// must surface the same opaque "invalid token" 401 that
+// `apiKeyFindUnique` returning `null` does — anything more specific
+// would let an outside SCIM client confirm a tenant exists.
+describe('SCIM auth gate — H3 tenant-deletion check', () => {
+  it('401 with the standard SCIM error envelope when the parent Institution is soft-deleted', async () => {
+    apiKeyFindUniqueMock.mockResolvedValue(
+      authedKey(['admin:scim'], { institution: { deletedAt: new Date('2026-04-15T00:00:00Z') } }),
+    );
+    const res = await request(buildApp())
+      .get('/scim/v2/Users')
+      .set('Authorization', `Bearer ${VALID_KEY}`);
+    expect(res.status).toBe(401);
+    expect(res.body.schemas).toContain('urn:ietf:params:scim:api:messages:2.0:Error');
+    // Opaque envelope — must not confirm tenant existence.
+    expect(res.body.detail).toMatch(/api key/i);
+  });
+
+  it('401 on POST /Users into a soft-deleted tenant — no User row is created', async () => {
+    apiKeyFindUniqueMock.mockResolvedValue(
+      authedKey(['admin:scim'], { institution: { deletedAt: new Date() } }),
+    );
+    const res = await request(buildApp())
+      .post('/scim/v2/Users')
+      .set('Authorization', `Bearer ${VALID_KEY}`)
+      .send({
+        userName: 'rejected@acme.test',
+        emails: [{ value: 'rejected@acme.test', primary: true }],
+        active: true,
+      });
+    expect(res.status).toBe(401);
+    expect(userMocks.create).not.toHaveBeenCalled();
+    // Audit row for a bogus provision must NOT be written.
+    expect(auditLogCreateMock).not.toHaveBeenCalled();
+  });
+
+  it('401 on PUT /Users/:id (replace) when the parent Institution is soft-deleted', async () => {
+    apiKeyFindUniqueMock.mockResolvedValue(
+      authedKey(['admin:scim'], { institution: { deletedAt: new Date() } }),
+    );
+    const res = await request(buildApp())
+      .put('/scim/v2/Users/usr-1')
+      .set('Authorization', `Bearer ${VALID_KEY}`)
+      .send({
+        userName: 'alice@acme.test',
+        emails: [{ value: 'alice@acme.test', primary: true }],
+        active: true,
+      });
+    expect(res.status).toBe(401);
+    expect(userMocks.update).not.toHaveBeenCalled();
+  });
+
+  it('401 on DELETE /Users/:id when the parent Institution is soft-deleted', async () => {
+    apiKeyFindUniqueMock.mockResolvedValue(
+      authedKey(['admin:scim'], { institution: { deletedAt: new Date() } }),
+    );
+    const res = await request(buildApp())
+      .delete('/scim/v2/Users/usr-1')
+      .set('Authorization', `Bearer ${VALID_KEY}`);
+    expect(res.status).toBe(401);
+    expect(userMocks.update).not.toHaveBeenCalled();
+  });
+
+  it('still allows requests when Institution.deletedAt is null (live tenant)', async () => {
+    apiKeyFindUniqueMock.mockResolvedValue(
+      authedKey(['admin:scim'], { institution: { deletedAt: null } }),
+    );
+    userMocks.count.mockResolvedValue(0);
+    userMocks.findMany.mockResolvedValue([]);
+    const res = await request(buildApp())
+      .get('/scim/v2/Users')
+      .set('Authorization', `Bearer ${VALID_KEY}`);
+    expect(res.status).toBe(200);
   });
 });

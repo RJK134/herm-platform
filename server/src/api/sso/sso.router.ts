@@ -18,9 +18,21 @@
  * default JSON body parser doesn't handle that — the urlencoded parser
  * is added inline as middleware on the ACS route only, so the rest of
  * the API doesn't pick up form bodies.
+ *
+ * Phase 11.15 (M3) — `discoveryRateLimiter` is mounted directly on the
+ * two anonymous discovery routes (NOT on the auth flow / ACS / metadata
+ * surfaces). After Phase 11.13 `/api/sso/[:slug/]discover` returns an
+ * `options[]` array of every enabled IdP, so an attacker who knows a
+ * slug or domain can enumerate the tenant's IdP map. Without a tighter
+ * limiter these endpoints share the global `apiRateLimiter` bucket
+ * with `/api/health`, so a single misbehaving probe can starve the
+ * whole anonymous bucket. Scoped here at the route mount so the limiter
+ * is applied without touching `sso.controller.ts` (avoids a merge
+ * collision with the in-flight `claude/p11-slo-replay` PR).
  */
 import { Router } from 'express';
 import express from 'express';
+import { discoveryRateLimiter } from '../../middleware/security';
 import {
   discover,
   discoverByEmail,
@@ -33,10 +45,10 @@ import {
 
 const router = Router();
 
-router.get('/discover', discoverByEmail);
+router.get('/discover', discoveryRateLimiter, discoverByEmail);
 router.get('/sp-metadata.xml', spMetadata);
 
-router.get('/:institutionSlug/discover', discover);
+router.get('/:institutionSlug/discover', discoveryRateLimiter, discover);
 router.get('/:institutionSlug/login', login);
 router.post(
   '/:institutionSlug/saml/acs',
