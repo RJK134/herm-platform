@@ -3,6 +3,11 @@
 Day-two operations for Future Horizons ASPT. Commands assume the repo root and a
 configured `.env` (see `.env.example`).
 
+For first-time deploys to Vercel + Railway + Neon (the demo / UAT
+stack), see [`docs/DEPLOY.md`](docs/DEPLOY.md). For the persona-driven
+testing brief colleagues use after deploy, see
+[`docs/USER_TESTING_BRIEF.md`](docs/USER_TESTING_BRIEF.md).
+
 ## Start / stop
 
 ### Local dev
@@ -176,6 +181,34 @@ Set `DATABASE_URL` to the production connection string; **never run
 `db:push --force-reset` against prod**. For schema changes use the
 migration workflow described in "Apply migrations (prod / staging)"
 above — `db:push` is only for dev / CI test DBs that get torn down.
+
+## Bundle-size budget (Phase 12.5)
+
+CI fails any PR whose client bundles grow past the configured ceilings in
+`client/.size-limit.json`. Run locally:
+
+```bash
+npm run build --workspace=@herm-platform/client
+npm run size:check --workspace=@herm-platform/client
+```
+
+Output is a per-asset table of current size vs ceiling (gzip-compressed).
+A ceiling miss means one of three things:
+
+1. **You added a heavy dep.** Look at the diff; consider dynamic-import or
+   route-level code-splitting before bumping the ceiling.
+2. **A transitive dep grew.** `npm why <package>` plus `du -sh
+   client/dist/assets` to see which chunk moved.
+3. **Threshold is genuinely too tight.** Bump in `.size-limit.json` and
+   call it out in the PR description so the regression is reviewable, not
+   silent.
+
+Initial ceilings (committed at the Phase 12.5 baseline) are the current
+size + ~3% headroom. The follow-up Phase 12.5b PR will introduce
+route-level code-splitting on the four heaviest pages
+(`ProcurementProjects`, `ProcurementGuide`, `SectorAnalytics`,
+`AdminSystems`) to chase the kickoff doc's <500 KB initial-load target;
+the ceilings will ratchet down with that work.
 
 ## Health checks
 

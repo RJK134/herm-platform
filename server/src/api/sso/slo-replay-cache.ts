@@ -9,7 +9,7 @@
  * victim's sessions on each replay. Bounded to logout (no
  * impersonation), but a stable nuisance vector.
  *
- * This cache records `slo:replay:{institutionId}:{requestId}` with a
+ * This cache records `sso:slo:replay:{institutionId}:{requestId}` with a
  * TTL bounded by the LogoutRequest's NotOnOrAfter when present, or a
  * default 300s window otherwise. Inserts use Redis `SET ... EX NX` so
  * a duplicate write returns null and the caller can reject. Mirror of
@@ -25,8 +25,7 @@
 import type { Redis } from 'ioredis';
 import { getRedis } from '../../lib/redis';
 import { logger } from '../../lib/logger';
-
-const KEY_PREFIX = 'sso:slo:replay';
+import { RedisKeys } from '../../lib/redis-keys';
 
 /**
  * Default TTL (seconds) when the LogoutRequest carries no NotOnOrAfter
@@ -37,8 +36,9 @@ export const DEFAULT_REPLAY_TTL_SECONDS = 300;
 
 const memStore = new Map<string, { expiresAt: number }>();
 
+// Phase 11.16 (S1) — Redis key shape lives in `lib/redis-keys.ts`.
 function cacheKey(institutionId: string, requestId: string): string {
-  return `${KEY_PREFIX}:${institutionId}:${requestId}`;
+  return RedisKeys.ssoSloReplay(institutionId, requestId);
 }
 
 function memPrune(now: number): void {

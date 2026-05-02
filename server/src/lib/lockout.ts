@@ -37,6 +37,7 @@ import type { Redis } from 'ioredis';
 import { logger } from './logger';
 import { AppError } from '../utils/errors';
 import { getRedis } from './redis';
+import { RedisKeys } from './redis-keys';
 
 const MAX_FAILS = 5;
 const WINDOW_MS = 15 * 60 * 1000;
@@ -45,7 +46,6 @@ const LOCK_MS = 30 * 60 * 1000;
 const MAX_STORE_SIZE = 10_000;
 let maxStoreSizeCap = MAX_STORE_SIZE;
 
-const REDIS_KEY_PREFIX = 'lockout';
 
 export class AccountLockedError extends AppError {
   constructor(
@@ -177,10 +177,10 @@ function clearFailuresMemory(email: string): void {
 // so a forgotten account naturally unlocks without manual cleanup.
 
 function failKey(email: string): string {
-  return `${REDIS_KEY_PREFIX}:fail:${key(email)}`;
+  return RedisKeys.lockoutFail(key(email));
 }
 function lockKey(email: string): string {
-  return `${REDIS_KEY_PREFIX}:lock:${key(email)}`;
+  return RedisKeys.lockoutLock(key(email));
 }
 
 /**
