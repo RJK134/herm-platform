@@ -8,6 +8,7 @@ import { AppError } from '../../utils/errors';
 import { generateToken, type JwtPayload } from '../../middleware/auth';
 import { verifyMfaChallengeToken, verifyTotp } from '../../lib/mfa';
 import { revokeSession } from '../../lib/session-store';
+import { recordAuthLogin } from '../../lib/metrics';
 
 const service = new AuthService();
 
@@ -232,6 +233,7 @@ export const mfaLogin = async (
         entityId: user.id,
         userId: user.id,
       });
+      recordAuthLogin('mfa_failed');
       throw new AppError(401, 'AUTHENTICATION_ERROR', 'Invalid authentication code');
     }
 
@@ -254,6 +256,11 @@ export const mfaLogin = async (
       entityId: user.id,
       userId: user.id,
     });
+    // Phase 12.2 — record the login as success on the MFA branch too.
+    // The password-only branch records `success` inside `auth.service`;
+    // the MFA branch finalises here, so the counter increment lives
+    // alongside the audit row that marks the same outcome.
+    recordAuthLogin('success');
 
     res.json({
       success: true,

@@ -10,6 +10,8 @@ import {
 } from './middleware/security';
 import { requestId } from './middleware/requestId';
 import { httpLogger } from './middleware/httpLogger';
+import { metricsMiddleware } from './middleware/metrics';
+import { renderMetrics } from './lib/metrics';
 import healthRouter from './api/health/health.router';
 import { readiness } from './api/health/health.controller';
 import systemsRouter from './api/systems/systems.router';
@@ -55,8 +57,28 @@ export function createApp(): Express {
 
   app.use(requestId);
   app.use(httpLogger);
+  // Phase 12.2 — record HTTP request duration / count / in-flight on
+  // every request. Mounted early (before auth + rate-limit) so the
+  // metrics surface every observable request, including 401s and 429s.
+  // The route label collapses dynamic IDs via Express's matched route
+  // pattern; see middleware/metrics.ts for the cardinality posture.
+  app.use(metricsMiddleware);
   app.use(helmetMiddleware);
   app.use(cors({ origin: allowedOrigin, credentials: true }));
+
+  // Phase 12.2 — Prometheus scrape endpoint. Outside the `/api` mount
+  // so scrapers reach a stable, version-free path; outside the
+  // rate-limiter mounts so a 15-second scrape interval doesn't burn
+  // anonymous-tier quota. Production deployments expose this on a
+  // separate, internally-routed port (see RUNBOOK).
+  app.get('/metrics', async (_req, res, next) => {
+    try {
+      const body = await renderMetrics();
+      res.type('text/plain; version=0.0.4').send(body);
+    } catch (err) {
+      next(err);
+    }
+  });
 
   // Stripe webhook needs the unparsed body to verify the signature. The
   // raw-body parser MUST be registered before `express.json()` — otherwise

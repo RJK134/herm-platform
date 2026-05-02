@@ -211,15 +211,33 @@ export async function validateLogoutRequest(
  *
  * Returns undefined when the SAMLRequest is missing, can't be inflated,
  * or carries no NotOnOrAfter — the cache then uses the default TTL.
+ *
+ * Phase 11.16 (Copilot review on PR #80) — the regex now matches both
+ * double-quoted (`NotOnOrAfter="..."`) and single-quoted (`...='...'`)
+ * attribute styles. XML allows either; some IdPs emit single quotes,
+ * and the previous double-quote-only regex would silently fall back
+ * to the default 300s TTL for those, opening a window where node-saml
+ * still accepts the assertion but the replay cache has already
+ * expired.
+ *
+ * Exported for direct unit testing — the surrounding
+ * `validateLogoutRequest` integration tests mock node-saml and never
+ * exercise the inflate+regex path, so this is the only way to pin the
+ * contract.
  */
-async function extractNotOnOrAfter(query: Record<string, unknown>): Promise<string | undefined> {
+export async function extractNotOnOrAfter(
+  query: Record<string, unknown>,
+): Promise<string | undefined> {
   const samlRequestRaw = query['SAMLRequest'];
   if (typeof samlRequestRaw !== 'string' || !samlRequestRaw) return undefined;
   try {
     const buf = Buffer.from(samlRequestRaw, 'base64');
     const inflated = (await inflateRawAsync(buf)).toString('utf8');
-    const match = /\bNotOnOrAfter\s*=\s*"([^"]+)"/i.exec(inflated);
-    return match?.[1];
+    // Matches `NotOnOrAfter="..."` OR `NotOnOrAfter='...'`. Captures
+    // the value in either group 1 (double-quoted) or group 2 (single-
+    // quoted). Only one branch fires per match.
+    const match = /\bNotOnOrAfter\s*=\s*(?:"([^"]+)"|'([^']+)')/i.exec(inflated);
+    return match?.[1] ?? match?.[2];
   } catch {
     return undefined;
   }

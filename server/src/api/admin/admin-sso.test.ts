@@ -599,6 +599,87 @@ describe('PUT /api/admin/sso/me — OIDC cache invalidation', () => {
 
     expect(invalidateMock).not.toHaveBeenCalled();
   });
+
+  // ── Phase 11.16 — OIDC→SAML protocol-switch invalidation gap (Bugbot/Copilot on PR #82) ──
+  // Bug: the previous `if (row.protocol === 'OIDC')` guard skipped
+  // invalidation entirely when an admin switched an existing OIDC IdP
+  // to SAML. The old OIDC cache entry then survived for up to TTL_MS,
+  // so a re-create-as-OIDC inside that window would have surfaced
+  // stale config. The fix invalidates on EITHER side being OIDC.
+  it('invalidates the OLD key when switching protocol from OIDC to SAML (Phase 11.16)', async () => {
+    // existing row is OIDC; new row is SAML.
+    // The body intentionally omits secrets — `encryptSecret` throws
+    // without SSO_SECRET_KEY, and we don't need to exercise encryption
+    // to verify the invalidation block. The "keep existing secret"
+    // semantics make this a valid no-op-on-secrets update.
+    const oidcExisting = baseRow; // protocol: 'OIDC'
+    const samlNewRow = {
+      ...baseRow,
+      protocol: 'SAML' as const,
+      samlEntityId: 'urn:new',
+      samlSsoUrl: 'https://idp.new/sso',
+      samlCert: null,
+      oidcIssuer: null,
+      oidcClientId: null,
+      oidcClientSecret: null,
+    };
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(oidcExisting);
+    prismaMock.ssoIdentityProvider.update.mockResolvedValue(samlNewRow);
+
+    const res = await request(buildApp())
+      .put('/api/admin/sso/me')
+      .set('Authorization', `Bearer ${makeToken()}`)
+      .send({
+        protocol: 'SAML',
+        samlEntityId: 'urn:new',
+        samlSsoUrl: 'https://idp.new/sso',
+      });
+    expect(res.status).toBe(200);
+
+    // Exactly ONE invalidate call — the OLD OIDC key. The new SAML
+    // row has no OIDC fields so there's no new key to invalidate.
+    expect(invalidateMock).toHaveBeenCalledTimes(1);
+    expect(invalidateMock).toHaveBeenCalledWith({
+      oidcIssuer: oidcExisting.oidcIssuer,
+      oidcClientId: oidcExisting.oidcClientId,
+    });
+  });
+
+  it('invalidates the NEW key when switching protocol from SAML to OIDC (defensive)', async () => {
+    // existing row is SAML; new row is OIDC. wasOidc=false, isOidc=true.
+    // No old cache entry exists (SAML rows don't populate the OIDC
+    // cache), so only the defensive new-key invalidation fires.
+    // Body omits the secret for the same reason as the previous test.
+    const samlExisting = {
+      ...baseRow,
+      protocol: 'SAML' as const,
+      samlEntityId: 'urn:old',
+      samlSsoUrl: 'https://idp.old/sso',
+      samlCert: null,
+      oidcIssuer: null,
+      oidcClientId: null,
+      oidcClientSecret: null,
+    };
+    const oidcNewRow = baseRow; // protocol: 'OIDC' with full OIDC fields
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(samlExisting);
+    prismaMock.ssoIdentityProvider.update.mockResolvedValue(oidcNewRow);
+
+    const res = await request(buildApp())
+      .put('/api/admin/sso/me')
+      .set('Authorization', `Bearer ${makeToken()}`)
+      .send({
+        protocol: 'OIDC',
+        oidcIssuer: oidcNewRow.oidcIssuer,
+        oidcClientId: oidcNewRow.oidcClientId,
+      });
+    expect(res.status).toBe(200);
+
+    expect(invalidateMock).toHaveBeenCalledTimes(1);
+    expect(invalidateMock).toHaveBeenCalledWith({
+      oidcIssuer: oidcNewRow.oidcIssuer,
+      oidcClientId: oidcNewRow.oidcClientId,
+    });
+  });
 });
 
 describe('DELETE /api/admin/sso/me — OIDC cache invalidation', () => {
@@ -634,5 +715,94 @@ describe('DELETE /api/admin/sso/me — OIDC cache invalidation', () => {
       .set('Authorization', `Bearer ${makeToken()}`);
 
     expect(invalidateMock).not.toHaveBeenCalled();
+  });
+});
+
+// ── Phase 11.16 (L1) — read-side audit logging ─────────────────────────────
+//
+// SSO config reads were previously unaudited despite revealing sensitive
+// configuration (which IdPs each tenant has, against which issuers).
+// L1 adds audit calls on all three GET endpoints with action namespaces
+// `admin.sso.read_self` / `read_all` / `read_by_institution`.
+
+describe('admin SSO read auditing (L1)', () => {
+  function findAuditCall(action: string): Record<string, unknown> | undefined {
+    // The mock's typed args are `[]` because the inline `vi.fn(async () => ({}))`
+    // declaration in `prismaMock` gives TS no parameter info; widen via
+    // `as unknown[][]` so we can index into the call's first arg.
+    const calls = prismaMock.auditLog.create.mock.calls as unknown as unknown[][];
+    const call = calls.find(
+      (c) => ((c[0] as { data?: { action?: string } } | undefined)?.data?.action) === action,
+    );
+    return (call?.[0] as { data?: Record<string, unknown> } | undefined)?.data;
+  }
+
+  it('GET /me audits with admin.sso.read_self when an IdP row exists', async () => {
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(baseRow);
+    await request(buildApp())
+      .get('/api/admin/sso/me')
+      .set('Authorization', `Bearer ${makeToken()}`);
+    const data = findAuditCall('admin.sso.read_self');
+    expect(data).toBeDefined();
+    expect(data?.['entityId']).toBe(baseRow.id);
+    const changes = data?.['changes'] as { hasIdp: boolean; institutionId: string };
+    expect(changes.hasIdp).toBe(true);
+    expect(changes.institutionId).toBe('inst-1');
+  });
+
+  it('GET /me audits with hasIdp=false when no row exists (negative result is itself notable)', async () => {
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(null);
+    await request(buildApp())
+      .get('/api/admin/sso/me')
+      .set('Authorization', `Bearer ${makeToken()}`);
+    const data = findAuditCall('admin.sso.read_self');
+    expect(data).toBeDefined();
+    expect(data?.['entityId']).toBeNull();
+    const changes = data?.['changes'] as { hasIdp: boolean };
+    expect(changes.hasIdp).toBe(false);
+  });
+
+  it('GET /all audits with admin.sso.read_all + rowCount (highest-value cross-tenant read)', async () => {
+    const rowsWithInst = [
+      { ...baseRow, institution: { name: 'Uni One', slug: 'uni-1' } },
+      { ...baseRow, id: 'idp-2', institution: { name: 'Uni Two', slug: 'uni-2' } },
+    ];
+    prismaMock.ssoIdentityProvider.findMany.mockResolvedValue(rowsWithInst);
+    await request(buildApp())
+      .get('/api/admin/sso/all')
+      .set('Authorization', `Bearer ${makeToken({ role: 'SUPER_ADMIN' })}`);
+    const data = findAuditCall('admin.sso.read_all');
+    expect(data).toBeDefined();
+    const changes = data?.['changes'] as { rowCount: number };
+    expect(changes.rowCount).toBe(2);
+  });
+
+  it('GET /institutions/:id audits with admin.sso.read_by_institution + the queried institutionId', async () => {
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue({
+      ...baseRow,
+      institution: { name: 'Uni One', slug: 'uni-1' },
+    });
+    await request(buildApp())
+      .get('/api/admin/sso/institutions/inst-target')
+      .set('Authorization', `Bearer ${makeToken({ role: 'SUPER_ADMIN' })}`);
+    const data = findAuditCall('admin.sso.read_by_institution');
+    expect(data).toBeDefined();
+    expect(data?.['entityId']).toBe(baseRow.id);
+    const changes = data?.['changes'] as { hasIdp: boolean; institutionId: string };
+    expect(changes.institutionId).toBe('inst-target');
+    expect(changes.hasIdp).toBe(true);
+  });
+
+  it('GET /institutions/:id still audits when the institution has no IdP (negative read)', async () => {
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(null);
+    await request(buildApp())
+      .get('/api/admin/sso/institutions/inst-empty')
+      .set('Authorization', `Bearer ${makeToken({ role: 'SUPER_ADMIN' })}`);
+    const data = findAuditCall('admin.sso.read_by_institution');
+    expect(data).toBeDefined();
+    expect(data?.['entityId']).toBeNull();
+    const changes = data?.['changes'] as { hasIdp: boolean; institutionId: string };
+    expect(changes.hasIdp).toBe(false);
+    expect(changes.institutionId).toBe('inst-empty');
   });
 });

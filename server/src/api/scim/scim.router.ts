@@ -34,7 +34,7 @@ import { serviceProviderConfig, resourceTypes, schemas } from './scim.config.con
 const SCIM_PERMISSION = 'admin:scim';
 const API_KEY_PREFIX = 'herm_pk_';
 
-// ── Negative-cache LRU for SCIM bearer auth ────────────────────────────────
+// ── Negative-cache (FIFO) for SCIM bearer auth ─────────────────────────────
 //
 // Phase 11.15 hardening (M1). Each invalid bearer would otherwise hit
 // Postgres on every probe — combined with the fact that the SCIM mount
@@ -49,10 +49,19 @@ const API_KEY_PREFIX = 'herm_pk_';
 // hash quickly, then move on", so recency-of-access doesn't help much
 // over insertion-time. Keeps the implementation small (no LRU lib).
 //
-// Crucially, only NEGATIVE results are cached. A positive lookup
-// (valid key) goes through to Prisma every time so a key revocation
-// or expiry takes effect immediately. Caching positive results would
-// keep a revoked key alive for up to TTL, which is unacceptable.
+// Only NEGATIVE results are cached. A positive (accepted) lookup goes
+// through to Prisma every time so a key revocation or expiry takes
+// effect immediately on the next request. Caching positive results
+// would keep a revoked key alive for up to TTL, which is unacceptable.
+//
+// Phase 11.16 — negative results now include EVERY rejection case (no
+// row, inactive, expired, tenant soft-deleted), not just the "no row"
+// probe path. Caching only "no row" earlier opened a multi-request
+// timing oracle: an attacker could distinguish "invalid hash" (cache
+// hit on second probe → fast) from "valid hash, rejected" (cache miss
+// every time → DB round-trip). Admin-driven flips that move a hash
+// from rejected → accepted now take effect at the next request AFTER
+// the 30s cache TTL elapses; that tradeoff is intentional.
 const SCIM_NEGATIVE_CACHE_MAX = 256;
 const SCIM_NEGATIVE_CACHE_TTL_MS = 30_000;
 
@@ -126,12 +135,13 @@ async function scimApiKeyAuth(req: Request, res: Response, next: NextFunction): 
   try {
     const keyHash = crypto.createHash('sha256').update(token).digest('hex');
 
-    // Negative cache short-circuit. Only HASH-level misses are cached
-    // — a hash that hit the DB and resolved to an inactive/expired/
-    // tenant-deleted row is NOT cached (the row state can flip back
-    // to valid via admin action; we want that change visible at the
-    // next request, not after TTL). The cache exists purely to absorb
-    // probe storms with bogus tokens.
+    // Negative cache short-circuit. Phase 11.16 — every rejection case
+    // (no row / inactive / expired / tenant-deleted) is cached for
+    // SCIM_NEGATIVE_CACHE_TTL_MS so a multi-request timing oracle
+    // can't distinguish "invalid hash" from "valid hash but rejected".
+    // Admin-driven flips (revoke → restore, expiry extension, tenant
+    // un-delete) take effect at the next request AFTER the cache TTL
+    // elapses; the alternative is leaking which hashes hit a row.
     if (negativeCacheGet(keyHash)) {
       sendScimError(res, { status: 401, detail: 'API key required' });
       return;
@@ -168,11 +178,14 @@ async function scimApiKeyAuth(req: Request, res: Response, next: NextFunction): 
     const accepted = hasRow && isActive && notExpired && tenantLive;
 
     if (!accepted) {
-      // Cache only the "no matching row" case so admin-driven flips
-      // (revoke / restore tenant / extend expiry) take effect at the
-      // next request without waiting for TTL. A missing hash is the
-      // overwhelmingly common probe-storm path.
-      if (!hasRow) negativeCacheSet(keyHash);
+      // Phase 11.16 — cache EVERY rejection, not just "no row". Caching
+      // only the no-row branch left a timing oracle: an inactive /
+      // expired / tenant-deleted hash hit Prisma on every probe while
+      // a non-existent hash hit the cache after the first probe, so
+      // the second-probe latency distinguished the two classes. Trade
+      // a 30s window for revoke/restore/expiry-extension visibility
+      // for closure of that oracle.
+      negativeCacheSet(keyHash);
       sendScimError(res, { status: 401, detail: 'API key required' });
       return;
     }

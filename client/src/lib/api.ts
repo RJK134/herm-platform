@@ -75,7 +75,29 @@ export class ApiError extends Error {
   }
 }
 
-const client = axios.create({ baseURL: '/api', timeout: REQUEST_TIMEOUT_MS });
+// Base URL strategy:
+// - Dev / single-origin deploys: use the relative `/api` path so requests
+//   share the page's origin (Vite dev proxy in dev, single-host server in
+//   production-like setups).
+// - Split-origin deploys (Vercel SPA + Railway / Fly API): set
+//   `VITE_API_URL` at build time to the absolute API origin (no trailing
+//   slash, no `/api` suffix) — e.g. `https://herm-api.up.railway.app`.
+//   This lib appends `/api` to whatever you give it, so you only need to
+//   provide the bare origin.
+//
+// We also set `axios.defaults.baseURL` to the API origin so the SPA's
+// remaining raw-axios callers (AuthContext, Login SSO discovery,
+// NotificationBell, VendorPortal, etc.) inherit the right origin without
+// needing to be migrated to the shared `client`. They use absolute
+// `/api/...` paths that axios resolves against `defaults.baseURL`.
+export const VITE_API_URL = (import.meta.env['VITE_API_URL'] as string | undefined)?.replace(/\/+$/, '');
+const API_BASE_URL = VITE_API_URL ? `${VITE_API_URL}/api` : '/api';
+
+if (VITE_API_URL) {
+  axios.defaults.baseURL = VITE_API_URL;
+}
+
+const client = axios.create({ baseURL: API_BASE_URL, timeout: REQUEST_TIMEOUT_MS });
 
 // Attach JWT to every request if present
 client.interceptors.request.use((config) => {
