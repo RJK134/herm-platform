@@ -188,6 +188,44 @@ npm run demo:validate                         # all of the above + demo login
 Expect 200 for both. `readiness` flips to 503 on DB (or, when `REDIS_URL` is
 set, Redis) loss.
 
+## Metrics (Phase 12.2)
+
+Prometheus text-format metrics live at `GET /metrics` (mounted **outside** the
+`/api` namespace so scrapers reach a stable, version-free path). Every metric
+uses the `herm_` prefix. Defaults emitted by `prom-client.collectDefaultMetrics`
+cover Node.js runtime + process state (heap, GC, event loop lag, FD count, CPU).
+
+```bash
+curl -s http://localhost:3002/metrics | head -40
+```
+
+Application-level metrics emitted today:
+
+| Metric | Type | Labels | Notes |
+|---|---|---|---|
+| `herm_http_request_duration_seconds` | Histogram | `method`, `route`, `status` | RED-method latency. Buckets cover 5ms–10s. |
+| `herm_http_requests_total` | Counter | `method`, `route`, `status` | RED-method rate + errors. |
+| `herm_http_requests_in_flight` | Gauge | `method` | Saturation indicator. |
+| `herm_auth_login_total` | Counter | `outcome` | `success` / `bad_credentials` / `locked` / `mfa_required` / `mfa_failed`. |
+| `herm_sso_login_total` | Counter | `protocol`, `outcome` | `protocol`: `saml` / `oidc`. `outcome`: `success` / `validation_failure` / etc. **Never includes `institutionSlug`** (per ADR-0001 — would let an external observer enumerate which tenants have SSO configured). |
+
+Route labels collapse dynamic IDs via the matched Express route pattern
+(`/api/users/:id`), so cardinality stays bounded. Unmatched paths get the
+sentinel label `__not_found` rather than the raw URL.
+
+### Production exposure
+
+`/metrics` is **public on the application port** by default — protect it via
+network isolation, not auth. The scrape pattern is:
+
+- Run Prometheus inside the same VPC / k8s namespace; scrape over the internal
+  port. The public load balancer never routes to `/metrics`.
+- Or: front the app with an ingress that strips `/metrics` from the public
+  surface.
+
+Adding bearer-token auth to `/metrics` is on the deferred list. Until then,
+do not expose this path to the open internet.
+
 ## Logs
 
 All production logs are JSON lines. Every line carries `req.id` so you can
