@@ -80,7 +80,7 @@ describe('discoveryRateLimiter — wiring', () => {
     expect(res.status).toBe(200);
   });
 
-  it('the SSO router mounts the limiter on /discover and /:slug/discover (and only those)', async () => {
+  it('the SSO router mounts the limiter on /discover and /:institutionSlug/discover (and only those)', async () => {
     // Inspect the actual router so this test fails if the production
     // wiring in sso.router.ts changes. We do not need to execute any
     // controller logic; checking the route stack is enough to verify
@@ -100,7 +100,8 @@ describe('discoveryRateLimiter — wiring', () => {
     );
 
     expect(routeMiddlewareByPath.get('/discover')).toContain(discoveryRateLimiter);
-    // The actual route path uses `:institutionSlug` (see sso.router.ts).
+    // The actual route path uses the parameter name `:institutionSlug`
+    // (see sso.router.ts), not `:slug`.
     expect(routeMiddlewareByPath.get('/:institutionSlug/discover')).toContain(discoveryRateLimiter);
     expect(routeMiddlewareByPath.get('/sp-metadata.xml') ?? []).not.toContain(discoveryRateLimiter);
   });
