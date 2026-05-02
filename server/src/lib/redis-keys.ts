@@ -32,7 +32,7 @@ export const RedisKeys = {
   sessionByJti: (jti: string): string => `${SESSION_PREFIX}:jti:${jti}`,
   /** Revocation marker keyed by jti. Presence means revoked. */
   sessionRevoked: (jti: string): string => `${SESSION_PREFIX}:revoked:${jti}`,
-  /** Reverse index: institutionId+nameId → set of jtis, for SAML SLO. */
+  /** Reverse index: institutionId+nameId → set of jti values, for SAML SLO. */
   sessionByNameId: (institutionId: string, nameId: string): string =>
     `${SESSION_PREFIX}:nameid:${institutionId}:${nameId}`,
 
