@@ -9,11 +9,8 @@
 --
 -- The column is nullable; Postgres' default B-tree index handles NULL
 -- values efficiently (they're stored at the end of the index and skipped
--- on equality scans). No CONCURRENTLY clause because Prisma's migration
--- runner does not support transaction-less DDL — production deployments
--- with high write volume on the Institution table should run this manually
--- with CONCURRENTLY ahead of the deploy. The Institution table sees
--- write traffic only on tenant onboarding / soft-delete cascade, so the
--- in-transaction lock is unlikely to matter in practice.
+-- on equality scans). The Institution table sees write traffic only on
+-- tenant onboarding / soft-delete cascade, so the in-transaction lock
+-- this migration takes is short and uncontended in practice.
 
 CREATE INDEX "Institution_domain_idx" ON "Institution"("domain");

@@ -135,8 +135,17 @@ export const discoverByEmail = async (
     if (!domain) {
       throw new AppError(400, 'VALIDATION_ERROR', 'email missing domain');
     }
+    // Phase 11.16 (Copilot review on PR #85) — explicit ordering. The
+    // `domain` column is non-unique; with the new `@@index([domain])`
+    // the planner may pick a different first row than the seq-scan
+    // baseline did, sending a user to the wrong tenant for duplicate-
+    // domain rows. Sorting by `createdAt` makes the chosen row stable
+    // regardless of plan choice. (The ordering bug exists pre-index
+    // too — discovery just appeared deterministic because seq-scan
+    // happened to follow physical row order.)
     const institution = await prisma.institution.findFirst({
       where: { domain },
+      orderBy: { createdAt: 'asc' },
       select: { slug: true },
     });
     if (!institution) {
