@@ -13,4 +13,4 @@
 -- tenant onboarding / soft-delete cascade, so the in-transaction lock
 -- this migration takes is short and uncontended in practice.
 
-CREATE INDEX "Institution_domain_idx" ON "Institution"("domain");
+CREATE INDEX IF NOT EXISTS "Institution_domain_idx" ON "Institution"("domain");
