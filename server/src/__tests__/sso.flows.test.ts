@@ -862,3 +862,106 @@ describe('POST /api/auth/login refuses passwordLoginDisabled accounts', () => {
     expect(res.body.error.message).toBe('Invalid email or password');
   });
 });
+
+// ── Phase 11.16 — OIDC config cache invalidates on client_secret rotation ──
+
+describe('OIDC config cache (Phase 11.16)', () => {
+  // The cache key includes a fingerprint of the client_secret so a
+  // rotation (same issuer + same clientId, new secret) doesn't keep
+  // serving the old cached Configuration for up to TTL_MS. We assert
+  // this by mocking `oidc.discovery` and watching the call count
+  // change when the secret changes.
+  //
+  // PR #75 changed resolveSsoForFlow to read via
+  // `prisma.ssoIdentityProvider.findFirst` directly (with the
+  // institution joined in). Tests mock that one call.
+
+  function fakeIdpRow(over: Partial<{ id: string; oidcClientId: string; oidcClientSecret: string; oidcIssuer: string }> = {}) {
+    return {
+      id: over.id ?? 'idp-1',
+      institutionId: 'inst-1',
+      protocol: 'OIDC',
+      enabled: true,
+      displayName: 'X',
+      samlEntityId: null,
+      samlSsoUrl: null,
+      samlCert: null,
+      oidcIssuer: over.oidcIssuer ?? 'https://idp.uni.test',
+      oidcClientId: over.oidcClientId ?? 'client-1',
+      oidcClientSecret: over.oidcClientSecret ?? 'secret-1',
+      jitProvisioning: true,
+      defaultRole: 'VIEWER',
+      priority: 100,
+      institution: {
+        id: 'inst-1',
+        slug: 'uni-1',
+        name: 'Uni',
+        subscription: { tier: 'ENTERPRISE' },
+      },
+    };
+  }
+
+  beforeEach(() => {
+    __resetOidcConfigCacheForTests();
+    oidcMock.discovery.mockReset();
+    oidcMock.discovery.mockResolvedValue({} as unknown);
+    oidcMock.buildAuthorizationUrl.mockReset();
+    oidcMock.buildAuthorizationUrl.mockReturnValue(
+      new URL('https://idp.uni.test/authorize?state=state-test'),
+    );
+  });
+
+  it('serves the same Configuration on repeated requests with unchanged credentials', async () => {
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(fakeIdpRow());
+    await request(buildApp()).get('/api/sso/uni-1/login');
+    await request(buildApp()).get('/api/sso/uni-1/login');
+    expect(oidcMock.discovery).toHaveBeenCalledTimes(1);
+  });
+
+  it('rediscovers when the client_secret is rotated (cache invalidates)', async () => {
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValueOnce(fakeIdpRow({ oidcClientSecret: 'secret-1' }));
+    await request(buildApp()).get('/api/sso/uni-1/login');
+    expect(oidcMock.discovery).toHaveBeenCalledTimes(1);
+
+    // Operator rotates the IdP's client_secret. Same issuer + clientId,
+    // new secret. Without the secret-fingerprint in the cache key, the
+    // second request would short-circuit on the stale cache and use
+    // the old secret on token exchange — failing every callback for
+    // the next hour. With the fingerprint, the cache misses and
+    // rediscovery happens with the fresh secret.
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValueOnce(fakeIdpRow({ oidcClientSecret: 'rotated-secret-xyz' }));
+    await request(buildApp()).get('/api/sso/uni-1/login');
+    expect(oidcMock.discovery).toHaveBeenCalledTimes(2);
+    // The discovery call's third positional arg is the client secret.
+    const lastCall = oidcMock.discovery.mock.calls[1] as unknown as [URL, string, string];
+    expect(lastCall[2]).toBe('rotated-secret-xyz');
+  });
+
+  it('serves distinct Configurations for two IdPs on the same issuer with different secrets (Bugbot HIGH on PR #75)', async () => {
+    // Two Azure AD apps in the same Entra tenant: same issuer URL,
+    // different clientId + secret. Cache must keep them separate.
+    prismaMock.ssoIdentityProvider.findFirst.mockImplementation(((args: unknown) => {
+      const a = args as { where?: { id?: string } };
+      const wantId = a.where?.id;
+      return Promise.resolve(
+        wantId === 'idp-b'
+          ? fakeIdpRow({ id: 'idp-b', oidcClientId: 'client-b', oidcClientSecret: 'secret-b' })
+          : fakeIdpRow({ id: 'idp-a', oidcClientId: 'client-a', oidcClientSecret: 'secret-a' }),
+      ) as unknown;
+    }) as never);
+
+    await request(buildApp()).get('/api/sso/uni-1/login?idpId=idp-a');
+    await request(buildApp()).get('/api/sso/uni-1/login?idpId=idp-b');
+    // Two distinct cache entries (one per (issuer, clientId, fp))
+    // → two discovery calls. If the cache collapsed them, only one
+    // call would happen and the second flow would use the wrong
+    // client_secret.
+    expect(oidcMock.discovery).toHaveBeenCalledTimes(2);
+    const callA = oidcMock.discovery.mock.calls[0] as unknown as [URL, string, string];
+    const callB = oidcMock.discovery.mock.calls[1] as unknown as [URL, string, string];
+    expect(callA[1]).toBe('client-a');
+    expect(callA[2]).toBe('secret-a');
+    expect(callB[1]).toBe('client-b');
+    expect(callB[2]).toBe('secret-b');
+  });
+});
