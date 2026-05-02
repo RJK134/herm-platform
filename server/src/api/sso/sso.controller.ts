@@ -53,6 +53,7 @@ import { peekFlowState } from './flow-store';
 import { computeReplayTtlSeconds, recordSloRequest } from './slo-replay-cache';
 import { resolveSsoForFlow, completeSsoSignIn, listEnabledIdpsForSlug } from './sso.service';
 import { getSpSigningMaterial } from '../../lib/sp-signing';
+import { recordSsoLogin } from '../../lib/metrics';
 
 // ── Discovery ──────────────────────────────────────────────────────────────
 
@@ -339,11 +340,13 @@ export const samlAcs = async (req: Request, res: Response, next: NextFunction): 
         entityId: idp.id,
         changes: { protocol: 'SAML', reason: 'validation_failed' },
       });
+      recordSsoLogin('saml', 'validation_failure');
       res.redirect(failureRedirect());
       return;
     }
 
     const token = await completeSsoSignIn(req, idp, assertion);
+    recordSsoLogin('saml', 'success');
     res.redirect(getFrontendSsoCallbackUrl(token));
   } catch (err) {
     next(err);
@@ -408,11 +411,13 @@ export const oidcCallback = async (
         entityId: idp.id,
         changes: { protocol: 'OIDC', reason: 'validation_failed' },
       });
+      recordSsoLogin('oidc', 'validation_failure');
       res.redirect(failureRedirect());
       return;
     }
 
     const token = await completeSsoSignIn(req, idp, assertion);
+    recordSsoLogin('oidc', 'success');
     res.redirect(getFrontendSsoCallbackUrl(token));
   } catch (err) {
     next(err);

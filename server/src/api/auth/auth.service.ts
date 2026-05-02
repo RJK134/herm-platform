@@ -4,6 +4,7 @@ import { generateToken, type JwtPayload } from '../../middleware/auth';
 import { AppError, ConflictError } from '../../utils/errors';
 import type { RegisterInput, LoginInput } from './auth.schema';
 import { checkLockout, recordFailure, clearFailures, AccountLockedError } from '../../lib/lockout';
+import { recordAuthLogin } from '../../lib/metrics';
 import { generateMfaChallengeToken } from '../../lib/mfa';
 
 // Pre-computed bcrypt hash used when the email doesn't exist in the database.
@@ -97,6 +98,7 @@ export class AuthService {
     // bypass the counter.
     const lockState = await checkLockout(data.email);
     if (lockState.locked) {
+      recordAuthLogin('locked');
       throw new AccountLockedError(Math.ceil(lockState.retryAfterMs / 1000));
     }
 
@@ -129,6 +131,7 @@ export class AuthService {
       if (!user) {
         await recordFailure(data.email);
       }
+      recordAuthLogin('bad_credentials');
       throw new AppError(401, 'AUTHENTICATION_ERROR', 'Invalid email or password');
     }
 
@@ -152,17 +155,21 @@ export class AuthService {
       if (!valid) {
         const post = await recordFailure(data.email);
         if (post.locked) {
+          recordAuthLogin('locked');
           throw new AccountLockedError(Math.ceil(post.retryAfterMs / 1000), true);
         }
       }
+      recordAuthLogin('bad_credentials');
       throw new AppError(401, 'AUTHENTICATION_ERROR', 'Invalid email or password');
     }
 
     if (!valid) {
       const post = await recordFailure(data.email);
       if (post.locked) {
+        recordAuthLogin('locked');
         throw new AccountLockedError(Math.ceil(post.retryAfterMs / 1000), true);
       }
+      recordAuthLogin('bad_credentials');
       throw new AppError(401, 'AUTHENTICATION_ERROR', 'Invalid email or password');
     }
 
@@ -183,6 +190,7 @@ export class AuthService {
     // client must POST it to /api/auth/mfa/login with a TOTP code to
     // exchange for a real session.
     if (user.mfaEnabledAt) {
+      recordAuthLogin('mfa_required');
       return {
         requiresMfa: true as const,
         challengeToken: generateMfaChallengeToken(user.id),
@@ -199,6 +207,7 @@ export class AuthService {
       tier,
     };
 
+    recordAuthLogin('success');
     return { token: generateToken(payload), user: payload };
   }
 
