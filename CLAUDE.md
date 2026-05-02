@@ -140,7 +140,6 @@ Every process-local `Map`-based cache must have:
    true LRU touch (delete + reinsert on hit) when the workload has hot keys.
 
 Examples: `server/src/api/sso/oidc.ts` (LRU, OIDC config),
-`server/src/middleware/auth.ts` (FIFO, soft-delete revocation),
 `server/src/api/scim/scim.router.ts` (FIFO, negative auth cache).
 
 ### Redis key namespaces
