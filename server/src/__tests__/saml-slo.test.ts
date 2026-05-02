@@ -35,17 +35,18 @@ vi.mock('@node-saml/node-saml', () => ({
   ValidateInResponseTo: { never: 'never' },
 }));
 
-const { findUniqueMock, ssoFindUniqueMock, ssoFindFirstMock, auditCreateMock, userFindUniqueMock } = vi.hoisted(() => ({
-  findUniqueMock: vi.fn(),
-  ssoFindUniqueMock: vi.fn(),
-  // Phase 11.13 follow-up — `resolveSsoForFlow` now reads the IdP via
-  // `ssoIdentityProvider.findFirst` directly. Tests need to mock that
-  // alongside the legacy `institution.findUnique` (still used for
-  // discovery via `listEnabledIdpsForSlug`).
-  ssoFindFirstMock: vi.fn(),
-  auditCreateMock: vi.fn(),
-  userFindUniqueMock: vi.fn(),
-}));
+const { findUniqueMock, ssoFindUniqueMock, ssoFindFirstMock, auditCreateMock, userFindUniqueMock } =
+  vi.hoisted(() => ({
+    findUniqueMock: vi.fn(),
+    ssoFindUniqueMock: vi.fn(),
+    // Phase 11.13 follow-up — `resolveSsoForFlow` now reads the IdP via
+    // `ssoIdentityProvider.findFirst` directly. Tests need to mock that
+    // alongside the legacy `institution.findUnique` (still used for
+    // discovery via `listEnabledIdpsForSlug`).
+    ssoFindFirstMock: vi.fn(),
+    auditCreateMock: vi.fn(),
+    userFindUniqueMock: vi.fn(),
+  }));
 vi.mock('../utils/prisma', () => ({
   default: {
     institution: { findUnique: findUniqueMock },
@@ -55,12 +56,14 @@ vi.mock('../utils/prisma', () => ({
   },
 }));
 
-const { revokeBySamlSubjectMock, recordSessionMock, revokeSessionMock, isRevokedMock } = vi.hoisted(() => ({
-  revokeBySamlSubjectMock: vi.fn(),
-  recordSessionMock: vi.fn(),
-  revokeSessionMock: vi.fn(),
-  isRevokedMock: vi.fn(),
-}));
+const { revokeBySamlSubjectMock, recordSessionMock, revokeSessionMock, isRevokedMock } = vi.hoisted(
+  () => ({
+    revokeBySamlSubjectMock: vi.fn(),
+    recordSessionMock: vi.fn(),
+    revokeSessionMock: vi.fn(),
+    isRevokedMock: vi.fn(),
+  }),
+);
 vi.mock('../lib/session-store', () => ({
   revokeBySamlSubject: revokeBySamlSubjectMock,
   recordSession: recordSessionMock,
@@ -75,6 +78,7 @@ import ssoRouter from '../api/sso/sso.router';
 import authRouter from '../api/auth/auth.router';
 import { errorHandler } from '../middleware/errorHandler';
 import { optionalJWT } from '../middleware/auth';
+import { __resetSloReplayCacheForTests } from '../api/sso/slo-replay-cache';
 
 // `vitest.config.ts` sets `fileParallelism: false`, so a module-scope
 // mutation of `process.env` would leak into later test files. Use
@@ -104,7 +108,8 @@ const ENTERPRISE_IDP_ROW = {
   displayName: 'Acme SAML',
   samlEntityId: 'https://idp.acme.test/saml',
   samlSsoUrl: 'https://idp.acme.test/sso',
-  samlCert: '-----BEGIN CERTIFICATE-----\nMIIDazCCAlOgAwIBAgIUaaaaaaaaaaaaaaaaaaaaaaaa\n-----END CERTIFICATE-----',
+  samlCert:
+    '-----BEGIN CERTIFICATE-----\nMIIDazCCAlOgAwIBAgIUaaaaaaaaaaaaaaaaaaaaaaaa\n-----END CERTIFICATE-----',
   oidcIssuer: null,
   oidcClientId: null,
   oidcClientSecret: null,
@@ -148,6 +153,9 @@ beforeEach(() => {
   auditCreateMock.mockResolvedValue({});
   recordSessionMock.mockResolvedValue(undefined);
   revokeSessionMock.mockResolvedValue(undefined);
+  // Phase 11.15 — clear the SLO replay cache so a `requestId` reused
+  // across tests doesn't trip on a stale entry.
+  __resetSloReplayCacheForTests();
 });
 
 describe('GET /api/sso/:slug/saml/slo (IdP-initiated SLO)', () => {
@@ -156,6 +164,7 @@ describe('GET /api/sso/:slug/saml/slo (IdP-initiated SLO)', () => {
     ssoFindFirstMock.mockResolvedValue(ENTERPRISE_IDP_ROW);
     samlInstance.validateRedirectAsync.mockResolvedValue({
       profile: {
+        ID: '_logout-req-1',
         nameID: 'alice@acme.test',
         sessionIndex: 'idx-42',
       },
@@ -195,6 +204,50 @@ describe('GET /api/sso/:slug/saml/slo (IdP-initiated SLO)', () => {
       (c) => (c[0]?.data?.action as string) === 'auth.sso.slo_fail',
     );
     expect(auditCall).toBeDefined();
+  });
+
+  it('rejects a replayed LogoutRequest with the same generic SLO failure response (Phase 11.15 H2)', async () => {
+    // node-saml verifies the redirect-binding signature on every request
+    // but does not consume the `ID`; an attacker who captures one signed
+    // SLO redirect would otherwise be able to replay it indefinitely.
+    // The replay cache binds (institutionId, requestId) on first sight
+    // so a duplicate 302s to /login?error=sso_failed via the SAME path
+    // as a signature failure — never echoing "already replayed".
+    ssoFindFirstMock.mockResolvedValue(ENTERPRISE_IDP_ROW);
+    samlInstance.validateRedirectAsync.mockResolvedValue({
+      profile: {
+        ID: '_replayed-id',
+        nameID: 'alice@acme.test',
+        sessionIndex: 'idx-42',
+      },
+      loggedOut: true,
+    });
+    revokeBySamlSubjectMock.mockResolvedValue(1);
+
+    // First request — succeeds.
+    const first = await request(buildApp()).get(
+      '/api/sso/acme/saml/slo?SAMLRequest=base64encoded&SigAlg=rsa-sha256&Signature=sigvalue',
+    );
+    expect(first.status).toBe(302);
+    expect(first.headers.location).toBe('https://app.herm.test/login?logged_out=sso');
+    expect(revokeBySamlSubjectMock).toHaveBeenCalledTimes(1);
+
+    // Second (identical) request — replay rejected. Generic failure
+    // response is indistinguishable from a signature error.
+    const second = await request(buildApp()).get(
+      '/api/sso/acme/saml/slo?SAMLRequest=base64encoded&SigAlg=rsa-sha256&Signature=sigvalue',
+    );
+    expect(second.status).toBe(302);
+    expect(second.headers.location).toBe('https://app.herm.test/login?error=sso_failed');
+    // No additional revocation issued — replay must not extend the original effect.
+    expect(revokeBySamlSubjectMock).toHaveBeenCalledTimes(1);
+
+    const sloFailCall = auditCreateMock.mock.calls.find(
+      (c) =>
+        (c[0]?.data?.action as string) === 'auth.sso.slo_fail' &&
+        (c[0]?.data?.changes as Record<string, unknown>)?.['reason'] === 'replay',
+    );
+    expect(sloFailCall).toBeDefined();
   });
 
   it('returns 404 SSO_NOT_CONFIGURED for an unknown institution slug', async () => {

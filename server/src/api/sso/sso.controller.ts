@@ -48,12 +48,9 @@ import {
   type TenantSamlConfig,
 } from './saml';
 import { revokeBySamlSubject } from '../../lib/session-store';
-import {
-  buildOidcAuthorizeUrl,
-  completeOidcCallback,
-  type TenantOidcConfig,
-} from './oidc';
+import { buildOidcAuthorizeUrl, completeOidcCallback, type TenantOidcConfig } from './oidc';
 import { peekFlowState } from './flow-store';
+import { computeReplayTtlSeconds, recordSloRequest } from './slo-replay-cache';
 import { resolveSsoForFlow, completeSsoSignIn, listEnabledIdpsForSlug } from './sso.service';
 import { getSpSigningMaterial } from '../../lib/sp-signing';
 
@@ -67,9 +64,9 @@ import { getSpSigningMaterial } from '../../lib/sp-signing';
  * Frontends that haven't been updated keep working; the new chooser
  * UI consumes `options[]`.
  */
-function pickPrimary<T extends { id: string; protocol: string; displayName: string; priority: number }>(
-  options: T[],
-): T | null {
+function pickPrimary<
+  T extends { id: string; protocol: string; displayName: string; priority: number },
+>(options: T[]): T | null {
   return options[0] ?? null;
 }
 
@@ -122,9 +119,15 @@ export const discover = async (req: Request, res: Response, next: NextFunction):
  * Anonymous. Reveals only "is SSO available for this domain" —
  * the same information visible from the institution's own login page.
  */
-export const discoverByEmail = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const discoverByEmail = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   try {
-    const email = String(req.query['email'] ?? '').trim().toLowerCase();
+    const email = String(req.query['email'] ?? '')
+      .trim()
+      .toLowerCase();
     if (!email.includes('@')) {
       throw new AppError(400, 'VALIDATION_ERROR', 'email query parameter required');
     }
@@ -137,19 +140,11 @@ export const discoverByEmail = async (req: Request, res: Response, next: NextFun
       select: { slug: true },
     });
     if (!institution) {
-      throw new AppError(
-        404,
-        'SSO_NOT_CONFIGURED',
-        'No SSO configured for this email domain.',
-      );
+      throw new AppError(404, 'SSO_NOT_CONFIGURED', 'No SSO configured for this email domain.');
     }
     const options = await listEnabledIdpsForSlug(institution.slug);
     if (options.length === 0) {
-      throw new AppError(
-        404,
-        'SSO_NOT_CONFIGURED',
-        'No SSO configured for this email domain.',
-      );
+      throw new AppError(404, 'SSO_NOT_CONFIGURED', 'No SSO configured for this email domain.');
     }
     const primary = pickPrimary(options)!;
     res.json({
@@ -348,7 +343,11 @@ export const samlAcs = async (req: Request, res: Response, next: NextFunction): 
 
 // ── OIDC callback ──────────────────────────────────────────────────────────
 
-export const oidcCallback = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const oidcCallback = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   try {
     const { institutionSlug } = req.params;
     if (!institutionSlug) {
@@ -442,8 +441,18 @@ function failureRedirect(): string {
  * validation. Most multi-IdP tenants use SAML+OIDC, not SAML+SAML, so
  * the gap rarely bites.
  *
+ * Phase 11.15 — replay protection. node-saml verifies the
+ * redirect-binding signature but does not consume the LogoutRequest's
+ * ID, so an attacker who passively captures one signed SLO redirect
+ * could replay it to revoke the victim's sessions on each retry. We
+ * key a per-institution replay cache on the LogoutRequest's `ID`
+ * attribute (TTL bounded by NotOnOrAfter when present, default 300s)
+ * and reject duplicates with the same generic failure response —
+ * never echoing "already replayed" or any other distinguishing
+ * message that would help an attacker calibrate.
+ *
  * Failures audit `auth.sso.slo_fail` and 302 to the frontend without
- * leaking the underlying error (signature / NameID / etc).
+ * leaking the underlying error (signature / NameID / replay / etc).
  */
 export const samlSlo = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -464,7 +473,7 @@ export const samlSlo = async (req: Request, res: Response, next: NextFunction): 
 
     const originalQuery = req.url.includes('?') ? req.url.split('?')[1]! : '';
 
-    let parsed: { nameId: string; sessionIndex?: string };
+    let parsed: { nameId: string; sessionIndex?: string; requestId: string; notOnOrAfter?: string };
     try {
       parsed = await validateLogoutRequest(
         institutionSlug,
@@ -487,7 +496,30 @@ export const samlSlo = async (req: Request, res: Response, next: NextFunction): 
       return;
     }
 
-    const revoked = await revokeBySamlSubject(idp.institutionId, parsed.nameId, parsed.sessionIndex);
+    // Replay protection: claim the LogoutRequest's ID before doing any
+    // session work. A duplicate replay loses the SETNX race and
+    // 302s to the same generic failure path as a signature error —
+    // we deliberately never differentiate "replayed" from "invalid"
+    // in the response so probes can't enumerate which IDs we've seen.
+    const ttlSeconds = computeReplayTtlSeconds(parsed.notOnOrAfter);
+    const claimed = await recordSloRequest(idp.institutionId, parsed.requestId, ttlSeconds);
+    if (!claimed) {
+      logger.warn({ institutionSlug, requestId: parsed.requestId }, 'sso.saml.slo replay rejected');
+      await audit(req, {
+        action: 'auth.sso.slo_fail',
+        entityType: 'SsoIdentityProvider',
+        entityId: idp.id,
+        changes: { reason: 'replay' },
+      });
+      res.redirect(failureRedirect());
+      return;
+    }
+
+    const revoked = await revokeBySamlSubject(
+      idp.institutionId,
+      parsed.nameId,
+      parsed.sessionIndex,
+    );
 
     await audit(req, {
       action: 'auth.sso.slo_success',
