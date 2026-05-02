@@ -31,6 +31,18 @@ interface CachedConfig {
   fetchedAt: number;
 }
 const TTL_MS = 60 * 60 * 1000;
+
+/**
+ * Bounded cache size cap. Keeps memory bounded even under pathological
+ * rotation patterns where every secret rotation creates a new entry
+ * (the fingerprint in the cache key changes, so the old entry would
+ * otherwise live until TTL eviction on access — never, if no one
+ * looks it up again). 256 is comfortably above the IdP count we'd
+ * expect any single deployment to host (most deployments have a few
+ * dozen at most), and small enough that the LRU sweep on overflow is
+ * trivially cheap.
+ */
+const MAX_CACHE_SIZE = 256;
 const configCache = new Map<string, CachedConfig>();
 
 /**
@@ -51,19 +63,49 @@ const configCache = new Map<string, CachedConfig>();
  * enough to keep the key small, long enough to make collisions
  * practically impossible, and never reveals the raw secret in any
  * cache-debug log line.
+ *
+ * Phase 11.16 (Copilot review on PR #82) — issuer and clientId are
+ * URL-encoded before joining with `|`. Without encoding, a clientId
+ * that contains a literal `|` (rare but allowed) would let prefix
+ * invalidation accidentally evict unrelated cache entries: e.g.
+ * invalidating `{issuer, clientId='foo'}` would also match a cache
+ * entry for `{issuer, clientId='foo|bar'}`. encodeURIComponent emits
+ * `%7C` for `|`, so the delimiter in the joined key is unambiguous.
+ * The fingerprint is hex (`[0-9a-f]+`) and needs no encoding.
  */
 function configCacheKey(idp: TenantOidcConfig): string {
   const secretFingerprint = createHash('sha256')
     .update(idp.oidcClientSecret)
     .digest('hex')
     .slice(0, 16);
-  return `${idp.oidcIssuer}|${idp.oidcClientId}|${secretFingerprint}`;
+  return `${encodeURIComponent(idp.oidcIssuer)}|${encodeURIComponent(idp.oidcClientId)}|${secretFingerprint}`;
+}
+
+/**
+ * Walk the cache and drop entries older than TTL. Cheap (the cache is
+ * size-bounded by MAX_CACHE_SIZE) and called opportunistically before
+ * any new write so orphaned entries from rotated secrets don't survive
+ * indefinitely. Without this, the lazy TTL check in `getConfig` only
+ * fires on lookup of the same key — a key that's been rotated away
+ * from is never looked up again, so its entry would persist until
+ * process restart.
+ */
+function pruneExpired(now: number): void {
+  for (const [k, v] of configCache) {
+    if (now - v.fetchedAt >= TTL_MS) configCache.delete(k);
+  }
 }
 
 async function getConfig(idp: TenantOidcConfig): Promise<oidc.Configuration> {
   const cacheKey = configCacheKey(idp);
+  const now = Date.now();
   const hit = configCache.get(cacheKey);
-  if (hit && Date.now() - hit.fetchedAt < TTL_MS) {
+  if (hit && now - hit.fetchedAt < TTL_MS) {
+    // LRU touch: re-insert so this entry moves to the back of Map's
+    // insertion order. On subsequent capacity-overflow eviction the
+    // recently-used entry is preserved.
+    configCache.delete(cacheKey);
+    configCache.set(cacheKey, hit);
     return hit.config;
   }
   const issuerUrl = new URL(idp.oidcIssuer);
@@ -81,7 +123,15 @@ async function getConfig(idp: TenantOidcConfig): Promise<oidc.Configuration> {
     undefined,
     allowInsecure ? { execute: [oidc.allowInsecureRequests] } : undefined,
   );
-  configCache.set(cacheKey, { config, fetchedAt: Date.now() });
+  // Active eviction before any growth: drop expired entries first, then
+  // LRU-evict the oldest if we're still over the cap.
+  pruneExpired(now);
+  while (configCache.size >= MAX_CACHE_SIZE) {
+    const oldest = configCache.keys().next().value;
+    if (oldest === undefined) break;
+    configCache.delete(oldest);
+  }
+  configCache.set(cacheKey, { config, fetchedAt: now });
   return config;
 }
 
@@ -192,6 +242,13 @@ export async function completeOidcCallback(
  * both the issuer/clientId-rotation case and the delete case where the
  * exact secret is no longer known.
  *
+ * Phase 11.16 (Copilot review on PR #82) — issuer and clientId are
+ * URL-encoded into the cache key, so the prefix used for matching is
+ * also URL-encoded. Without this, a clientId of `foo` would erroneously
+ * evict cache entries whose clientId was `foo|bar` (delimiter
+ * collision). With encoding, the encoded `|` in the entry key is
+ * `%7C`, so an unrelated clientId can't be matched.
+ *
  * Returns whether at least one entry was actually removed — useful for
  * tests and metrics, but callers don't need to care in production.
  *
@@ -209,7 +266,7 @@ export function invalidateOidcConfigCacheByKey(args: {
   oidcClientId: string | null | undefined;
 }): boolean {
   if (!args.oidcIssuer || !args.oidcClientId) return false;
-  const prefix = `${args.oidcIssuer}|${args.oidcClientId}|`;
+  const prefix = `${encodeURIComponent(args.oidcIssuer)}|${encodeURIComponent(args.oidcClientId)}|`;
   let removed = false;
   for (const key of configCache.keys()) {
     if (key.startsWith(prefix)) {
@@ -223,4 +280,9 @@ export function invalidateOidcConfigCacheByKey(args: {
 /** Test hook: drop the in-memory discovery-config cache. */
 export function __resetOidcConfigCacheForTests(): void {
   configCache.clear();
+}
+
+/** Test hook: read current cache size for assertions. */
+export function __oidcConfigCacheSizeForTests(): number {
+  return configCache.size;
 }

@@ -599,6 +599,87 @@ describe('PUT /api/admin/sso/me — OIDC cache invalidation', () => {
 
     expect(invalidateMock).not.toHaveBeenCalled();
   });
+
+  // ── Phase 11.16 — OIDC→SAML protocol-switch invalidation gap (Bugbot/Copilot on PR #82) ──
+  // Bug: the previous `if (row.protocol === 'OIDC')` guard skipped
+  // invalidation entirely when an admin switched an existing OIDC IdP
+  // to SAML. The old OIDC cache entry then survived for up to TTL_MS,
+  // so a re-create-as-OIDC inside that window would have surfaced
+  // stale config. The fix invalidates on EITHER side being OIDC.
+  it('invalidates the OLD key when switching protocol from OIDC to SAML (Phase 11.16)', async () => {
+    // existing row is OIDC; new row is SAML.
+    // The body intentionally omits secrets — `encryptSecret` throws
+    // without SSO_SECRET_KEY, and we don't need to exercise encryption
+    // to verify the invalidation block. The "keep existing secret"
+    // semantics make this a valid no-op-on-secrets update.
+    const oidcExisting = baseRow; // protocol: 'OIDC'
+    const samlNewRow = {
+      ...baseRow,
+      protocol: 'SAML' as const,
+      samlEntityId: 'urn:new',
+      samlSsoUrl: 'https://idp.new/sso',
+      samlCert: null,
+      oidcIssuer: null,
+      oidcClientId: null,
+      oidcClientSecret: null,
+    };
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(oidcExisting);
+    prismaMock.ssoIdentityProvider.update.mockResolvedValue(samlNewRow);
+
+    const res = await request(buildApp())
+      .put('/api/admin/sso/me')
+      .set('Authorization', `Bearer ${makeToken()}`)
+      .send({
+        protocol: 'SAML',
+        samlEntityId: 'urn:new',
+        samlSsoUrl: 'https://idp.new/sso',
+      });
+    expect(res.status).toBe(200);
+
+    // Exactly ONE invalidate call — the OLD OIDC key. The new SAML
+    // row has no OIDC fields so there's no new key to invalidate.
+    expect(invalidateMock).toHaveBeenCalledTimes(1);
+    expect(invalidateMock).toHaveBeenCalledWith({
+      oidcIssuer: oidcExisting.oidcIssuer,
+      oidcClientId: oidcExisting.oidcClientId,
+    });
+  });
+
+  it('invalidates the NEW key when switching protocol from SAML to OIDC (defensive)', async () => {
+    // existing row is SAML; new row is OIDC. wasOidc=false, isOidc=true.
+    // No old cache entry exists (SAML rows don't populate the OIDC
+    // cache), so only the defensive new-key invalidation fires.
+    // Body omits the secret for the same reason as the previous test.
+    const samlExisting = {
+      ...baseRow,
+      protocol: 'SAML' as const,
+      samlEntityId: 'urn:old',
+      samlSsoUrl: 'https://idp.old/sso',
+      samlCert: null,
+      oidcIssuer: null,
+      oidcClientId: null,
+      oidcClientSecret: null,
+    };
+    const oidcNewRow = baseRow; // protocol: 'OIDC' with full OIDC fields
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(samlExisting);
+    prismaMock.ssoIdentityProvider.update.mockResolvedValue(oidcNewRow);
+
+    const res = await request(buildApp())
+      .put('/api/admin/sso/me')
+      .set('Authorization', `Bearer ${makeToken()}`)
+      .send({
+        protocol: 'OIDC',
+        oidcIssuer: oidcNewRow.oidcIssuer,
+        oidcClientId: oidcNewRow.oidcClientId,
+      });
+    expect(res.status).toBe(200);
+
+    expect(invalidateMock).toHaveBeenCalledTimes(1);
+    expect(invalidateMock).toHaveBeenCalledWith({
+      oidcIssuer: oidcNewRow.oidcIssuer,
+      oidcClientId: oidcNewRow.oidcClientId,
+    });
+  });
 });
 
 describe('DELETE /api/admin/sso/me — OIDC cache invalidation', () => {

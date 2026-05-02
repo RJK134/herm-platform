@@ -1,6 +1,7 @@
 import type { Request } from 'express';
 import helmet from 'helmet';
 import rateLimit, { type Options } from 'express-rate-limit';
+import { sendScimError } from '../api/scim/scim.errors';
 
 export const helmetMiddleware = helmet({
   contentSecurityPolicy: {
@@ -150,15 +151,19 @@ export const vendorPortalRateLimiter = rateLimit({
 // Emits a SCIM-shaped error envelope (RFC 7644 §3.12) so a real SCIM
 // client can parse the response. The HERM `{success, error}` shape
 // would break parsing for SCIM clients.
+//
+// Phase 11.16 — uses an explicit `handler` (rather than the `message`
+// option) so the response goes out with `Content-Type:
+// application/scim+json` per RFC 7644 §3.12. The default
+// express-rate-limit handler sends `application/json`, which Okta /
+// Entra clients can mis-handle when the path is a SCIM resource.
 export const scimRateLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 60,
   standardHeaders: true,
   legacyHeaders: false,
-  message: {
-    schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
-    status: '429',
-    detail: 'SCIM rate limit exceeded.',
+  handler: (_req, res) => {
+    sendScimError(res, { status: 429, detail: 'SCIM rate limit exceeded.' });
   },
 });
 

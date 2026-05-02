@@ -263,13 +263,21 @@ async function upsertForInstitution(
   //
   // Creates (existing === null) skip the old-key invalidation: the
   // cache can't have an entry yet, since the row didn't exist.
-  if (row.protocol === 'OIDC') {
-    if (existing) {
-      invalidateOidcConfigCacheByKey({
-        oidcIssuer: existing.oidcIssuer,
-        oidcClientId: existing.oidcClientId,
-      });
-    }
+  //
+  // Phase 11.16 — also invalidate when `existing.protocol === 'OIDC'`,
+  // even if the post-write `row.protocol` is now SAML. A protocol
+  // switch from OIDC → SAML must drop the old OIDC cache entry too;
+  // checking only the post-write protocol left those entries lingering
+  // until TTL.
+  const wasOidc = existing?.protocol === 'OIDC';
+  const isOidc = row.protocol === 'OIDC';
+  if (wasOidc) {
+    invalidateOidcConfigCacheByKey({
+      oidcIssuer: existing!.oidcIssuer,
+      oidcClientId: existing!.oidcClientId,
+    });
+  }
+  if (isOidc) {
     invalidateOidcConfigCacheByKey({
       oidcIssuer: row.oidcIssuer,
       oidcClientId: row.oidcClientId,
