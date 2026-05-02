@@ -123,15 +123,16 @@ async function getConfig(idp: TenantOidcConfig): Promise<oidc.Configuration> {
     undefined,
     allowInsecure ? { execute: [oidc.allowInsecureRequests] } : undefined,
   );
+  const fetchedAt = Date.now();
   // Active eviction before any growth: drop expired entries first, then
   // LRU-evict the oldest if we're still over the cap.
-  pruneExpired(now);
+  pruneExpired(fetchedAt);
   while (configCache.size >= MAX_CACHE_SIZE) {
     const oldest = configCache.keys().next().value;
     if (oldest === undefined) break;
     configCache.delete(oldest);
   }
-  configCache.set(cacheKey, { config, fetchedAt: now });
+  configCache.set(cacheKey, { config, fetchedAt });
   return config;
 }
 
