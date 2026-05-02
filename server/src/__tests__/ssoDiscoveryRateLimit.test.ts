@@ -81,24 +81,25 @@ describe('discoveryRateLimiter — wiring', () => {
   });
 
   it('the SSO router mounts the limiter on /discover and /:slug/discover (and only those)', async () => {
-    // Import the actual router and confirm the discovery routes carry
-    // the limiter while sp-metadata / login do not. We exercise this
-    // by sharing a single bucket (max=1) and checking that the
-    // discovery routes deplete each other (they share the bucket via
-    // their per-IP key) but a request to sp-metadata.xml is NOT
-    // affected.
-    //
-    // To do this without depending on the full router's downstream
-    // controllers, we mount our own minimal copy of the same route
-    // list using the production limiter export. The contract under
-    // test is "discovery-limiter applies to discovery routes only".
+    // Inspect the actual router so this test fails if the production
+    // wiring in sso.router.ts changes. We do not need to execute any
+    // controller logic; checking the route stack is enough to verify
+    // that discoveryRateLimiter is attached to the intended routes.
+    const { ssoRouter } = await import('../api/sso/sso.router');
     const { discoveryRateLimiter } = await import('../middleware/security');
-    const app = express();
-    app.get('/api/sso/discover', discoveryRateLimiter, (_req, res) => res.json({ ok: true }));
-    app.get('/api/sso/:slug/discover', discoveryRateLimiter, (_req, res) => res.json({ ok: true }));
-    app.get('/api/sso/sp-metadata.xml', (_req, res) => res.type('xml').send('<md/>'));
 
-    const sp1 = await request(app).get('/api/sso/sp-metadata.xml');
-    expect(sp1.status).toBe(200);
+    const routeLayers = ((ssoRouter as unknown as { stack?: Array<{ route?: { path?: string; stack?: Array<{ handle: unknown }> } }> }).stack ?? [])
+      .filter((layer) => layer.route?.path);
+
+    const routeMiddlewareByPath = new Map(
+      routeLayers.map((layer) => [
+        layer.route!.path as string,
+        (layer.route!.stack ?? []).map((stackLayer) => stackLayer.handle),
+      ]),
+    );
+
+    expect(routeMiddlewareByPath.get('/discover')).toContain(discoveryRateLimiter);
+    expect(routeMiddlewareByPath.get('/:slug/discover')).toContain(discoveryRateLimiter);
+    expect(routeMiddlewareByPath.get('/sp-metadata.xml') ?? []).not.toContain(discoveryRateLimiter);
   });
 });
