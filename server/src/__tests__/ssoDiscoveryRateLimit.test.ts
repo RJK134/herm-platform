@@ -85,7 +85,8 @@ describe('discoveryRateLimiter — wiring', () => {
     // wiring in sso.router.ts changes. We do not need to execute any
     // controller logic; checking the route stack is enough to verify
     // that discoveryRateLimiter is attached to the intended routes.
-    const { ssoRouter } = await import('../api/sso/sso.router');
+    // The router is exported as default; destructure to a local name.
+    const { default: ssoRouter } = await import('../api/sso/sso.router');
     const { discoveryRateLimiter } = await import('../middleware/security');
 
     const routeLayers = ((ssoRouter as unknown as { stack?: Array<{ route?: { path?: string; stack?: Array<{ handle: unknown }> } }> }).stack ?? [])
@@ -99,7 +100,8 @@ describe('discoveryRateLimiter — wiring', () => {
     );
 
     expect(routeMiddlewareByPath.get('/discover')).toContain(discoveryRateLimiter);
-    expect(routeMiddlewareByPath.get('/:slug/discover')).toContain(discoveryRateLimiter);
+    // The actual route path uses `:institutionSlug` (see sso.router.ts).
+    expect(routeMiddlewareByPath.get('/:institutionSlug/discover')).toContain(discoveryRateLimiter);
     expect(routeMiddlewareByPath.get('/sp-metadata.xml') ?? []).not.toContain(discoveryRateLimiter);
   });
 });
