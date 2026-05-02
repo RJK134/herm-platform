@@ -183,12 +183,16 @@ async function isUserSoftDeleted(userId: string): Promise<boolean> {
   const deleted = userDeleted || tenantDeleted;
   // Active prune + FIFO eviction before the new write so memory stays
   // bounded under any access pattern. Map iterates in insertion order,
-  // so the first key from `keys()` is the oldest.
+  // so the first key from `keys()` is the oldest. Delete before set to
+  // ensure an existing key is reinserted at the end on refresh.
   pruneExpired(now);
   while (softDeleteCache.size >= MAX_CACHE_SIZE) {
     const oldest = softDeleteCache.keys().next().value;
     if (oldest === undefined) break;
     softDeleteCache.delete(oldest);
+  }
+  if (softDeleteCache.has(userId)) {
+    softDeleteCache.delete(userId);
   }
   softDeleteCache.set(userId, { deleted, cachedAt: now });
   return deleted;
