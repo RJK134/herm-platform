@@ -260,6 +260,131 @@ async function main() {
   });
   console.log('Demo user seeded — demo@demo-university.ac.uk (password documented for local demos)');
 
+  // ── UAT personas (Phase 11.17) ───────────────────────────────────────────
+  // Each persona has their own login + institution + role so colleagues
+  // running the testing brief from `docs/USER_TESTING_BRIEF.md` get a
+  // realistic per-role experience instead of all four sharing the demo
+  // admin account. Passwords default to the same `DEMO_PASSWORD` so a
+  // single rotation flips them all.
+  const personaHash = demoHash;
+
+  // Priya — Russell Group HE, Enterprise tier (so Sector Analytics +
+  // Framework Mapping render without DEV_UNLOCK_ALL_TIERS)
+  const priyaInst = await prisma.institution.upsert({
+    where: { slug: 'midshire-university' },
+    update: {},
+    create: {
+      name: 'Midshire University',
+      slug: 'midshire-university',
+      country: 'UK',
+      tier: 'enterprise',
+    },
+  });
+  await prisma.subscription.upsert({
+    where: { institutionId: priyaInst.id },
+    update: {},
+    create: { institutionId: priyaInst.id, tier: 'ENTERPRISE', status: 'active' },
+  });
+  await prisma.user.upsert({
+    where: { email: 'priya@midshire.ac.uk' },
+    update: {},
+    create: {
+      email: 'priya@midshire.ac.uk',
+      name: 'Priya Sharma',
+      passwordHash: personaHash,
+      role: 'PROCUREMENT_LEAD',
+      institutionId: priyaInst.id,
+    },
+  });
+
+  // Marcus — post-92 HE, Professional tier
+  const marcusInst = await prisma.institution.upsert({
+    where: { slug: 'newport-met' },
+    update: {},
+    create: {
+      name: 'Newport Metropolitan University',
+      slug: 'newport-met',
+      country: 'UK',
+      tier: 'professional',
+    },
+  });
+  await prisma.subscription.upsert({
+    where: { institutionId: marcusInst.id },
+    update: {},
+    create: { institutionId: marcusInst.id, tier: 'PROFESSIONAL', status: 'active' },
+  });
+  await prisma.user.upsert({
+    where: { email: 'marcus@newport-met.ac.uk' },
+    update: {},
+    create: {
+      email: 'marcus@newport-met.ac.uk',
+      name: 'Marcus Webb',
+      passwordHash: personaHash,
+      role: 'EVALUATOR',
+      institutionId: marcusInst.id,
+    },
+  });
+
+  // Rachel — FE college group, Enterprise tier (needs Framework Mapping)
+  const rachelInst = await prisma.institution.upsert({
+    where: { slug: 'wessex-colleges' },
+    update: {},
+    create: {
+      name: 'Wessex Colleges Group',
+      slug: 'wessex-colleges',
+      country: 'UK',
+      tier: 'enterprise',
+    },
+  });
+  await prisma.subscription.upsert({
+    where: { institutionId: rachelInst.id },
+    update: {},
+    create: { institutionId: rachelInst.id, tier: 'ENTERPRISE', status: 'active' },
+  });
+  await prisma.user.upsert({
+    where: { email: 'rachel@wessex-colleges.ac.uk' },
+    update: {},
+    create: {
+      email: 'rachel@wessex-colleges.ac.uk',
+      name: 'Rachel Okonkwo',
+      passwordHash: personaHash,
+      role: 'PROCUREMENT_LEAD',
+      institutionId: rachelInst.id,
+    },
+  });
+
+  // Daniel — vendor side. Lives in his own "vendor" institution row so
+  // tenant-scoped queries don't accidentally surface him to the buyer
+  // personas. Role is VENDOR_ADMIN so he can hit the vendor portal.
+  const danielInst = await prisma.institution.upsert({
+    where: { slug: 'apex-software-vendor' },
+    update: {},
+    create: {
+      name: 'Apex Software (Vendor)',
+      slug: 'apex-software-vendor',
+      country: 'UK',
+      tier: 'free',
+    },
+  });
+  await prisma.user.upsert({
+    where: { email: 'daniel@apex-software.com' },
+    update: {},
+    create: {
+      email: 'daniel@apex-software.com',
+      name: 'Daniel Hartley',
+      passwordHash: personaHash,
+      role: 'VENDOR_ADMIN',
+      institutionId: danielInst.id,
+    },
+  });
+
+  console.log('UAT personas seeded:');
+  console.log('  priya@midshire.ac.uk           PROCUREMENT_LEAD  Enterprise   (Russell Group HE)');
+  console.log('  marcus@newport-met.ac.uk       EVALUATOR         Professional (post-92 HE)');
+  console.log('  rachel@wessex-colleges.ac.uk   PROCUREMENT_LEAD  Enterprise   (FE college group)');
+  console.log('  daniel@apex-software.com       VENDOR_ADMIN      —            (Vendor portal)');
+  console.log('  Password for all four: same as the demo user (DEMO_PASSWORD env or default)');
+
   // ── Demo capability basket ────────────────────────────────────────────────
   const demoBasket = await prisma.capabilityBasket.upsert({
     where: { id: 'demo-basket-001' },
