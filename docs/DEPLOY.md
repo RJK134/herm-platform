@@ -47,9 +47,12 @@ the second `SSO_SECRET_KEY`.
 
 1. https://railway.com/ → **New Project** → **Deploy from GitHub repo** →
    pick `rjk134/herm-platform` → branch `master`.
-2. Railway will detect the `Dockerfile` and `railway.json` and start a
-   build. Let it run — it will fail healthcheck the first time because
-   env vars aren't set yet. That's expected.
+2. **Don't let the first build run yet.** Pause / cancel it if it kicks
+   off automatically. With `NODE_ENV=production` and `FRONTEND_URL` /
+   `SP_BASE_URL` unset, the container *crashes on boot* (not just fails
+   healthcheck — `checkEnvironment()` in `server/src/utils/env-check.ts`
+   refuses to start). Railway will mark the deploy "Failed" and burn a
+   restart-policy retry. Set the env vars first, *then* deploy.
 3. **Add Redis plugin**: Project → New → Database → Redis. Railway
    auto-injects `REDIS_URL` into the API service's environment.
 4. **Set env vars** on the API service (Variables tab). The minimum
@@ -61,10 +64,17 @@ the second `SSO_SECRET_KEY`.
    | `DATABASE_URL` | (Neon pooled string from Step 1) |
    | `JWT_SECRET` | (the `openssl rand -base64 64` you generated) |
    | `SSO_SECRET_KEY` | (the `openssl rand -hex 32` you generated) |
-   | `FRONTEND_URL` | (paste this AFTER Vercel deploy in Step 3) |
+   | `FRONTEND_URL` | placeholder e.g. `https://example.com` — overwrite with the real Vercel URL after Step 3 |
    | `SP_BASE_URL` | (the Railway service's public URL — Settings → Networking → Public Networking) |
    | `DEV_UNLOCK_ALL_TIERS` | `true` (for UAT only — every user sees Enterprise features) |
    | `DEMO_PASSWORD` | leave UNSET for the demo (login page hint is hard-coded to `demo12345`) |
+
+   The `FRONTEND_URL` placeholder is fine until Vercel exists. CORS
+   will reject the eventual SPA origin until you swap it for the real
+   value, but the container itself will boot, the healthcheck will
+   pass, and you can reach `/api/health` and `/api/readiness` from
+   `curl` — which is enough to hand a working API URL to Vercel in the
+   next step.
 
    `REDIS_URL` is auto-injected by the Redis plugin; don't set it
    manually.
@@ -75,7 +85,7 @@ the second `SSO_SECRET_KEY`.
    | `ANTHROPIC_API_KEY` | (your key) — enables the AI Assistant scenario |
    | `RETENTION_SCHEDULER_ENABLED` | `false` for UAT — keeps soft-deletes around for the testing window |
 
-5. Trigger a redeploy. Healthcheck (`GET /api/health`) should pass.
+5. Trigger the first deploy. Healthcheck (`GET /api/health`) should pass.
 
 ## Step 3 — Vercel (SPA)
 
@@ -113,11 +123,12 @@ Expected output ends with the persona list:
 
 ```
 UAT personas seeded:
-  priya@midshire.ac.uk           PROCUREMENT_LEAD  Enterprise   (Russell Group HE)
-  marcus@newport-met.ac.uk       EVALUATOR         Professional (post-92 HE)
-  rachel@wessex-colleges.ac.uk   PROCUREMENT_LEAD  Enterprise   (FE college group)
-  daniel@apex-software.com       VENDOR_ADMIN      —            (Vendor portal)
-  Password for all four: same as the demo user (DEMO_PASSWORD env or default)
+  priya@midshire.ac.uk           PROCUREMENT_LEAD  Enterprise   (Russell Group HE)     /login
+  marcus@newport-met.ac.uk       EVALUATOR         Professional (post-92 HE)           /login
+  rachel@wessex-colleges.ac.uk   PROCUREMENT_LEAD  Enterprise   (FE college group)     /login
+  daniel@apex-software.com       admin (vendor)    PREMIUM      (Apex Software)        /vendor-portal/login
+  Password for all four: same as the demo user (DEMO_PASSWORD env or default).
+  Note: Daniel logs in via the vendor portal — the buyer /login page will not authenticate him.
 ```
 
 ## Step 5 — Smoke-test before sharing
@@ -162,13 +173,22 @@ Pick the persona that matches your real-world role:
            marcus@newport-met.ac.uk     / demo12345
   Rachel — FE college procurement officer
            rachel@wessex-colleges.ac.uk / demo12345
-  Daniel — vendor solutions architect
+  Daniel — vendor solutions architect (uses the VENDOR PORTAL, not the
+           main login page)
+           Sign in at <site>/vendor-portal/login
            daniel@apex-software.com     / demo12345
 
 Use the persona's lens — only test surfaces they would realistically use
 in their day job. File feedback per the template at the bottom of the
 brief.
 ```
+
+> **Why Daniel's login URL is different**: vendor authentication is a
+> separate identity surface (`VendorUser` / `VendorAccount` tables in
+> `prisma/schema.prisma`). The buyer-side `/login` page queries the
+> `User` table and will return `Invalid email or password` for Daniel.
+> Hand him the vendor-portal URL up-front so he doesn't waste a UAT
+> session debugging it.
 
 ## After the UAT — tear-down or persist
 
