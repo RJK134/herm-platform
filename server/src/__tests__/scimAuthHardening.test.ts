@@ -103,8 +103,14 @@ describe('SCIM negative-auth cache (M1)', () => {
     expect(_scimNegativeCacheSizeForTests()).toBe(0);
   });
 
-  it('does NOT cache hashed-but-invalid (active=false / expired / tenant-deleted) — flips back to active take effect at next request', async () => {
-    // Sequence: revoked key → admin restores → next request must accept.
+  it('caches ALL rejection cases (active=false / expired / tenant-deleted) — closes the timing oracle (Phase 11.16)', async () => {
+    // Phase 11.16 — the previous behaviour cached only "no row" rejections,
+    // which left a multi-request timing oracle: an attacker probing with
+    // a hash that hit a real-but-rejected row (revoked / expired /
+    // tenant-deleted) burned a Prisma round-trip every time, while a
+    // hash that hit no row burned one only on the first probe. The fix
+    // caches every rejection class, accepting a 30s window for admin-
+    // driven state flips to take effect.
     apiKeyFindUniqueMock.mockResolvedValueOnce({
       id: 'key-2',
       institutionId: 'inst-2',
@@ -118,10 +124,13 @@ describe('SCIM negative-auth cache (M1)', () => {
       .get('/scim/v2/Users')
       .set('Authorization', `Bearer ${VALID_KEY}`);
     expect(first.status).toBe(401);
+    expect(apiKeyFindUniqueMock).toHaveBeenCalledTimes(1);
 
-    // Admin un-revokes the key. Cache should NOT have stamped this
-    // hash (only "no matching row" is cached), so the next request
-    // should hit Prisma again and accept.
+    // Admin un-revokes the key. Even with a fresh "active" mock queued,
+    // the cache MUST short-circuit the next request (closing the timing
+    // oracle); the second request returns 401 from cache without hitting
+    // Prisma at all. The flip to active becomes visible only after the
+    // 30s TTL elapses (asserted in the next test).
     apiKeyFindUniqueMock.mockResolvedValueOnce({
       id: 'key-2',
       institutionId: 'inst-2',
@@ -133,8 +142,51 @@ describe('SCIM negative-auth cache (M1)', () => {
     const second = await request(app)
       .get('/scim/v2/Users')
       .set('Authorization', `Bearer ${VALID_KEY}`);
-    expect(second.status).toBe(200);
-    expect(apiKeyFindUniqueMock).toHaveBeenCalledTimes(2);
+    expect(second.status).toBe(401);
+    // Critical: Prisma was NOT consulted on the cached request.
+    expect(apiKeyFindUniqueMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('admin-driven flip from rejected→active becomes visible after the 30s cache TTL (Phase 11.16)', async () => {
+    apiKeyFindUniqueMock.mockResolvedValueOnce({
+      id: 'key-3',
+      institutionId: 'inst-3',
+      permissions: ['admin:scim'],
+      isActive: false,
+      expiresAt: null,
+      institution: { deletedAt: null },
+    });
+    const app = buildScimApp();
+
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-05-01T12:00:00Z'));
+      const first = await request(app)
+        .get('/scim/v2/Users')
+        .set('Authorization', `Bearer ${VALID_KEY}`);
+      expect(first.status).toBe(401);
+      expect(apiKeyFindUniqueMock).toHaveBeenCalledTimes(1);
+
+      // Admin restores the key; queue the active row.
+      apiKeyFindUniqueMock.mockResolvedValueOnce({
+        id: 'key-3',
+        institutionId: 'inst-3',
+        permissions: ['admin:scim'],
+        isActive: true,
+        expiresAt: null,
+        institution: { deletedAt: null },
+      });
+
+      // Advance past the 30s TTL — cache entry expires.
+      vi.setSystemTime(new Date('2026-05-01T12:00:31Z'));
+      const second = await request(app)
+        .get('/scim/v2/Users')
+        .set('Authorization', `Bearer ${VALID_KEY}`);
+      expect(second.status).toBe(200);
+      expect(apiKeyFindUniqueMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('expires entries after the 30s TTL — a probe after expiry queries Prisma again', async () => {
@@ -188,34 +240,43 @@ describe('SCIM negative-auth cache (M1)', () => {
   });
 });
 
-describe('SCIM rate limiter (M2)', () => {
-  it('returns 429 with a SCIM-shaped error envelope after the per-minute ceiling', async () => {
-    // Use a tight ceiling so the test runs fast — we're verifying the
-    // limiter wires up and emits the right envelope, not the precise
-    // 60/min default. Mount our own limiter with max=3 in front of a
-    // stub /scim handler.
+describe('SCIM rate limiter (M2 + Phase 11.16 Content-Type fix)', () => {
+  it('429 response uses Content-Type: application/scim+json and the SCIM error envelope (Phase 11.16)', async () => {
+    // Phase 11.16 — Copilot review on PR #81 flagged that the previous
+    // limiter sent `Content-Type: application/json` (express-rate-limit's
+    // default for the `message` option). RFC 7644 §3.12 mandates
+    // `application/scim+json` on every SCIM response, including errors;
+    // some clients (Okta, Entra) reject or mis-handle JSON-typed 429s
+    // on a SCIM resource path. The fix swaps `message:` for a custom
+    // `handler:` that calls `sendScimError`, which sets the right type.
+    //
+    // Build a limiter using the SAME handler shape as the production
+    // export (small max=3 so the test is fast), then assert:
+    //   - status 429
+    //   - Content-Type starts with application/scim+json
+    //   - body has the SCIM error envelope
+    const { sendScimError } = await import('../api/scim/scim.errors');
     const limiter = rateLimit({
       windowMs: 60 * 1000,
       max: 3,
       standardHeaders: true,
       legacyHeaders: false,
-      message: {
-        schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
-        status: '429',
-        detail: 'SCIM rate limit exceeded.',
+      handler: (_req, res) => {
+        sendScimError(res, { status: 429, detail: 'SCIM rate limit exceeded.' });
       },
     });
     const app = express();
     app.use('/scim/v2', limiter, (_req, res) => res.status(200).json({ ok: true }));
 
-    // First 3 succeed; the 4th must 429 with the SCIM envelope.
     for (let i = 0; i < 3; i++) {
       const ok = await request(app).get('/scim/v2/Users');
       expect(ok.status).toBe(200);
     }
     const blocked = await request(app).get('/scim/v2/Users');
     expect(blocked.status).toBe(429);
+    expect(blocked.headers['content-type']).toMatch(/application\/scim\+json/);
     expect(blocked.body.schemas).toContain('urn:ietf:params:scim:api:messages:2.0:Error');
+    expect(blocked.body.status).toBe('429');
     expect(blocked.body.detail).toMatch(/rate limit/i);
   });
 

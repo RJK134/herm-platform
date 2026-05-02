@@ -89,6 +89,7 @@ import { __resetLockoutForTests } from '../lib/lockout';
 import { encryptSecret, _resetCipherKeyCache } from '../lib/secret-cipher';
 import {
   __resetOidcConfigCacheForTests,
+  __oidcConfigCacheSizeForTests,
   buildOidcAuthorizeUrl,
   invalidateOidcConfigCacheByKey,
 } from '../api/sso/oidc';
@@ -1092,5 +1093,200 @@ describe('OIDC config cache (Phase 11.16)', () => {
     expect(callA[2]).toBe('secret-a');
     expect(callB[1]).toBe('client-b');
     expect(callB[2]).toBe('secret-b');
+  });
+});
+
+// ── Phase 11.16 — OIDC config cache LRU + structured-key invalidation ──────
+//
+// PR #82 review threads from Bugbot + Copilot flagged two related issues
+// in the post-#79 cache:
+//   - The cache had no size cap and no active eviction. Each secret
+//     rotation creates a new entry (the fingerprint changes); the old
+//     one only goes away if someone looks it up again — which by
+//     definition won't happen, since the rotation moved every caller
+//     to the new key. Long-lived nodes leaked memory and stale
+//     credentials forever.
+//   - `invalidateOidcConfigCacheByKey` used `key.startsWith('issuer|clientId|')`
+//     for prefix scan. A clientId of `foo` would erroneously match a
+//     cached entry whose clientId was `foo|bar` (literal `|` in
+//     clientId is rare but allowed). One admin save could evict
+//     unrelated providers' cache entries.
+//
+// These tests pin the new LRU + structured-key semantics.
+
+describe('OIDC config cache LRU + structured-key invalidation (Phase 11.16)', () => {
+  beforeEach(() => {
+    __resetOidcConfigCacheForTests();
+    oidcMock.discovery.mockReset();
+    oidcMock.discovery.mockResolvedValue({} as unknown);
+    oidcMock.buildAuthorizationUrl.mockReset();
+    oidcMock.buildAuthorizationUrl.mockReturnValue(
+      new URL('https://idp.uni.test/authorize?state=state-test'),
+    );
+  });
+
+  it('does NOT cross-evict when one clientId is a `|`-containing prefix of another', async () => {
+    // Populate two cache entries: clientId `foo` and clientId `foo|bar`.
+    // Before the URL-encoding fix, `startsWith('https://i|foo|')` matched
+    // both because the joined key had a literal `|` between the encoded
+    // segments — so invalidating `foo` would also drop `foo|bar`.
+    await buildOidcAuthorizeUrl('uni-1', {
+      oidcIssuer: 'https://idp.uni.test',
+      oidcClientId: 'foo',
+      oidcClientSecret: 'secret-foo',
+    });
+    await buildOidcAuthorizeUrl('uni-1', {
+      oidcIssuer: 'https://idp.uni.test',
+      oidcClientId: 'foo|bar',
+      oidcClientSecret: 'secret-foobar',
+    });
+    expect(oidcMock.discovery).toHaveBeenCalledTimes(2);
+    expect(__oidcConfigCacheSizeForTests()).toBe(2);
+
+    // Invalidate only the `foo` entry. With URL-encoding, `foo|bar`
+    // encodes the literal `|` as `%7C` — so the prefix
+    // `https%3A%2F%2Fidp.uni.test|foo|` only matches the `foo` entry
+    // (the `foo|bar` entry's encoded clientId is `foo%7Cbar`).
+    expect(
+      invalidateOidcConfigCacheByKey({
+        oidcIssuer: 'https://idp.uni.test',
+        oidcClientId: 'foo',
+      }),
+    ).toBe(true);
+    expect(__oidcConfigCacheSizeForTests()).toBe(1);
+
+    // Confirm the `foo|bar` entry is still a cache HIT.
+    await buildOidcAuthorizeUrl('uni-1', {
+      oidcIssuer: 'https://idp.uni.test',
+      oidcClientId: 'foo|bar',
+      oidcClientSecret: 'secret-foobar',
+    });
+    expect(oidcMock.discovery).toHaveBeenCalledTimes(2); // unchanged
+
+    // And the `foo` entry is now a cache MISS → re-discovery.
+    await buildOidcAuthorizeUrl('uni-1', {
+      oidcIssuer: 'https://idp.uni.test',
+      oidcClientId: 'foo',
+      oidcClientSecret: 'secret-foo',
+    });
+    expect(oidcMock.discovery).toHaveBeenCalledTimes(3);
+  });
+
+  it('caps cache size at MAX_CACHE_SIZE and evicts the oldest entry on overflow (LRU)', async () => {
+    // Populate just past the cap. The exact cap is an implementation
+    // detail; we test the BEHAVIOUR (size never exceeds the cap) with
+    // a small enough loop that the test is fast but still proves
+    // overflow eviction fires.
+    //
+    // The MAX_CACHE_SIZE constant in oidc.ts is 256. Populate 260
+    // distinct entries; size should plateau at 256.
+    for (let i = 0; i < 260; i++) {
+      await buildOidcAuthorizeUrl('uni-1', {
+        oidcIssuer: `https://idp.uni-${i}.test`,
+        oidcClientId: 'client-1',
+        oidcClientSecret: 'secret-1',
+      });
+    }
+    expect(__oidcConfigCacheSizeForTests()).toBeLessThanOrEqual(256);
+
+    // The oldest entry (i=0) should have been evicted; lookup forces
+    // re-discovery.
+    const callsBefore = oidcMock.discovery.mock.calls.length;
+    await buildOidcAuthorizeUrl('uni-1', {
+      oidcIssuer: 'https://idp.uni-0.test',
+      oidcClientId: 'client-1',
+      oidcClientSecret: 'secret-1',
+    });
+    expect(oidcMock.discovery.mock.calls.length).toBeGreaterThan(callsBefore);
+  });
+
+  it('actively evicts expired entries on the next set (no orphan accumulation)', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-05-01T00:00:00Z'));
+      await buildOidcAuthorizeUrl('uni-1', {
+        oidcIssuer: 'https://idp.uni-A.test',
+        oidcClientId: 'client-1',
+        oidcClientSecret: 'secret-A',
+      });
+      expect(__oidcConfigCacheSizeForTests()).toBe(1);
+
+      // Advance past the 1h TTL — entry A is now stale but still in
+      // the Map (no one has looked it up).
+      vi.setSystemTime(new Date('2026-05-01T01:30:00Z'));
+      expect(__oidcConfigCacheSizeForTests()).toBe(1);
+
+      // Trigger any new set; the active prune in oidc.ts must drop A.
+      await buildOidcAuthorizeUrl('uni-1', {
+        oidcIssuer: 'https://idp.uni-B.test',
+        oidcClientId: 'client-1',
+        oidcClientSecret: 'secret-B',
+      });
+      // After the prune-then-set, only B remains.
+      expect(__oidcConfigCacheSizeForTests()).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('LRU touch on cache HIT preserves the entry against subsequent overflow eviction', async () => {
+    // Without the LRU touch, the oldest-by-insertion entry would be
+    // evicted on overflow even if it's been recently accessed. The
+    // touch (delete + reinsert on hit) moves a hot entry to the back
+    // of insertion order so it survives the next round of evictions.
+    //
+    // Setup: fill the cache to capacity with cold entries inserted
+    // OLDEST-FIRST. Then touch the oldest. Then insert one more new
+    // entry — the SECOND-oldest must be evicted (because the touch
+    // moved the oldest to the back), and the touched entry must
+    // survive.
+
+    // Fill to MAX_CACHE_SIZE (256). Insertion order: cold-0 oldest,
+    // cold-255 newest.
+    for (let i = 0; i < 256; i++) {
+      await buildOidcAuthorizeUrl('uni-1', {
+        oidcIssuer: `https://idp.cold-${i}.test`,
+        oidcClientId: 'client-1',
+        oidcClientSecret: 'secret-cold',
+      });
+    }
+    expect(__oidcConfigCacheSizeForTests()).toBe(256);
+
+    // Touch the oldest (cold-0) — moves it to the back of insertion
+    // order. No new discovery (it was a cache HIT before the touch).
+    const callsAfterFill = oidcMock.discovery.mock.calls.length;
+    await buildOidcAuthorizeUrl('uni-1', {
+      oidcIssuer: 'https://idp.cold-0.test',
+      oidcClientId: 'client-1',
+      oidcClientSecret: 'secret-cold',
+    });
+    expect(oidcMock.discovery.mock.calls.length).toBe(callsAfterFill);
+
+    // Insert one more new entry — overflow eviction fires. The
+    // oldest-by-insertion is now cold-1 (since cold-0 was touched
+    // to the back), so cold-1 should be evicted.
+    await buildOidcAuthorizeUrl('uni-1', {
+      oidcIssuer: 'https://idp.cold-256.test',
+      oidcClientId: 'client-1',
+      oidcClientSecret: 'secret-cold',
+    });
+    expect(__oidcConfigCacheSizeForTests()).toBe(256);
+
+    // cold-0 should still be a HIT (touched, survived eviction).
+    const callsBeforeProbe = oidcMock.discovery.mock.calls.length;
+    await buildOidcAuthorizeUrl('uni-1', {
+      oidcIssuer: 'https://idp.cold-0.test',
+      oidcClientId: 'client-1',
+      oidcClientSecret: 'secret-cold',
+    });
+    expect(oidcMock.discovery.mock.calls.length).toBe(callsBeforeProbe);
+
+    // cold-1 should be a MISS (evicted).
+    await buildOidcAuthorizeUrl('uni-1', {
+      oidcIssuer: 'https://idp.cold-1.test',
+      oidcClientId: 'client-1',
+      oidcClientSecret: 'secret-cold',
+    });
+    expect(oidcMock.discovery.mock.calls.length).toBe(callsBeforeProbe + 1);
   });
 });

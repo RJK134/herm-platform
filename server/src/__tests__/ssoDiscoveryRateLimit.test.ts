@@ -101,7 +101,8 @@ describe('discoveryRateLimiter — wiring', () => {
 
     expect(routeMiddlewareByPath.get('/discover')).toContain(discoveryRateLimiter);
     // The actual route path uses the parameter name `:institutionSlug`
-    // (see sso.router.ts), not `:slug`.
+    // (see sso.router.ts), not `:slug`. Express stores the path with
+    // the declared parameter name verbatim.
     expect(routeMiddlewareByPath.get('/:institutionSlug/discover')).toContain(discoveryRateLimiter);
     expect(routeMiddlewareByPath.get('/sp-metadata.xml') ?? []).not.toContain(discoveryRateLimiter);
   });
