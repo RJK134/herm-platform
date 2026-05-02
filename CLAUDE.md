@@ -45,8 +45,8 @@ Monorepo via npm workspaces (Node 20 baseline, ESM-only):
 
 - **Auth:** JWT sessions (`jsonwebtoken`); per-tenant SAML via `@node-saml/node-saml`; per-tenant OIDC via `openid-client` v6 (ESM); API keys (`herm_pk_…` prefix); SCIM 2.0 with API-key + `admin:scim` permission.
 - **Persistence:** Prisma 5.22 + Postgres 16. In-memory `Map` + Redis fallback for short-lived state (lockout counters, OIDC PKCE flow, SAML SLO replay, session JTI store).
-- **Observability:** structured JSON logs with `req.id` correlation; `prom-client` metrics at `GET /metrics` (`herm_` prefix).
-- **CI:** GitHub Actions — lint, typecheck, test (with Postgres + Redis service containers), build, prisma-validate. Bundle-size gate via `size-limit` (Phase 12.5a).
+- **Observability:** structured JSON logs with `req.id` correlation.
+- **CI:** GitHub Actions — lint, typecheck, test (with Postgres + Redis service containers), build, prisma-validate.
 - **Pre-existing review bots:** Cursor Bugbot + GitHub Copilot review every PR. Treat their findings as actionable; Bugbot is the higher-signal of the two for behaviour bugs.
 
 ## Working conventions
