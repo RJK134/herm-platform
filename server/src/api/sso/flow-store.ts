@@ -32,6 +32,7 @@
 import type { Redis } from 'ioredis';
 import { getRedis } from '../../lib/redis';
 import { logger } from '../../lib/logger';
+import { RedisKeys } from '../../lib/redis-keys';
 
 export interface OidcFlowState {
   slug: string;
@@ -46,13 +47,15 @@ export interface OidcFlowState {
   idpId?: string;
 }
 
-const KEY_PREFIX = 'sso:oidc:flow';
 const TTL_SECONDS = 600; // 10 min — covers IdP login UX + a re-prompt
 
 const memStore = new Map<string, { value: OidcFlowState; expiresAt: number }>();
 
+// Phase 11.16 (S1) — Redis key shape lives in `lib/redis-keys.ts`. The
+// in-memory Map shares the same string so a Redis-vs-Map switch never
+// needs to translate keys.
 function memKey(state: string): string {
-  return `${KEY_PREFIX}:${state}`;
+  return RedisKeys.ssoOidcFlow(state);
 }
 
 function memPrune(now: number): void {

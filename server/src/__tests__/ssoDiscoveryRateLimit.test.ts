@@ -80,7 +80,7 @@ describe('discoveryRateLimiter — wiring', () => {
     expect(res.status).toBe(200);
   });
 
-  it('the SSO router mounts the limiter on /discover and /:slug/discover (and only those)', async () => {
+  it('the SSO router mounts the limiter on /discover and /:institutionSlug/discover (and only those)', async () => {
     // Inspect the actual router so this test fails if the production
     // wiring in sso.router.ts changes. We do not need to execute any
     // controller logic; checking the route stack is enough to verify

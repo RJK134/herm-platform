@@ -31,6 +31,7 @@
 import type { Redis } from 'ioredis';
 import { getRedis } from './redis';
 import { logger } from './logger';
+import { RedisKeys } from './redis-keys';
 
 export interface SessionRecord {
   jti: string;
@@ -44,12 +45,9 @@ export interface SessionRecord {
   expiresAt: number;
 }
 
-const SESSION_PREFIX = 'session:jti:';
-const REVOKED_PREFIX = 'session:revoked:';
-const NAMEID_PREFIX = 'session:nameid:';
-
+// Phase 11.16 (S1) — Redis key shapes live in `lib/redis-keys.ts`.
 function nameIdKey(institutionId: string, nameId: string): string {
-  return `${NAMEID_PREFIX}${institutionId}:${nameId}`;
+  return RedisKeys.sessionByNameId(institutionId, nameId);
 }
 
 function ttlSecondsFromExpiresAt(expiresAt: number): number {
@@ -156,7 +154,7 @@ export function _resetSessionStoreForTests(): void {
 
 async function recordInRedis(redis: Redis, rec: SessionRecord): Promise<void> {
   const ttl = ttlSecondsFromExpiresAt(rec.expiresAt);
-  await redis.set(`${SESSION_PREFIX}${rec.jti}`, JSON.stringify(rec), 'EX', ttl);
+  await redis.set(RedisKeys.sessionByJti(rec.jti), JSON.stringify(rec), 'EX', ttl);
   if (rec.samlNameId) {
     const key = nameIdKey(rec.institutionId, rec.samlNameId);
     await redis.sadd(key, rec.jti);
@@ -165,7 +163,7 @@ async function recordInRedis(redis: Redis, rec: SessionRecord): Promise<void> {
 }
 
 async function isRevokedInRedis(redis: Redis, jti: string): Promise<boolean> {
-  const flag = await redis.get(`${REVOKED_PREFIX}${jti}`);
+  const flag = await redis.get(RedisKeys.sessionRevoked(jti));
   return flag !== null;
 }
 
@@ -173,7 +171,7 @@ async function revokeInRedis(redis: Redis, jti: string): Promise<void> {
   // Tombstone the jti for the remaining TTL of the original session.
   // If the session row is gone (already expired or never existed), use
   // the JWT max TTL as a defensive ceiling.
-  const raw = await redis.get(`${SESSION_PREFIX}${jti}`);
+  const raw = await redis.get(RedisKeys.sessionByJti(jti));
   let ttl = 7 * 24 * 60 * 60;
   if (raw) {
     try {
@@ -187,8 +185,8 @@ async function revokeInRedis(redis: Redis, jti: string): Promise<void> {
       // fall through with the default TTL
     }
   }
-  await redis.set(`${REVOKED_PREFIX}${jti}`, '1', 'EX', ttl);
-  await redis.del(`${SESSION_PREFIX}${jti}`);
+  await redis.set(RedisKeys.sessionRevoked(jti), '1', 'EX', ttl);
+  await redis.del(RedisKeys.sessionByJti(jti));
 }
 
 async function findByNameIdInRedis(
@@ -201,7 +199,7 @@ async function findByNameIdInRedis(
   if (jtis.length === 0) return [];
   const recs: SessionRecord[] = [];
   for (const jti of jtis) {
-    const raw = await redis.get(`${SESSION_PREFIX}${jti}`);
+    const raw = await redis.get(RedisKeys.sessionByJti(jti));
     if (!raw) {
       // Stale index entry (expired session, or revocation already
       // dropped the row). Sweep it on the way through.
