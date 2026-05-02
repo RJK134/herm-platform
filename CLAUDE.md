@@ -145,10 +145,11 @@ Examples: `server/src/api/sso/oidc.ts` (LRU, OIDC config),
 
 ### Redis key namespaces
 
-Centralised in `server/src/lib/redis-keys.ts`. Every Redis read/write goes
-through `RedisKeys.<builder>(...)`. Adding a new namespace = add a builder +
-add the prefix to `REDIS_KEY_PREFIXES` (alphabetised). Don't sprinkle
-prefix string literals across modules.
+Redis key construction is not yet centralised in a single
+`server/src/lib/redis-keys.ts` helper in this tree. When changing or adding
+Redis namespaces, follow the existing local builder/constant pattern in the
+relevant module and avoid introducing new scattered prefix string literals
+across modules.
 
 ### Audit logs
 
