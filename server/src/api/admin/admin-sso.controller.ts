@@ -42,6 +42,7 @@ import prisma from '../../utils/prisma';
 import { audit } from '../../lib/audit';
 import { AppError } from '../../utils/errors';
 import { encryptIdpSecretsForWrite } from '../sso/sso.service';
+import { invalidateOidcConfigCacheByKey } from '../sso/oidc';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -243,6 +244,38 @@ async function upsertForInstitution(
         },
       });
 
+  // Phase 11.15 (P11) — invalidate the in-process OIDC discovery-config
+  // cache when an OIDC IdP's credentials change. The cached
+  // `Configuration` embeds the client_secret at discovery time, so a
+  // rotation that doesn't kick this cache leaves token exchange using
+  // the stale secret for up to TTL_MS (1h) — operationally surprising
+  // and only visible to users as the opaque "sso_failed" banner.
+  //
+  // We invalidate BOTH the old key (read from the pre-write `existing`
+  // row, captured before the update) AND the new key (read from the
+  // post-write `row`). When neither issuer nor clientId changed the
+  // two collapse to a single delete; when either rotated, the old
+  // cache entry would otherwise survive untouched. The new-key
+  // invalidation is defensive — no other path populates this cache
+  // outside the SSO flow itself, but this guarantees a rotation
+  // forces re-discovery on the very next sign-in regardless of any
+  // background work.
+  //
+  // Creates (existing === null) skip the old-key invalidation: the
+  // cache can't have an entry yet, since the row didn't exist.
+  if (row.protocol === 'OIDC') {
+    if (existing) {
+      invalidateOidcConfigCacheByKey({
+        oidcIssuer: existing.oidcIssuer,
+        oidcClientId: existing.oidcClientId,
+      });
+    }
+    invalidateOidcConfigCacheByKey({
+      oidcIssuer: row.oidcIssuer,
+      oidcClientId: row.oidcClientId,
+    });
+  }
+
   await audit(req, {
     action: existing ? 'admin.sso.update' : 'admin.sso.create',
     entityType: 'SsoIdentityProvider',
@@ -307,6 +340,18 @@ async function deleteForInstitution(req: Request, institutionId: string): Promis
     throw new AppError(404, 'NOT_FOUND', 'No SSO IdP row to delete.');
   }
   await prisma.ssoIdentityProvider.delete({ where: { id: existing.id } });
+  // Phase 11.15 (P11) — drop the discovery-config cache entry for the
+  // deleted IdP. Otherwise the cached Configuration (with its embedded
+  // clientSecret) would linger for up to TTL_MS even though the row
+  // is gone; benign in steady state but a foot-gun if the same
+  // {issuer, clientId} is recreated within the TTL window with a
+  // different secret.
+  if (existing.protocol === 'OIDC') {
+    invalidateOidcConfigCacheByKey({
+      oidcIssuer: existing.oidcIssuer,
+      oidcClientId: existing.oidcClientId,
+    });
+  }
   await audit(req, {
     action: 'admin.sso.delete',
     entityType: 'SsoIdentityProvider',

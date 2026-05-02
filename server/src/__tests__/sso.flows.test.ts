@@ -44,7 +44,9 @@ vi.mock('@node-saml/node-saml', () => ({
     return samlInstance;
   }) as unknown as new (...args: unknown[]) => typeof samlInstance,
   ValidateInResponseTo: { never: 'never', ifPresent: 'ifPresent', always: 'always' },
-  generateServiceProviderMetadata: vi.fn(() => '<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata"/>'),
+  generateServiceProviderMetadata: vi.fn(
+    () => '<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata"/>',
+  ),
 }));
 
 // openid-client v6: mock the flat functional API.
@@ -85,7 +87,11 @@ import { requestId } from '../middleware/requestId';
 import { __resetFlowStoreForTests, putFlowState } from '../api/sso/flow-store';
 import { __resetLockoutForTests } from '../lib/lockout';
 import { encryptSecret, _resetCipherKeyCache } from '../lib/secret-cipher';
-import { __resetOidcConfigCacheForTests } from '../api/sso/oidc';
+import {
+  __resetOidcConfigCacheForTests,
+  buildOidcAuthorizeUrl,
+  invalidateOidcConfigCacheByKey,
+} from '../api/sso/oidc';
 
 const SECRET = process.env['JWT_SECRET'] ?? 'test-jwt-secret-do-not-use-in-prod';
 
@@ -194,7 +200,9 @@ function enterpriseOidcIdpFixture(): FakeIdpWithInstitution {
 
 type AuditCall = [{ data: { action: string; changes?: Record<string, unknown> } }];
 function auditActions(): string[] {
-  return (prismaMock.auditLog.create.mock.calls as unknown as AuditCall[]).map((c) => c[0].data.action);
+  return (prismaMock.auditLog.create.mock.calls as unknown as AuditCall[]).map(
+    (c) => c[0].data.action,
+  );
 }
 
 beforeEach(() => {
@@ -307,7 +315,10 @@ describe('POST /api/sso/:slug/saml/acs', () => {
     // Token from URL should be a valid HERM JWT representing the new user.
     const tokenMatch = /token=([^&]+)/.exec(res.headers['location']);
     expect(tokenMatch).toBeTruthy();
-    const decoded = jwt.verify(decodeURIComponent(tokenMatch![1]!), SECRET) as { userId: string; email: string };
+    const decoded = jwt.verify(decodeURIComponent(tokenMatch![1]!), SECRET) as {
+      userId: string;
+      email: string;
+    };
     expect(decoded.userId).toBe('u-new');
     expect(decoded.email).toBe('new@uni.test');
 
@@ -514,18 +525,13 @@ describe('Q10 MFA bypass — SSO mints a session even when user has mfaEnabledAt
     expect(res.headers['location']).toMatch(/\/login\/sso\?token=/);
     // The minted token must NOT carry the MFA challenge purpose.
     const tokenMatch = /token=([^&]+)/.exec(res.headers['location']);
-    const decoded = jwt.verify(
-      decodeURIComponent(tokenMatch![1]!),
-      SECRET,
-    ) as { purpose?: string };
+    const decoded = jwt.verify(decodeURIComponent(tokenMatch![1]!), SECRET) as { purpose?: string };
     expect(decoded.purpose).toBeUndefined();
 
     const successCall = (prismaMock.auditLog.create.mock.calls as unknown as AuditCall[]).find(
       (c) => c[0].data.action === 'auth.sso.success',
     );
-    expect(successCall?.[0].data.changes).toEqual(
-      expect.objectContaining({ mfaBypassed: true }),
-    );
+    expect(successCall?.[0].data.changes).toEqual(expect.objectContaining({ mfaBypassed: true }));
   });
 });
 
@@ -567,9 +573,7 @@ describe('GET /api/sso/:slug/oidc/callback', () => {
   it('rejects when state is unknown or already consumed', async () => {
     prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(enterpriseOidcIdpFixture());
 
-    const res = await request(buildApp()).get(
-      '/api/sso/uni-1/oidc/callback?state=unknown',
-    );
+    const res = await request(buildApp()).get('/api/sso/uni-1/oidc/callback?state=unknown');
     expect(res.status).toBe(302);
     expect(res.headers['location']).toMatch(/\/login\?error=sso_failed/);
   });
@@ -860,6 +864,131 @@ describe('POST /api/auth/login refuses passwordLoginDisabled accounts', () => {
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe('AUTHENTICATION_ERROR');
     expect(res.body.error.message).toBe('Invalid email or password');
+  });
+});
+
+// ── P11: invalidateOidcConfigCacheByKey ────────────────────────────────────
+//
+// Phase 11.15 (P11) — write-side invalidation hook for the admin SSO upsert
+// path. The cached `Configuration` object embeds the `clientSecret` it was
+// discovered with, so a secret rotation that doesn't kick the cache leaves
+// token exchange using the stale secret for up to TTL_MS (1h). These tests
+// pin the contract: a populated entry can be removed via prefix scan, and the
+// next `getConfig` call re-runs `oidc.discovery` rather than serving stale data.
+
+describe('invalidateOidcConfigCacheByKey', () => {
+  beforeEach(() => {
+    __resetOidcConfigCacheForTests();
+    oidcMock.discovery.mockReset();
+    oidcMock.buildAuthorizationUrl.mockReset();
+  });
+
+  it('returns false when issuer or clientId is missing (no cache entry can exist)', () => {
+    expect(invalidateOidcConfigCacheByKey({ oidcIssuer: null, oidcClientId: 'c' })).toBe(false);
+    expect(invalidateOidcConfigCacheByKey({ oidcIssuer: 'https://i', oidcClientId: null })).toBe(
+      false,
+    );
+    expect(invalidateOidcConfigCacheByKey({ oidcIssuer: undefined, oidcClientId: undefined })).toBe(
+      false,
+    );
+  });
+
+  it('returns false when the key has no entry in the cache (idempotent)', () => {
+    expect(
+      invalidateOidcConfigCacheByKey({
+        oidcIssuer: 'https://idp.uni.test',
+        oidcClientId: 'never-cached',
+      }),
+    ).toBe(false);
+  });
+
+  it('removes the entry from the cache for {issuer, clientId} populated by getConfig', async () => {
+    // Populate the cache via the public surface (buildOidcAuthorizeUrl
+    // calls getConfig internally). Then invalidate. Then call again and
+    // assert discovery was hit twice — proving the entry was actually
+    // dropped, not just shadowed by a TTL miss.
+    oidcMock.discovery.mockResolvedValue({} as unknown);
+    oidcMock.buildAuthorizationUrl.mockReturnValue(
+      new URL('https://idp.uni.test/authorize?state=state-test'),
+    );
+
+    await buildOidcAuthorizeUrl('uni-1', {
+      oidcIssuer: 'https://idp.uni.test',
+      oidcClientId: 'client-abc',
+      oidcClientSecret: 'old-secret',
+    });
+    expect(oidcMock.discovery).toHaveBeenCalledTimes(1);
+
+    // Sanity: a second call without invalidation hits the cache (no
+    // discovery re-fetch).
+    await buildOidcAuthorizeUrl('uni-1', {
+      oidcIssuer: 'https://idp.uni.test',
+      oidcClientId: 'client-abc',
+      oidcClientSecret: 'old-secret',
+    });
+    expect(oidcMock.discovery).toHaveBeenCalledTimes(1);
+
+    const removed = invalidateOidcConfigCacheByKey({
+      oidcIssuer: 'https://idp.uni.test',
+      oidcClientId: 'client-abc',
+    });
+    expect(removed).toBe(true);
+
+    // After invalidation, getConfig must re-run discovery — and pass
+    // the NEW secret on the wire, since the cached Configuration is gone.
+    await buildOidcAuthorizeUrl('uni-1', {
+      oidcIssuer: 'https://idp.uni.test',
+      oidcClientId: 'client-abc',
+      oidcClientSecret: 'rotated-secret',
+    });
+    expect(oidcMock.discovery).toHaveBeenCalledTimes(2);
+    const lastCall = oidcMock.discovery.mock.calls[1] as unknown as [URL, string, string];
+    expect(lastCall[2]).toBe('rotated-secret');
+  });
+
+  it('only removes the targeted entry — other {issuer, clientId} pairs are untouched', async () => {
+    oidcMock.discovery.mockResolvedValue({} as unknown);
+    oidcMock.buildAuthorizationUrl.mockReturnValue(
+      new URL('https://idp.uni.test/authorize?state=state-test'),
+    );
+
+    // Populate two distinct entries (same issuer, different clientId —
+    // matches the two-Entra-apps scenario from PR #77).
+    await buildOidcAuthorizeUrl('uni-1', {
+      oidcIssuer: 'https://idp.uni.test',
+      oidcClientId: 'client-A',
+      oidcClientSecret: 'secret-A',
+    });
+    await buildOidcAuthorizeUrl('uni-1', {
+      oidcIssuer: 'https://idp.uni.test',
+      oidcClientId: 'client-B',
+      oidcClientSecret: 'secret-B',
+    });
+    expect(oidcMock.discovery).toHaveBeenCalledTimes(2);
+
+    // Invalidate only A. B must remain a cache hit.
+    expect(
+      invalidateOidcConfigCacheByKey({
+        oidcIssuer: 'https://idp.uni.test',
+        oidcClientId: 'client-A',
+      }),
+    ).toBe(true);
+
+    await buildOidcAuthorizeUrl('uni-1', {
+      oidcIssuer: 'https://idp.uni.test',
+      oidcClientId: 'client-B',
+      oidcClientSecret: 'secret-B',
+    });
+    // Still 2 — B was a cache hit, not a re-discovery.
+    expect(oidcMock.discovery).toHaveBeenCalledTimes(2);
+
+    // A is now a miss → re-discovery.
+    await buildOidcAuthorizeUrl('uni-1', {
+      oidcIssuer: 'https://idp.uni.test',
+      oidcClientId: 'client-A',
+      oidcClientSecret: 'secret-A',
+    });
+    expect(oidcMock.discovery).toHaveBeenCalledTimes(3);
   });
 });
 

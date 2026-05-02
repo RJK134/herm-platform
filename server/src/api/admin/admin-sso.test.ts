@@ -29,6 +29,19 @@ const { prismaMock } = vi.hoisted(() => ({
 }));
 vi.mock('../../utils/prisma', () => ({ default: prismaMock }));
 
+// Phase 11.15 — assert the admin upsert/delete path drives the OIDC
+// config-cache invalidation hook. Mock the whole `../sso/oidc` module so
+// the integration test pins which {issuer, clientId} keys the controller
+// invalidates and in what order — without dragging the real openid-client
+// into scope. Other exports from the module aren't used by the controller,
+// so we don't need to thread `importActual` through.
+const { invalidateMock } = vi.hoisted(() => ({
+  invalidateMock: vi.fn(() => true),
+}));
+vi.mock('../sso/oidc', () => ({
+  invalidateOidcConfigCacheByKey: invalidateMock,
+}));
+
 import adminRouter from './admin.router';
 import { errorHandler } from '../../middleware/errorHandler';
 import { requestId } from '../../middleware/requestId';
@@ -81,6 +94,7 @@ const baseRow = {
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.auditLog.create.mockResolvedValue({});
+  invalidateMock.mockReturnValue(true);
 });
 
 describe('GET /api/admin/sso/me', () => {
@@ -174,7 +188,10 @@ describe('PUT /api/admin/sso/me', () => {
   });
 
   it('preserves existing samlCert when the field is omitted on update', async () => {
-    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue({ ...baseRow, samlCert: 'old-cert' });
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue({
+      ...baseRow,
+      samlCert: 'old-cert',
+    });
     prismaMock.ssoIdentityProvider.update.mockResolvedValue({ ...baseRow, samlCert: 'old-cert' });
     await request(buildApp())
       .put('/api/admin/sso/me')
@@ -188,7 +205,10 @@ describe('PUT /api/admin/sso/me', () => {
   });
 
   it('clears samlCert when the field is sent as null', async () => {
-    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue({ ...baseRow, samlCert: 'old-cert' });
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue({
+      ...baseRow,
+      samlCert: 'old-cert',
+    });
     prismaMock.ssoIdentityProvider.update.mockResolvedValue({ ...baseRow, samlCert: null });
     await request(buildApp())
       .put('/api/admin/sso/me')
@@ -252,7 +272,6 @@ describe('DELETE /api/admin/sso/me', () => {
     expect(auditData.action).toBe('admin.sso.delete');
   });
 });
-
 
 // ── Phase 11.8 — SUPER_ADMIN cross-institution panel ───────────────────────
 
@@ -382,7 +401,9 @@ describe('PUT /api/admin/sso/institutions/:id', () => {
         | undefined;
       expect(createArgs?.data.institutionId).toBe('inst-2');
       const [createCall] = prismaMock.auditLog.create.mock.calls;
-      const auditData = (createCall as unknown as [{ data: { action: string; changes: { institutionId: string } } }])[0].data;
+      const auditData = (
+        createCall as unknown as [{ data: { action: string; changes: { institutionId: string } } }]
+      )[0].data;
       expect(auditData.action).toBe('admin.sso.create');
       expect(auditData.changes.institutionId).toBe('inst-2');
       // Response shape pin (Copilot review feedback): the SUPER_ADMIN
@@ -411,7 +432,7 @@ describe('DELETE /api/admin/sso/institutions/:id', () => {
     expect(res.status).toBe(403);
   });
 
-  it('deletes another institution\'s IdP as SUPER_ADMIN', async () => {
+  it("deletes another institution's IdP as SUPER_ADMIN", async () => {
     prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue({
       ...baseRow,
       institutionId: 'inst-2',
@@ -428,5 +449,190 @@ describe('DELETE /api/admin/sso/institutions/:id', () => {
     expect(prismaMock.ssoIdentityProvider.delete).toHaveBeenCalledWith({
       where: { id: 'idp-1' },
     });
+  });
+});
+
+// ── Phase 11.15 — OIDC config cache invalidation on admin upsert/delete ────
+//
+// The admin SSO write path mutates the row that produces the cached
+// `Configuration`'s {clientId, clientSecret}. Without these calls, a secret
+// rotation done via the panel takes up to TTL_MS (1h) to take effect — every
+// token-exchange in that window 401s at the IdP and surfaces as the opaque
+// `sso_failed` banner. Pin the contract: every OIDC mutation invalidates,
+// SAML mutations don't, creates only invalidate the new key, and rotations
+// of issuer/clientId invalidate the OLD key (read pre-write) AND the new.
+describe('PUT /api/admin/sso/me — OIDC cache invalidation', () => {
+  it('invalidates the cache on a secret-only rotation (key unchanged)', async () => {
+    const originalKey = process.env['SSO_SECRET_KEY'];
+    process.env['SSO_SECRET_KEY'] = '42'.repeat(32);
+    const { _resetCipherKeyCache } = await import('../../lib/secret-cipher');
+    _resetCipherKeyCache();
+    try {
+      prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(baseRow);
+      prismaMock.ssoIdentityProvider.update.mockResolvedValue(baseRow);
+
+      const res = await request(buildApp())
+        .put('/api/admin/sso/me')
+        .set('Authorization', `Bearer ${makeToken()}`)
+        .send({ oidcClientSecret: 'rotated-secret' });
+
+      expect(res.status).toBe(200);
+      // Both old + new keys invalidated. Issuer + clientId unchanged, so
+      // both calls collapse to the same {issuer, clientId} pair — that's
+      // expected and harmless (the second delete is a no-op against an
+      // empty entry); what matters is at least one fired with the right
+      // key, so the next OIDC sign-in re-discovers with the new secret.
+      expect(invalidateMock).toHaveBeenCalledWith({
+        oidcIssuer: baseRow.oidcIssuer,
+        oidcClientId: baseRow.oidcClientId,
+      });
+      expect(invalidateMock).toHaveBeenCalledTimes(2);
+    } finally {
+      if (originalKey === undefined) delete process.env['SSO_SECRET_KEY'];
+      else process.env['SSO_SECRET_KEY'] = originalKey;
+      _resetCipherKeyCache();
+    }
+  });
+
+  it('invalidates BOTH old and new keys when oidcClientId rotates', async () => {
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(baseRow);
+    prismaMock.ssoIdentityProvider.update.mockResolvedValue({
+      ...baseRow,
+      oidcClientId: 'client-NEW',
+    });
+
+    await request(buildApp())
+      .put('/api/admin/sso/me')
+      .set('Authorization', `Bearer ${makeToken()}`)
+      .send({ oidcClientId: 'client-NEW' });
+
+    // The OLD key (read from `existing` pre-write) must be invalidated
+    // first — that's the entry the cache actually has.
+    expect(invalidateMock).toHaveBeenCalledTimes(2);
+    expect(invalidateMock).toHaveBeenNthCalledWith(1, {
+      oidcIssuer: baseRow.oidcIssuer,
+      oidcClientId: baseRow.oidcClientId, // 'client-abc'
+    });
+    expect(invalidateMock).toHaveBeenNthCalledWith(2, {
+      oidcIssuer: baseRow.oidcIssuer,
+      oidcClientId: 'client-NEW',
+    });
+  });
+
+  it('invalidates BOTH old and new keys when oidcIssuer rotates', async () => {
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(baseRow);
+    prismaMock.ssoIdentityProvider.update.mockResolvedValue({
+      ...baseRow,
+      oidcIssuer: 'https://login.microsoftonline.com/tenant-NEW',
+    });
+
+    await request(buildApp())
+      .put('/api/admin/sso/me')
+      .set('Authorization', `Bearer ${makeToken()}`)
+      .send({ oidcIssuer: 'https://login.microsoftonline.com/tenant-NEW' });
+
+    expect(invalidateMock).toHaveBeenCalledTimes(2);
+    expect(invalidateMock).toHaveBeenNthCalledWith(1, {
+      oidcIssuer: baseRow.oidcIssuer,
+      oidcClientId: baseRow.oidcClientId,
+    });
+    expect(invalidateMock).toHaveBeenNthCalledWith(2, {
+      oidcIssuer: 'https://login.microsoftonline.com/tenant-NEW',
+      oidcClientId: baseRow.oidcClientId,
+    });
+  });
+
+  it('on create (no existing row) only invalidates the NEW key — no old to evict', async () => {
+    const originalKey = process.env['SSO_SECRET_KEY'];
+    process.env['SSO_SECRET_KEY'] = '42'.repeat(32);
+    const { _resetCipherKeyCache } = await import('../../lib/secret-cipher');
+    _resetCipherKeyCache();
+    try {
+      prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(null);
+      prismaMock.ssoIdentityProvider.create.mockResolvedValue({
+        ...baseRow,
+        enabled: true,
+      });
+
+      await request(buildApp())
+        .put('/api/admin/sso/me')
+        .set('Authorization', `Bearer ${makeToken()}`)
+        .send({
+          protocol: 'OIDC',
+          displayName: 'Sign in with Azure',
+          oidcIssuer: baseRow.oidcIssuer,
+          oidcClientId: baseRow.oidcClientId,
+          oidcClientSecret: 'fresh-secret',
+        });
+
+      // Single invalidation — defensive new-key drop only; no old row to evict.
+      expect(invalidateMock).toHaveBeenCalledTimes(1);
+      expect(invalidateMock).toHaveBeenCalledWith({
+        oidcIssuer: baseRow.oidcIssuer,
+        oidcClientId: baseRow.oidcClientId,
+      });
+    } finally {
+      if (originalKey === undefined) delete process.env['SSO_SECRET_KEY'];
+      else process.env['SSO_SECRET_KEY'] = originalKey;
+      _resetCipherKeyCache();
+    }
+  });
+
+  it('does NOT call invalidate for a SAML upsert (cache is OIDC-only)', async () => {
+    const samlRow = {
+      ...baseRow,
+      protocol: 'SAML' as const,
+      samlEntityId: 'urn:test',
+      samlSsoUrl: 'https://idp.test/sso',
+      samlCert: 'CERT-OLD',
+      oidcIssuer: null,
+      oidcClientId: null,
+      oidcClientSecret: null,
+    };
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(samlRow);
+    prismaMock.ssoIdentityProvider.update.mockResolvedValue({ ...samlRow, samlCert: 'CERT-NEW' });
+
+    await request(buildApp())
+      .put('/api/admin/sso/me')
+      .set('Authorization', `Bearer ${makeToken()}`)
+      .send({ samlCert: 'CERT-NEW' });
+
+    expect(invalidateMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('DELETE /api/admin/sso/me — OIDC cache invalidation', () => {
+  it('invalidates the cache for the deleted IdP (OIDC)', async () => {
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(baseRow);
+    prismaMock.ssoIdentityProvider.delete.mockResolvedValue(baseRow);
+
+    const res = await request(buildApp())
+      .delete('/api/admin/sso/me')
+      .set('Authorization', `Bearer ${makeToken()}`);
+    expect(res.status).toBe(204);
+
+    expect(invalidateMock).toHaveBeenCalledTimes(1);
+    expect(invalidateMock).toHaveBeenCalledWith({
+      oidcIssuer: baseRow.oidcIssuer,
+      oidcClientId: baseRow.oidcClientId,
+    });
+  });
+
+  it('does NOT call invalidate for a SAML delete (no cache entry to drop)', async () => {
+    const samlRow = {
+      ...baseRow,
+      protocol: 'SAML' as const,
+      oidcIssuer: null,
+      oidcClientId: null,
+      oidcClientSecret: null,
+    };
+    prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(samlRow);
+    prismaMock.ssoIdentityProvider.delete.mockResolvedValue(samlRow);
+
+    await request(buildApp())
+      .delete('/api/admin/sso/me')
+      .set('Authorization', `Bearer ${makeToken()}`);
+
+    expect(invalidateMock).not.toHaveBeenCalled();
   });
 });

@@ -73,8 +73,7 @@ async function getConfig(idp: TenantOidcConfig): Promise<oidc.Configuration> {
   // We only relax this when (a) we're explicitly outside production
   // AND (b) the issuer URL itself is http: — so a misconfigured prod
   // deploy can't accidentally talk to a plaintext IdP.
-  const allowInsecure =
-    process.env['NODE_ENV'] !== 'production' && issuerUrl.protocol === 'http:';
+  const allowInsecure = process.env['NODE_ENV'] !== 'production' && issuerUrl.protocol === 'http:';
   const config = await oidc.discovery(
     issuerUrl,
     idp.oidcClientId,
@@ -128,7 +127,6 @@ export async function buildOidcAuthorizeUrl(
   return url.href;
 }
 
-
 export interface OidcAssertion {
   email: string;
   name?: string;
@@ -176,6 +174,50 @@ export async function completeOidcCallback(
   const rawName = claims['name'];
   const name = typeof rawName === 'string' ? rawName : undefined;
   return { email, name, sub };
+}
+
+/**
+ * Drop all cache entries for a specific {issuer, clientId} pair.
+ *
+ * Phase 11.15 (P11) — write-side invalidation hook for the admin SSO
+ * upsert path. Writes that rotate `oidcIssuer` or `oidcClientId` (and
+ * disables / deletes) call this with the OLD {issuer, clientId} so the
+ * stale cache entry doesn't survive until TTL expiry.
+ *
+ * Phase 11.16 added a secret fingerprint to the cache key so a
+ * secret-only rotation automatically yields a cache miss without an
+ * explicit invalidation call. This function uses a prefix scan
+ * (`${issuer}|${clientId}|*`) so it correctly finds and removes entries
+ * regardless of which fingerprint they were stored under — covering
+ * both the issuer/clientId-rotation case and the delete case where the
+ * exact secret is no longer known.
+ *
+ * Returns whether at least one entry was actually removed — useful for
+ * tests and metrics, but callers don't need to care in production.
+ *
+ * Edge cases:
+ *   - Issuer/clientId rotated: pass the OLD issuer + clientId; the new
+ *     key won't be in the cache yet, so invalidating it is a no-op.
+ *   - Delete: pass the deleted row's issuer + clientId; removes the
+ *     lingering entry so a same-key re-create within the TTL window
+ *     doesn't surface stale config.
+ *   - `null`/missing fields: silently no-ops (a row without OIDC
+ *     issuer/clientId can't have produced a cache entry).
+ */
+export function invalidateOidcConfigCacheByKey(args: {
+  oidcIssuer: string | null | undefined;
+  oidcClientId: string | null | undefined;
+}): boolean {
+  if (!args.oidcIssuer || !args.oidcClientId) return false;
+  const prefix = `${args.oidcIssuer}|${args.oidcClientId}|`;
+  let removed = false;
+  for (const key of configCache.keys()) {
+    if (key.startsWith(prefix)) {
+      configCache.delete(key);
+      removed = true;
+    }
+  }
+  return removed;
 }
 
 /** Test hook: drop the in-memory discovery-config cache. */
