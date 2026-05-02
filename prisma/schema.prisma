@@ -130,14 +130,16 @@ model Institution {
 
   @@index([deletedAt])
   // Phase 11.16 (L3) — speeds up the email-based SSO discovery path
-  // (`discoverByEmail` in sso.controller.ts) which queries
-  // `Institution.findFirst({ where: { domain } })` on every probe.
-  // Without an index this is a sequential scan of the Institution
-  // table; the discoveryRateLimiter caps the surface at 30 req/min/IP
-  // but doesn't change the per-query cost. B-tree on a nullable column
-  // is fine — Postgres handles NULL entries efficiently and the table
-  // is small enough that index size isn't a concern.
-  @@index([domain])
+  // (`discoverByEmail` in sso.controller.ts), which now performs a
+  // deterministic oldest-match lookup equivalent to
+  // `WHERE domain = ? ORDER BY createdAt ASC LIMIT 1`.
+  // A composite B-tree index on `(domain, createdAt)` lets Postgres
+  // satisfy both the equality filter and the ordering from the index,
+  // avoiding extra work scanning/sorting duplicate-domain rows. B-tree
+  // on a nullable leading column is fine — Postgres handles NULL
+  // entries efficiently and the table is small enough that index size
+  // isn't a concern.
+  @@index([domain, createdAt])
 }
 
 // Phase 10.7 (scaffold) + Phase 11.13 (multi-IdP per tenant): per-
