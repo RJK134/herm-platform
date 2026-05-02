@@ -1,0 +1,32 @@
+[
+  {
+    "name": "main bundle (initial load) — gzip",
+    "path": "dist/assets/index-*.js",
+    "limit": "460 KB",
+    "gzip": true
+  },
+  {
+    "name": "main CSS — gzip",
+    "path": "dist/assets/index-*.css",
+    "limit": "12 KB",
+    "gzip": true
+  },
+  {
+    "name": "html2canvas (lazy chunk, PDF export) — gzip",
+    "path": "dist/assets/html2canvas-*.js",
+    "limit": "50 KB",
+    "gzip": true
+  },
+  {
+    "name": "jsPDF DOMPurify (lazy chunk, PDF export) — gzip",
+    "path": "dist/assets/purify.es-*.js",
+    "limit": "10 KB",
+    "gzip": true
+  },
+  {
+    "name": "jsPDF (lazy chunk, PDF export) — gzip",
+    "path": "dist/assets/index.es-*.js",
+    "limit": "52 KB",
+    "gzip": true
+  }
+]

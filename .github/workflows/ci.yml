@@ -91,6 +91,15 @@ jobs:
       - name: Generate Prisma client
         run: npm run db:generate
       - run: npm run build
+      # Phase 12.5 — fail the build if a client bundle grows past its
+      # configured ceiling (client/.size-limit.json). Run after the
+      # build step above so the dist/ artefacts exist; runs in the
+      # client workspace because that's where size-limit + the config
+      # live. Failures show the diff between current and ceiling so
+      # the PR author can decide whether to refactor or to bump the
+      # ceiling deliberately.
+      - name: Bundle size check (client)
+        run: npm run size:check --workspace=@herm-platform/client
 
   prisma-validate:
     name: Validate Prisma schema
