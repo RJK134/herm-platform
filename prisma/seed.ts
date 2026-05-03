@@ -358,14 +358,14 @@ async function main() {
   // Daniel — vendor side. The vendor portal authenticates against the
   // separate VendorUser/VendorAccount tables (see vendor-portal.service
   // login flow), NOT the buyer-side User table. Seeding him as a User
-  // with role VENDOR_ADMIN would let him through `/auth/login` but he
+  // with role VENDOR_ADMIN would let him through `/api/auth/login` but he
   // could not actually use the portal because the portal queries
   // `prisma.vendorUser`. So we create both halves of the vendor
   // identity here.
   //
   // PR #89 (the previous deploy seed) accidentally seeded Daniel as a
   // buyer User + Institution. On UAT databases that already ran that
-  // seed, the row still exists and would let him through `/auth/login`
+  // seed, the row still exists and would let him through `/api/auth/login`
   // — defeating the "buyer login won't authenticate Daniel" promise we
   // make in DEPLOY.md. Clean it up before creating the vendor identity
   // so existing UAT environments converge to the new shape on rerun.
