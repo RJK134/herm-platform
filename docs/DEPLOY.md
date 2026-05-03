@@ -64,17 +64,23 @@ the second `SSO_SECRET_KEY`.
    | `DATABASE_URL` | (Neon pooled string from Step 1) |
    | `JWT_SECRET` | (the `openssl rand -base64 64` you generated) |
    | `SSO_SECRET_KEY` | (the `openssl rand -hex 32` you generated) |
-   | `FRONTEND_URL` | placeholder e.g. `https://example.com` — overwrite with the real Vercel URL after Step 3 |
+   | `FRONTEND_URL` | **Set this to the same value as `SP_BASE_URL` for now** — overwrite with the real Vercel URL after Step 3 |
    | `SP_BASE_URL` | (the Railway service's public URL — Settings → Networking → Public Networking) |
    | `DEV_UNLOCK_ALL_TIERS` | `true` (for UAT only — every user sees Enterprise features) |
    | `DEMO_PASSWORD` | leave UNSET for the demo (login page hint is hard-coded to `demo12345`) |
 
-   The `FRONTEND_URL` placeholder is fine until Vercel exists. CORS
-   will reject the eventual SPA origin until you swap it for the real
-   value, but the container itself will boot, the healthcheck will
-   pass, and you can reach `/api/health` and `/api/readiness` from
-   `curl` — which is enough to hand a working API URL to Vercel in the
-   next step.
+   Why same as `SP_BASE_URL` and not e.g. `https://example.com`: the
+   SSO controllers redirect to `${FRONTEND_URL}/login/sso?token=...`
+   carrying the session JWT in the query string. If you set a
+   third-party origin as the placeholder and someone exercises SSO
+   before Step 3 swaps in the Vercel host, that JWT leaks to the
+   third party. Pointing `FRONTEND_URL` at the Railway origin keeps
+   the redirect on the same host you control — it 404s harmlessly,
+   no token leak. Cookie / CORS for the buyer SPA won't work yet
+   (you haven't deployed it), but the container boots, the
+   healthcheck passes, and `/api/health` + `/api/readiness` answer
+   from `curl` — which is enough to hand a working API URL to Vercel
+   in the next step.
 
    `REDIS_URL` is auto-injected by the Redis plugin; don't set it
    manually.
@@ -126,9 +132,10 @@ UAT personas seeded:
   priya@midshire.ac.uk           PROCUREMENT_LEAD  Enterprise   (Russell Group HE)     /login
   marcus@newport-met.ac.uk       EVALUATOR         Professional (post-92 HE)           /login
   rachel@wessex-colleges.ac.uk   PROCUREMENT_LEAD  Enterprise   (FE college group)     /login
-  daniel@apex-software.com       admin (vendor)    PREMIUM      (Apex Software)        /vendor-portal/login
+  daniel@apex-software.com       admin (vendor)    PREMIUM      (Apex Software)        /vendor-portal
   Password for all four: same as the demo user (DEMO_PASSWORD env or default).
-  Note: Daniel logs in via the vendor portal — the buyer /login page will not authenticate him.
+  Note: Daniel logs in via the vendor portal (/vendor-portal renders the vendor sign-in form).
+        The buyer /login page will not authenticate him.
 ```
 
 ## Step 5 — Smoke-test before sharing
@@ -175,7 +182,7 @@ Pick the persona that matches your real-world role:
            rachel@wessex-colleges.ac.uk / demo12345
   Daniel — vendor solutions architect (uses the VENDOR PORTAL, not the
            main login page)
-           Sign in at <site>/vendor-portal/login
+           Sign in at <site>/vendor-portal
            daniel@apex-software.com     / demo12345
 
 Use the persona's lens — only test surfaces they would realistically use
