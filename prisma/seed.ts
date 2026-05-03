@@ -359,9 +359,19 @@ async function main() {
   // separate VendorUser/VendorAccount tables (see vendor-portal.service
   // login flow), NOT the buyer-side User table. Seeding him as a User
   // with role VENDOR_ADMIN would let him through `/auth/login` but he
-  // could not actually use the portal because `/vendor-portal/login`
-  // queries `prisma.vendorUser`. So we create both halves of the vendor
+  // could not actually use the portal because the portal queries
+  // `prisma.vendorUser`. So we create both halves of the vendor
   // identity here.
+  //
+  // PR #89 (the previous deploy seed) accidentally seeded Daniel as a
+  // buyer User + Institution. On UAT databases that already ran that
+  // seed, the row still exists and would let him through `/auth/login`
+  // — defeating the "buyer login won't authenticate Daniel" promise we
+  // make in DEPLOY.md. Clean it up before creating the vendor identity
+  // so existing UAT environments converge to the new shape on rerun.
+  await prisma.user.deleteMany({ where: { email: 'daniel@apex-software.com' } });
+  await prisma.institution.deleteMany({ where: { slug: 'apex-software-vendor' } });
+
   const danielAccount = await prisma.vendorAccount.upsert({
     where: { contactEmail: 'daniel@apex-software.com' },
     update: { status: 'approved', tier: 'PREMIUM' },
@@ -392,9 +402,10 @@ async function main() {
   console.log('  priya@midshire.ac.uk           PROCUREMENT_LEAD  Enterprise   (Russell Group HE)     /login');
   console.log('  marcus@newport-met.ac.uk       EVALUATOR         Professional (post-92 HE)           /login');
   console.log('  rachel@wessex-colleges.ac.uk   PROCUREMENT_LEAD  Enterprise   (FE college group)     /login');
-  console.log('  daniel@apex-software.com       admin (vendor)    PREMIUM      (Apex Software)        /vendor-portal/login');
+  console.log('  daniel@apex-software.com       admin (vendor)    PREMIUM      (Apex Software)        /vendor-portal');
   console.log('  Password for all four: same as the demo user (DEMO_PASSWORD env or default).');
-  console.log('  Note: Daniel logs in via the vendor portal — the buyer /login page will not authenticate him.');
+  console.log('  Note: Daniel logs in via the vendor portal (/vendor-portal renders the vendor sign-in form).');
+  console.log('        The buyer /login page will not authenticate him.');
 
   // ── Demo capability basket ────────────────────────────────────────────────
   const demoBasket = await prisma.capabilityBasket.upsert({
