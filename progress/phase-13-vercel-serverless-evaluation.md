@@ -56,9 +56,10 @@ minutes for someone who knows the codebase.
 Currently implemented under `server/src/services/...` (with one-shot
 runners under `server/src/scripts/`):
 
-- **Retention scheduler** — daily soft-delete cleanup. GDPR-relevant.
-  Must run reliably (i.e. >99% on-time). Vercel Cron candidate, but
-  needs an SLA conversation.
+- **Retention scheduler** — periodic soft-delete cleanup (default 6h
+  interval; configurable). GDPR-relevant. Must run reliably (i.e.
+  >99% on-time). Vercel Cron candidate, but needs an SLA
+  conversation.
 - **UKAMF metadata-feed cert auto-rotation** — periodic poller for
   SAML cert refresh from the UKAMF feed.
 
