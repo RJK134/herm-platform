@@ -45,7 +45,7 @@ infrastructure.
 |---|---|---|
 | Serverless-safe | idempotent, <10 s, no in-memory state | `/api/auth/*`, `/api/sso/*`, `/scim/v2/*`, `/api/capabilities/*`, `/api/scores/*`, `/api/health` |
 | Needs Pro (10–60 s) | timeout > Hobby cap | `/api/chat/*` (AI assistant — Anthropic call), `/api/export/*` (bulk export), heavy `/api/scoring/*` aggregations |
-| Cannot serverless | streaming, long-running, or stateful between calls | `/api/metrics` (Prometheus counters reset on cold start), any future websocket / SSE surfaces |
+| Cannot serverless | streaming, long-running, or stateful between calls | `/metrics` (Prometheus counters reset on cold start), any future websocket / SSE surfaces |
 
 The actual sweep should look at `server/src/api/*/router.ts` and
 classify each handler. ~15 minutes for someone who knows the codebase.
