@@ -43,7 +43,7 @@ infrastructure.
 
 | Bucket | Constraint | Examples (non-exhaustive — needs full sweep) |
 |---|---|---|
-| Serverless-safe | idempotent, <10 s, no in-memory state | `/api/auth/*`, `/api/sso/*`, `/api/scim/v2/*`, `/api/capabilities/*`, `/api/scores/*`, `/api/health` |
+| Serverless-safe | idempotent, <10 s, no in-memory state | `/api/auth/*`, `/api/sso/*`, `/scim/v2/*`, `/api/capabilities/*`, `/api/scores/*`, `/api/health` |
 | Needs Pro (10–60 s) | timeout > Hobby cap | `/api/chat/*` (AI assistant — Anthropic call), `/api/export/*` (bulk export), heavy `/api/scoring/*` aggregations |
 | Cannot serverless | streaming, long-running, or stateful between calls | `/api/metrics` (Prometheus counters reset on cold start), any future websocket / SSE surfaces |
 
