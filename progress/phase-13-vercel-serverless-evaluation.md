@@ -53,7 +53,8 @@ minutes for someone who knows the codebase.
 
 ### Long-running jobs
 
-Currently in `server/src/jobs/`:
+Currently implemented under `server/src/services/...` (with one-shot
+runners under `server/src/scripts/`):
 
 - **Retention scheduler** — daily soft-delete cleanup. GDPR-relevant.
   Must run reliably (i.e. >99% on-time). Vercel Cron candidate, but
