@@ -47,8 +47,9 @@ infrastructure.
 | Needs Pro (10–60 s) | timeout > Hobby cap | `/api/chat/*` (AI assistant — Anthropic call), `/api/export/*` (bulk export), heavy `/api/scoring/*` aggregations |
 | Cannot serverless | streaming, long-running, or stateful between calls | `/metrics` (Prometheus counters reset on cold start), any future websocket / SSE surfaces |
 
-The actual sweep should look at `server/src/api/*/router.ts` and
-classify each handler. ~15 minutes for someone who knows the codebase.
+The actual sweep should look at `server/src/api/*/*.router.ts` (or do
+a repo-wide search for `*.router.ts`) and classify each handler. ~15
+minutes for someone who knows the codebase.
 
 ### Long-running jobs
 
