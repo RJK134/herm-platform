@@ -15,7 +15,18 @@
  * v6 is ESM-only — fine; the project's root package.json sets
  * `"type": "module"`. Node 22 baseline (we run 22+ in CI and prod).
  */
-import * as oidc from 'openid-client';
+// openid-client v6 is pure ESM. The server's tsconfig is module:commonjs,
+// so `require('openid-client')` would throw at module load on Node runtimes
+// that don't enable require(esm) (notably Vercel's Node 24 wrapper as of
+// 2026-05). Resolve it lazily via `import()` instead — values are pulled
+// inside the async functions that actually need them, types come from a
+// type-only import so the compile-time API stays unchanged.
+import type * as OidcMod from 'openid-client';
+let _oidc: typeof OidcMod | null = null;
+async function loadOidc(): Promise<typeof OidcMod> {
+  _oidc ??= await import('openid-client');
+  return _oidc;
+}
 import { createHash } from 'node:crypto';
 import { putFlowState, takeFlowState, type OidcFlowState } from './flow-store';
 import { getOidcCallbackUrl } from '../../lib/sso-config';
@@ -27,7 +38,7 @@ export interface TenantOidcConfig {
 }
 
 interface CachedConfig {
-  config: oidc.Configuration;
+  config: OidcMod.Configuration;
   fetchedAt: number;
 }
 const TTL_MS = 60 * 60 * 1000;
@@ -96,7 +107,8 @@ function pruneExpired(now: number): void {
   }
 }
 
-async function getConfig(idp: TenantOidcConfig): Promise<oidc.Configuration> {
+async function getConfig(idp: TenantOidcConfig): Promise<OidcMod.Configuration> {
+  const oidc = await loadOidc();
   const cacheKey = configCacheKey(idp);
   const now = Date.now();
   const hit = configCache.get(cacheKey);
@@ -152,6 +164,7 @@ export async function buildOidcAuthorizeUrl(
   idp: TenantOidcConfig,
   idpId?: string,
 ): Promise<string> {
+  const oidc = await loadOidc();
   const config = await getConfig(idp);
   const codeVerifier = oidc.randomPKCECodeVerifier();
   const codeChallenge = await oidc.calculatePKCECodeChallenge(codeVerifier);
@@ -206,6 +219,7 @@ export async function completeOidcCallback(
   if (flow.slug !== institutionSlug) {
     throw new Error('OIDC flow slug mismatch');
   }
+  const oidc = await loadOidc();
   const config = await getConfig(idp);
   const tokens = await oidc.authorizationCodeGrant(config, callbackUrl, {
     pkceCodeVerifier: flow.codeVerifier,
