@@ -1,14 +1,18 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run build --workspace=@herm-platform/client",
-  "outputDirectory": "dist",
-  "installCommand": "npm install",
+  "buildCommand": "npm install && npx prisma generate --schema=prisma/schema.prisma && npm run build --workspace=server && npm run build --workspace=client",
+  "outputDirectory": "client/dist",
   "framework": null,
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
+  "functions": {
+    "api/[...path].ts": {
+      "memory": 1024,
+      "maxDuration": 30,
+      "includeFiles": "{server/dist/**,prisma/**,node_modules/.prisma/**,node_modules/@prisma/**,node_modules/@neondatabase/**,node_modules/ws/**,node_modules/bcryptjs/**}"
     }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/[...path]" },
+    { "source": "/((?!api/|assets/).*)", "destination": "/index.html" }
   ],
   "github": {
     "silent": true
