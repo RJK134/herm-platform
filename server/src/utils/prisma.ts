@@ -1,7 +1,4 @@
 import { PrismaClient } from '@prisma/client';
-import { createRequire } from 'node:module';
-
-const require = createRequire(import.meta.url);
 
 /**
  * DB resilience defaults. Both are overridable per environment by setting
@@ -88,11 +85,11 @@ function makePrisma(): PrismaClient {
     // pool instead of native TCP. Synchronous require() to keep this module
     // synchronous; deps are pulled in ad hoc with `npm install --no-save` in
     // the sandbox flow and are not in package.json.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { Pool, neonConfig } = require('@neondatabase/serverless');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { PrismaNeon } = require('@prisma/adapter-neon');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const ws = require('ws');
     neonConfig.webSocketConstructor = ws;
     const pool = new Pool({ connectionString: databaseUrl });
