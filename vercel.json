@@ -20,6 +20,10 @@
       "destination": "/api/scim/v2/:path*"
     },
     {
+      "source": "/api/(.*)",
+      "destination": "/api/[...slug]"
+    },
+    {
       "source": "/((?!api/|assets/).*)",
       "destination": "/index.html"
     }
