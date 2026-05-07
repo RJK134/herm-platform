@@ -1,12 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run build --workspace=@herm-platform/client",
-  "outputDirectory": "dist",
+  "buildCommand": "npx prisma generate --schema=prisma/schema.prisma && npm run build --workspace=@herm-platform/server && npm run build --workspace=@herm-platform/client",
+  "outputDirectory": "client/dist",
   "installCommand": "npm install",
   "framework": null,
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ],
