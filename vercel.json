@@ -1,7 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm install && npx prisma generate --schema=prisma/schema.prisma && npm run build --workspace=server && npm run build --workspace=client",
+  "buildCommand": "npx prisma generate --schema=prisma/schema.prisma && npm run build --workspace=@herm-platform/server && npm run build --workspace=@herm-platform/client",
   "outputDirectory": "client/dist",
+  "installCommand": "npm install --include=dev",
   "framework": null,
   "functions": {
     "api/[...path].ts": {
@@ -10,8 +11,22 @@
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/[...path]" },
-    { "source": "/((?!api/|assets/).*)", "destination": "/index.html" }
+    {
+      "source": "/metrics",
+      "destination": "/api/metrics"
+    },
+    {
+      "source": "/scim/v2/:path*",
+      "destination": "/api/scim/v2/:path*"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/[...path]"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
   ],
   "github": {
     "silent": true
