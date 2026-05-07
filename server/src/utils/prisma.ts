@@ -80,11 +80,18 @@ function encodePostgresQuery(params: URLSearchParams): string {
 const databaseUrl = applyConnectionDefaults(process.env['DATABASE_URL']);
 
 function makePrisma(): PrismaClient {
-  if (process.env['USE_NEON_HTTP'] === '1' && databaseUrl) {
+  if (process.env['USE_NEON_HTTP'] === '1') {
     // Sandbox / HTTPS-only fallback: route Prisma through Neon's WebSocket
-    // pool instead of native TCP. Synchronous require() to keep this module
-    // synchronous; deps are pulled in ad hoc with `npm install --no-save` in
-    // the sandbox flow and are not in package.json.
+    // pool instead of native TCP. Uses the raw DATABASE_URL — the pooled
+    // Neon proxy rejects the `options=-c statement_timeout=…` startup
+    // parameter that applyConnectionDefaults() adds (Postgres error 08P01:
+    // "unsupported startup parameter in options"). connection_limit is
+    // also irrelevant here because connection management is the Neon
+    // pool's job, not Prisma's.
+    const rawUrl = process.env['DATABASE_URL'];
+    if (!rawUrl) {
+      throw new Error('USE_NEON_HTTP=1 requires DATABASE_URL to be set');
+    }
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { Pool, neonConfig } = require('@neondatabase/serverless');
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -92,7 +99,7 @@ function makePrisma(): PrismaClient {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const ws = require('ws');
     neonConfig.webSocketConstructor = ws;
-    const pool = new Pool({ connectionString: databaseUrl });
+    const pool = new Pool({ connectionString: rawUrl });
     return new PrismaClient({ adapter: new PrismaNeon(pool) } as never);
   }
   return databaseUrl
