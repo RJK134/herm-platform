@@ -70,7 +70,11 @@ async function main() {
         console.log(`[ok]    ${name}`);
       } catch (e) {
         await client.query('ROLLBACK').catch(() => {});
-        console.error(`[fail]  ${name}: ${e.message}`);
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        console.error(`[fail]  ${name}: ${errorMessage}`);
+        if (e instanceof Error && e.stack) {
+          console.error(e.stack);
+        }
         throw e;
       }
     }
