@@ -1,4 +1,7 @@
 import { PrismaClient } from '@prisma/client';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
 
 /**
  * DB resilience defaults. Both are overridable per environment by setting
@@ -79,8 +82,27 @@ function encodePostgresQuery(params: URLSearchParams): string {
 
 const databaseUrl = applyConnectionDefaults(process.env['DATABASE_URL']);
 
-const prisma = databaseUrl
-  ? new PrismaClient({ datasources: { db: { url: databaseUrl } } })
-  : new PrismaClient();
+function makePrisma(): PrismaClient {
+  if (process.env['USE_NEON_HTTP'] === '1' && databaseUrl) {
+    // Sandbox / HTTPS-only fallback: route Prisma through Neon's WebSocket
+    // pool instead of native TCP. Synchronous require() to keep this module
+    // synchronous; deps are pulled in ad hoc with `npm install --no-save` in
+    // the sandbox flow and are not in package.json.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    const { Pool, neonConfig } = require('@neondatabase/serverless');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    const { PrismaNeon } = require('@prisma/adapter-neon');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    const ws = require('ws');
+    neonConfig.webSocketConstructor = ws;
+    const pool = new Pool({ connectionString: databaseUrl });
+    return new PrismaClient({ adapter: new PrismaNeon(pool) } as never);
+  }
+  return databaseUrl
+    ? new PrismaClient({ datasources: { db: { url: databaseUrl } } })
+    : new PrismaClient();
+}
+
+const prisma = makePrisma();
 
 export default prisma;
