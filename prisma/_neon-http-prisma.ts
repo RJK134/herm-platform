@@ -12,12 +12,18 @@ export async function getPrismaClient(): Promise<PrismaClient> {
   if (process.env['USE_NEON_HTTP'] !== '1') {
     return new PrismaClient();
   }
+
+  const databaseUrl = process.env['DATABASE_URL'];
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL is required when USE_NEON_HTTP is enabled.');
+  }
+
   const [{ Pool, neonConfig }, { PrismaNeon }, wsMod] = await Promise.all([
     import('@neondatabase/serverless'),
     import('@prisma/adapter-neon'),
     import('ws'),
   ]);
   neonConfig.webSocketConstructor = wsMod.default;
-  const pool = new Pool({ connectionString: process.env['DATABASE_URL'] });
+  const pool = new Pool({ connectionString: databaseUrl });
   return new PrismaClient({ adapter: new PrismaNeon(pool) } as never);
 }
