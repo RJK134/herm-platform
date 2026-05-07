@@ -14,3 +14,4 @@ client/node_modules/
 *.pdf
 /docs-private/
 /briefings/
+.vercel
