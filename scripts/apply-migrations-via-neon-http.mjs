@@ -8,13 +8,14 @@ import ws from 'ws';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 neonConfig.webSocketConstructor = ws;
 
 const url = process.env.DATABASE_URL;
 if (!url) { console.error('DATABASE_URL missing'); process.exit(1); }
 
-const migrationsDir = new URL('../prisma/migrations/', import.meta.url).pathname;
+const migrationsDir = fileURLToPath(new URL('../prisma/migrations/', import.meta.url));
 const dirs = readdirSync(migrationsDir)
   .filter(n => statSync(join(migrationsDir, n)).isDirectory())
   .sort();
