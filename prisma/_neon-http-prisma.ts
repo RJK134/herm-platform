@@ -25,5 +25,5 @@ export async function getPrismaClient(): Promise<PrismaClient> {
   ]);
   neonConfig.webSocketConstructor = wsMod.default;
   const pool = new Pool({ connectionString: databaseUrl });
-  return new PrismaClient({ adapter: new PrismaNeon(pool) } as never);
+  return new PrismaClient({ adapter: new PrismaNeon(pool) });
 }
