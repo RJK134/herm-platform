@@ -473,9 +473,15 @@ async function main() {
     { stageCode: 'PLANNING', stageName: 'Planning & Business Case', stageOrder: 1, status: 'IN_PROGRESS' },
     { stageCode: 'MARKET_ANALYSIS', stageName: 'Market Engagement', stageOrder: 2, status: 'NOT_STARTED' },
     { stageCode: 'SPECIFICATION', stageName: 'Requirements Specification', stageOrder: 3, status: 'NOT_STARTED' },
-    { stageCode: 'NOTICE', stageName: 'Tender Notice & Submission', stageOrder: 4, status: 'NOT_STARTED' },
-    { stageCode: 'EVALUATION', stageName: 'Evaluation & Scoring', stageOrder: 5, status: 'NOT_STARTED' },
-    { stageCode: 'STANDSTILL', stageName: 'Standstill Period', stageOrder: 6, status: 'NOT_STARTED' },
+    // Stage names mirror UK_STAGES in
+    // server/src/services/domain/procurement-engine.ts exactly so the
+    // demo project's Pipeline cards match what users see on freshly-
+    // created projects (which go through procurement.service.ts:createProject(),
+    // which imports the engine). Copilot review on PR #100 noted three
+    // names had drifted from the engine's source-of-truth strings.
+    { stageCode: 'NOTICE', stageName: 'Tender Notice Publication', stageOrder: 4, status: 'NOT_STARTED' },
+    { stageCode: 'EVALUATION', stageName: 'Tender Evaluation', stageOrder: 5, status: 'NOT_STARTED' },
+    { stageCode: 'STANDSTILL', stageName: 'Mandatory Standstill Period', stageOrder: 6, status: 'NOT_STARTED' },
     { stageCode: 'AWARD', stageName: 'Contract Award', stageOrder: 7, status: 'NOT_STARTED' },
   ];
   for (const def of UK_DEMO_STAGES) {
@@ -507,9 +513,15 @@ async function main() {
   if (priyaUser) {
     const evalDeadline = new Date();
     evalDeadline.setDate(evalDeadline.getDate() + 30);
+    // Copilot review on PR #100 — `update: {}` would let the
+    // deadline drift into the past on every reseed against an existing
+    // database, surfacing as an "OVERDUE" demo state in Team
+    // Workspaces. Refresh `deadline` and `status` in the upsert update
+    // block so Midshire always lands on a 30-days-out, in_progress
+    // evaluation regardless of how many times the seed has run.
     const demoEval = await prisma.evaluationProject.upsert({
       where: { id: 'demo-evaluation-001' },
-      update: {},
+      update: { status: 'in_progress', deadline: evalDeadline },
       create: {
         id: 'demo-evaluation-001',
         name: 'SIS Replacement — Capability Evaluation',
