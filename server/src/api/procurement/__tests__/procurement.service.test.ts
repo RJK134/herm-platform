@@ -95,6 +95,7 @@ describe('ProcurementService.createProject', () => {
 
   it('persists procurement stages and tasks alongside the legacy workflow', async () => {
     const stageDefs = procurementEngine.getStageDefinitions('UK');
+    expect(stageDefs.length).toBeGreaterThan(0);
 
     vi.mocked(prisma.procurementProject.create).mockResolvedValueOnce({
       id: 'project-1',
@@ -190,9 +191,10 @@ describe('ProcurementService.createProject', () => {
       })),
     });
     const lastStageDef = stageDefs.at(-1);
+    expect(lastStageDef).toBeDefined();
     expect(prisma.stageTask.createMany).toHaveBeenLastCalledWith({
-      data: lastStageDef?.tasks.map((task) => ({
-        stageId: `stage-${lastStageDef?.stageCode}`,
+      data: lastStageDef!.tasks.map((task) => ({
+        stageId: `stage-${lastStageDef!.stageCode}`,
         title: task.title,
         description: task.description ?? null,
         isMandatory: task.isMandatory,
