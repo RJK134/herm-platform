@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Prisma, ProcurementProject, ProcurementStage, ProcurementWorkflow } from '@prisma/client';
 import { InvalidTransitionError } from '../../../services/domain/procurement/project-status';
 
 // Mock prisma before importing the service so the service picks up the mock.
@@ -96,23 +97,50 @@ describe('ProcurementService.createProject', () => {
   it('persists procurement stages and tasks alongside the legacy workflow', async () => {
     const stageDefs = procurementEngine.getStageDefinitions('UK');
     expect(stageDefs.length).toBeGreaterThan(0);
-
-    vi.mocked(prisma.procurementProject.create).mockResolvedValueOnce({
+    const now = new Date('2026-01-01T00:00:00Z');
+    const createdProject: ProcurementProject = {
       id: 'project-1',
       name: 'New Project',
+      description: null,
       institutionId: 'inst-1',
-      jurisdiction: 'UK',
-      basketId: null,
       status: 'draft',
-    } as never);
-    vi.mocked(prisma.procurementWorkflow.create).mockResolvedValueOnce({
+      basketId: null,
+      jurisdiction: 'UK',
+      estimatedValue: null,
+      procurementRoute: 'open',
+      startDate: null,
+      targetAwardDate: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const createdWorkflow: ProcurementWorkflow = {
       id: 'workflow-1',
       projectId: 'project-1',
-    } as never);
+      currentStage: 1,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const createManyResult: Prisma.BatchPayload = { count: 1 };
+
+    vi.mocked(prisma.procurementProject.create).mockResolvedValueOnce(createdProject);
+    vi.mocked(prisma.procurementWorkflow.create).mockResolvedValueOnce(createdWorkflow);
     vi.mocked(prisma.procurementStage.create).mockImplementation(({ data }) =>
-      Promise.resolve({ id: `stage-${data.stageCode}`, ...data }) as never,
+      Promise.resolve({
+        id: `stage-${data.stageCode}`,
+        projectId: data.projectId ?? 'project-1',
+        stageCode: data.stageCode,
+        stageName: data.stageName,
+        stageOrder: data.stageOrder,
+        status: data.status ?? 'NOT_STARTED',
+        startDate: null,
+        dueDate: null,
+        completedDate: null,
+        assignedTo: null,
+        complianceChecks: Array.isArray(data.complianceChecks) ? data.complianceChecks : null,
+        notes: null,
+      } satisfies ProcurementStage) as never,
     );
-    vi.mocked(prisma.stageTask.createMany).mockResolvedValue({ count: 1 } as never);
+    vi.mocked(prisma.stageTask.createMany).mockResolvedValue(createManyResult);
 
     const project = await service.createProject({
       name: 'New Project',
@@ -191,10 +219,12 @@ describe('ProcurementService.createProject', () => {
       })),
     });
     const lastStageDef = stageDefs.at(-1);
-    expect(lastStageDef).toBeDefined();
+    if (!lastStageDef) {
+      throw new Error('Expected UK stage definitions to include a final stage');
+    }
     expect(prisma.stageTask.createMany).toHaveBeenLastCalledWith({
-      data: lastStageDef!.tasks.map((task) => ({
-        stageId: `stage-${lastStageDef!.stageCode}`,
+      data: lastStageDef.tasks.map((task) => ({
+        stageId: `stage-${lastStageDef.stageCode}`,
         title: task.title,
         description: task.description ?? null,
         isMandatory: task.isMandatory,
