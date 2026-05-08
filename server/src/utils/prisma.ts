@@ -84,8 +84,9 @@ const databaseUrl = applyConnectionDefaults(process.env['DATABASE_URL']);
  * down corporate networks) only allow outbound HTTPS — no raw TCP to
  * Postgres on 5432. When `PRISMA_NEON_HTTP=1`, route Prisma queries
  * through the @neondatabase/serverless WebSocket pool instead, which
- * speaks the wire protocol over an HTTPS upgrade. Otherwise this is a
- * no-op and the standard libpq TCP path runs unchanged.
+ * speaks the wire protocol over an HTTPS upgrade. (Seed/scripts keep
+ * their own flag in `prisma/_neon-http-prisma.ts`.) Otherwise this is
+ * a no-op and the standard libpq TCP path runs unchanged.
  *
  * This branch is required (not optional) for the live Vercel deploy at
  * https://herm-platform-client-*.vercel.app — without it every API
