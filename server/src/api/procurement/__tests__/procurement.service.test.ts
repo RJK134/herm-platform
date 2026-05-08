@@ -1,12 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Prisma, ProcurementProject, ProcurementStage, ProcurementWorkflow } from '@prisma/client';
 import { InvalidTransitionError } from '../../../services/domain/procurement/project-status';
 
 // Mock prisma before importing the service so the service picks up the mock.
 vi.mock('../../../utils/prisma', () => {
   const procurementProject = {
+    create: vi.fn(),
     findUnique: vi.fn(),
     update: vi.fn(),
     updateMany: vi.fn(),
+  };
+  const procurementWorkflow = {
+    create: vi.fn(),
+    findUnique: vi.fn(),
+  };
+  const procurementStage = {
+    create: vi.fn(),
+  };
+  const stageTask = {
+    createMany: vi.fn(),
+  };
+  const institution = {
+    findFirst: vi.fn(),
+    create: vi.fn(),
   };
   const capabilityBasket = {
     findUnique: vi.fn(),
@@ -30,7 +46,11 @@ vi.mock('../../../utils/prisma', () => {
     findMany: vi.fn(),
   };
   const prismaMock = {
+    institution,
     procurementProject,
+    procurementWorkflow,
+    procurementStage,
+    stageTask,
     capabilityBasket,
     vendorSystem,
     capabilityScore,
@@ -64,9 +84,155 @@ vi.mock('../../baskets/baskets.service', () => ({
 }));
 
 import { ProcurementService } from '../procurement.service';
+import { procurementEngine } from '../../../services/domain/procurement-engine';
 import prisma from '../../../utils/prisma';
 
 const service = new ProcurementService();
+
+describe('ProcurementService.createProject', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('persists procurement stages and tasks alongside the legacy workflow', async () => {
+    const stageDefs = procurementEngine.getStageDefinitions('UK');
+    expect(stageDefs.length).toBeGreaterThan(0);
+    const now = new Date('2026-01-01T00:00:00Z');
+    const createdProject: ProcurementProject = {
+      id: 'project-1',
+      name: 'New Project',
+      description: null,
+      institutionId: 'inst-1',
+      status: 'draft',
+      basketId: null,
+      jurisdiction: 'UK',
+      estimatedValue: null,
+      procurementRoute: 'open',
+      startDate: null,
+      targetAwardDate: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const createdWorkflow: ProcurementWorkflow = {
+      id: 'workflow-1',
+      projectId: 'project-1',
+      currentStage: 1,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const createManyResult: Prisma.BatchPayload = { count: 1 };
+
+    vi.mocked(prisma.procurementProject.create).mockResolvedValueOnce(createdProject);
+    vi.mocked(prisma.procurementWorkflow.create).mockResolvedValueOnce(createdWorkflow);
+    vi.mocked(prisma.procurementStage.create).mockImplementation(({ data }) =>
+      Promise.resolve({
+        id: `stage-${data.stageCode}`,
+        projectId: data.projectId ?? 'project-1',
+        stageCode: data.stageCode,
+        stageName: data.stageName,
+        stageOrder: data.stageOrder,
+        status: data.status ?? 'NOT_STARTED',
+        startDate: null,
+        dueDate: null,
+        completedDate: null,
+        assignedTo: null,
+        complianceChecks: Array.isArray(data.complianceChecks) ? data.complianceChecks : null,
+        notes: null,
+      } satisfies ProcurementStage) as never,
+    );
+    vi.mocked(prisma.stageTask.createMany).mockResolvedValue(createManyResult);
+
+    const project = await service.createProject({
+      name: 'New Project',
+      institutionId: 'inst-1',
+      jurisdiction: 'UK',
+    });
+
+    expect(project).toMatchObject({
+      id: 'project-1',
+      institutionId: 'inst-1',
+      jurisdiction: 'UK',
+      status: 'draft',
+    });
+
+    expect(prisma.procurementProject.create).toHaveBeenCalledWith({
+      data: {
+        name: 'New Project',
+        institutionId: 'inst-1',
+        jurisdiction: 'UK',
+        basketId: null,
+        status: 'draft',
+      },
+    });
+
+    expect(prisma.procurementWorkflow.create).toHaveBeenCalledWith({
+      data: {
+        projectId: 'project-1',
+        currentStage: 1,
+        stages: {
+          create: expect.arrayContaining([
+            expect.objectContaining({
+              stageNumber: 1,
+              title: 'Requirements Definition',
+              status: 'active',
+            }),
+            expect.objectContaining({
+              stageNumber: 8,
+              title: 'Contract Award',
+              status: 'pending',
+            }),
+          ]),
+        },
+      },
+    });
+
+    expect(prisma.procurementStage.create).toHaveBeenCalledTimes(stageDefs.length);
+    expect(prisma.procurementStage.create).toHaveBeenNthCalledWith(1, {
+      data: {
+        projectId: 'project-1',
+        stageCode: stageDefs[0].stageCode,
+        stageName: stageDefs[0].stageName,
+        stageOrder: stageDefs[0].stageOrder,
+        status: 'IN_PROGRESS',
+        complianceChecks: stageDefs[0].complianceCheckCodes,
+      },
+    });
+    expect(prisma.procurementStage.create).toHaveBeenNthCalledWith(2, {
+      data: expect.objectContaining({
+        projectId: 'project-1',
+        stageCode: stageDefs[1].stageCode,
+        stageName: stageDefs[1].stageName,
+        stageOrder: stageDefs[1].stageOrder,
+        status: 'NOT_STARTED',
+        complianceChecks: stageDefs[1].complianceCheckCodes,
+      }),
+    });
+
+    expect(prisma.stageTask.createMany).toHaveBeenCalledTimes(stageDefs.length);
+    expect(prisma.stageTask.createMany).toHaveBeenNthCalledWith(1, {
+      data: stageDefs[0].tasks.map((task) => ({
+        stageId: `stage-${stageDefs[0].stageCode}`,
+        title: task.title,
+        description: task.description ?? null,
+        isMandatory: task.isMandatory,
+        sortOrder: task.sortOrder,
+      })),
+    });
+    const lastStageDef = stageDefs.at(-1);
+    if (!lastStageDef) {
+      throw new Error('Expected UK stage definitions to include a final stage');
+    }
+    expect(prisma.stageTask.createMany).toHaveBeenLastCalledWith({
+      data: lastStageDef.tasks.map((task) => ({
+        stageId: `stage-${lastStageDef.stageCode}`,
+        title: task.title,
+        description: task.description ?? null,
+        isMandatory: task.isMandatory,
+        sortOrder: task.sortOrder,
+      })),
+    });
+  });
+});
 
 describe('ProcurementService.transitionStatus', () => {
   beforeEach(() => {

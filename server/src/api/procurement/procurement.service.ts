@@ -17,6 +17,7 @@ import {
   nextStates,
 } from '../../services/domain/procurement/project-status';
 import type { ProjectStatus } from '../../services/domain/procurement/project-status';
+import { procurementEngine } from '../../services/domain/procurement-engine';
 import { NotFoundError, ValidationError } from '../../utils/errors';
 
 /**
@@ -102,13 +103,25 @@ async function ensureDefaultInstitution(): Promise<string> {
 export class ProcurementService {
   async createProject(data: CreateProjectInput) {
     const institutionId = data.institutionId ?? (await ensureDefaultInstitution());
+    const jurisdiction = data.jurisdiction ?? 'UK';
+
+    // UAT D-06 — Pipeline UI in client/src/pages/ProcurementProjects.tsx
+    // reads `project.stages` (ProcurementStage rows), but the legacy
+    // implementation only populated procurementWorkflow.stages
+    // (WorkflowStage rows). Result: every newly-created project rendered
+    // an empty Pipeline tab. Source the jurisdiction-aware stage
+    // definitions from procurement-engine.ts (UK_STAGES = 7-stage UK
+    // PA 2023 workflow; EU_STAGES = 6-stage Directive 2014/24/EU
+    // workflow) and persist them alongside the legacy workflow so both
+    // the new Pipeline view and any older readers keep working.
+    const stageDefs = procurementEngine.getStageDefinitions(jurisdiction);
 
     return prisma.$transaction(async (tx) => {
       const project = await tx.procurementProject.create({
         data: {
           name: data.name,
           institutionId,
-          jurisdiction: data.jurisdiction ?? 'UK',
+          jurisdiction,
           basketId: data.basketId ?? null,
           // Phase 3 state machine: new projects start in `draft`. The
           // previous default of `active` is mapped to `active_review`
@@ -130,6 +143,34 @@ export class ProcurementService {
           },
         },
       });
+
+      // Pipeline-source ProcurementStage rows + tasks. First stage is
+      // IN_PROGRESS (so the Kanban board has an active card on the
+      // demo on first load); the rest are NOT_STARTED. complianceCheckCodes
+      // are stored as JSON to match the schema's `Json?` column shape.
+      for (const def of stageDefs) {
+        const stage = await tx.procurementStage.create({
+          data: {
+            projectId: project.id,
+            stageCode: def.stageCode,
+            stageName: def.stageName,
+            stageOrder: def.stageOrder,
+            status: def.stageOrder === 1 ? 'IN_PROGRESS' : 'NOT_STARTED',
+            complianceChecks: def.complianceCheckCodes as unknown as import('@prisma/client').Prisma.InputJsonValue,
+          },
+        });
+        if (def.tasks.length > 0) {
+          await tx.stageTask.createMany({
+            data: def.tasks.map((t) => ({
+              stageId: stage.id,
+              title: t.title,
+              description: t.description ?? null,
+              isMandatory: t.isMandatory,
+              sortOrder: t.sortOrder,
+            })),
+          });
+        }
+      }
 
       return project;
     });

@@ -126,7 +126,17 @@ export function CapabilityHeatmap() {
                 <tr key={system.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-700/20">
                   <td className="sticky left-0 bg-white dark:bg-gray-900 border-b border-r border-gray-200 dark:border-gray-700 py-1.5 px-3 font-medium text-gray-800 dark:text-gray-200 z-10">
                     <div className="truncate w-40">
-                      {system.isOwnSystem && <span className="text-teal mr-1">\u2605</span>}
+                      {/*
+                        UAT D-04 \u2014 the previous content was the six-character
+                        literal `\u2605` written directly in the JSX text node.
+                        JSX text nodes don't process backslash-u escapes (only
+                        JS string literals do), so it rendered as raw "\u2605"
+                        next to system names with isOwnSystem=true. Wrapping
+                        the escape in a JS expression `{'\u2605'}` forces JS
+                        to evaluate the escape and emit the BLACK STAR
+                        codepoint (U+2605) before JSX sees it.
+                      */}
+                      {system.isOwnSystem && <span className="text-teal mr-1">{'\u2605'}</span>}
                       {system.name}
                     </div>
                   </td>
