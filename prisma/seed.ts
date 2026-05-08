@@ -206,15 +206,27 @@ async function main() {
   await seedVendorProfiles(prisma);
   console.log('Vendor profiles seeded');
 
-  // FHE seeding currently fails to load via tsx + ESM ("type": "module") on
-  // some Node 22 setups — see fhe-framework.ts import resolution. The platform
-  // is fully functional on HERM data alone, so we degrade gracefully here
-  // rather than blocking the seed. Re-enable once tsx ESM resolution stabilises.
-  try {
-    const { seedFheFramework } = await import('./seeds/fhe-framework');
-    await seedFheFramework(prisma);
-    console.log('FHE framework seeded');
+  // Phase 14.7 — FHE seeding now resolves cleanly. The cross-tree import
+  // from server/src/data/fhe-framework that was tripping tsx ESM
+  // resolution has been replaced with a colocated copy at
+  // ./seeds/fhe-framework-data.ts, so the seeder is self-contained
+  // within prisma/. Failures here are now genuine errors (e.g. DB
+  // connectivity, schema drift) rather than module-resolution noise,
+  // so we let them surface rather than swallowing them — a quiet
+  // "FHE seeding skipped" used to mask the very state UAT D-01
+  // surfaced (paid tier defaulting to a 0/0 framework).
+  const { seedFheFramework } = await import('./seeds/fhe-framework');
+  await seedFheFramework(prisma);
+  console.log('FHE framework seeded');
 
+  // FHE scores + framework-mappings still cross-import from server/src/data/
+  // (fhe-scoring-rules, fhe-manual-scores, herm-to-fhe-mapping). Those data
+  // files are seed-only at runtime so they can be relocated in a follow-up
+  // sub-phase the same way fhe-framework-data was relocated in 14.7. Until
+  // then keep them on a tight try/catch — the framework itself (the
+  // demo-critical 8 domains + ~120 capabilities) seeds cleanly above; only
+  // the score-and-mapping data degrades gracefully.
+  try {
     const { seedFheScores } = await import('./seeds/fhe-scores');
     await seedFheScores(prisma);
     console.log('FHE scores seeded');
@@ -222,7 +234,10 @@ async function main() {
     const { seedFrameworkMappings } = await import('./seeds/framework-mappings');
     await seedFrameworkMappings(prisma);
   } catch (err) {
-    console.warn('[seed] FHE seeding skipped:', err instanceof Error ? err.message : err);
+    console.warn(
+      '[seed] FHE scores / mappings skipped (cross-tree import path; will be relocated in follow-up):',
+      err instanceof Error ? err.message : err,
+    );
   }
 
   // ── Demo institution & user ──────────────────────────────────────────────

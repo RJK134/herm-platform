@@ -15,6 +15,11 @@ import {
   getAggregatedScores,
   getTeamProgress,
 } from './evaluations.controller';
+import {
+  submitOwnCoi,
+  getOwnCoi,
+  listProjectCoi,
+} from './coi.controller';
 
 const router = Router();
 // Reads keep `optionalJWT` so tenant-scoped lists can still be served to
@@ -37,5 +42,16 @@ router.get('/:id/domains', getDomainProgress);
 router.post('/:id/domains/:domainId/scores', authenticateJWT, submitDomainScores);
 router.get('/:id/aggregate', getAggregatedScores);
 router.get('/:id/progress', getTeamProgress);
+
+// Phase 14.9 — Conflict-of-Interest declarations. Every endpoint
+// requires a real JWT because (a) submit carries per-user audit
+// attribution that must never fall back to the 'anonymous' sentinel,
+// and (b) reads expose `declaredText` which can carry commercially-
+// sensitive disclosure content. The list endpoint additionally
+// gates on tenant institutionId + evaluation-lead membership inside
+// the service layer before returning any project-wide declarations.
+router.post('/:id/coi', authenticateJWT, submitOwnCoi);
+router.get('/:id/coi/me', authenticateJWT, getOwnCoi);
+router.get('/:id/coi', authenticateJWT, listProjectCoi);
 
 export default router;

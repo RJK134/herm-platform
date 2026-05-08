@@ -13,6 +13,7 @@ import { RequireTier } from './components/auth/RequireTier';
 import { Login } from './pages/Login';
 import { SsoCallback } from './pages/SsoCallback';
 import { Register } from './pages/Register';
+import { TrustCentre } from './pages/TrustCentre';
 import { Leaderboard } from './pages/Leaderboard';
 import { RadarComparison } from './pages/RadarComparison';
 import { CapabilityHeatmap } from './pages/CapabilityHeatmap';
@@ -101,6 +102,15 @@ export default function App() {
                 <Route path="/login" element={<Login />} />
                 <Route path="/login/sso" element={<SsoCallback />} />
                 <Route path="/register" element={<Register />} />
+                {/*
+                  Phase 14.10 — public Trust Centre. No auth so procurement
+                  officers and InfoSec reviewers can find SOC 2 / ISO 27001
+                  / Cyber Essentials Plus status during pre-procurement
+                  evaluation. Route mounted alongside /login + /register
+                  rather than under the SidebarLayout so it's reachable
+                  without an account.
+                */}
+                <Route path="/trust" element={<TrustCentre />} />
 
                 <Route
                   path="/*"

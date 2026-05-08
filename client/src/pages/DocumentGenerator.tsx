@@ -75,7 +75,7 @@ const DOC_TYPES: {
   {
     id: 'RFP_ITT',
     label: "RFP / ITT",
-    desc: 'UK PCR 2015-compliant Invitation to Tender. Includes supplier instructions, scoring matrix, and compliance requirements.',
+    desc: 'UK Procurement Act 2023-compliant Invitation to Tender. Includes supplier instructions, scoring matrix, and compliance requirements.',
     icon: ClipboardList,
     colour: 'border-purple-500 bg-purple-50 dark:bg-purple-950/30',
     pages: '40–60 pages',
@@ -376,7 +376,7 @@ export function DocumentGenerator() {
             {t("docgen.title", "Document Generator")}
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
-            {t("docgen.subtitle", "Generate professional procurement documents populated from your platform data. UK PCR 2015 compliant.")}
+            {t("docgen.subtitle", "Generate professional procurement documents populated from your platform data. UK Procurement Act 2023 compliant.")}
           </p>
         </div>
         <button
