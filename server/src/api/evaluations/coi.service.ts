@@ -97,7 +97,27 @@ export class CoiService {
     });
   }
 
-  async getMine(evaluationProjectId: string, userId: string): Promise<CoiDeclarationView | null> {
+  async getMine(
+    evaluationProjectId: string,
+    userId: string,
+    requestingInstitutionId: string,
+  ): Promise<CoiDeclarationView | null> {
+    // Tenant-scope check: refuse to return a row whose project doesn't
+    // belong to the caller's institution. Catches the wedge case Vade
+    // flagged on PR #101 — if a user somehow has an EvaluationMember
+    // row on a cross-tenant project (data anomaly, bad seed, migration
+    // glitch), getMine still returns null rather than leaking the
+    // declaration. Same posture as listForProject + submit: cross-
+    // tenant probes return null/empty, never a 403, so the response
+    // shape doesn't reveal project existence.
+    const project = await prisma.evaluationProject.findFirst({
+      where: {
+        id: evaluationProjectId,
+        institutionId: requestingInstitutionId,
+      },
+      select: { id: true },
+    });
+    if (!project) return null;
     return prisma.conflictOfInterestDeclaration.findUnique({
       where: {
         evaluationProjectId_userId: { evaluationProjectId, userId },

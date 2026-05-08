@@ -73,7 +73,7 @@ export async function getOwnCoi(
   next: NextFunction,
 ): Promise<void> {
   try {
-    if (!req.user?.userId) {
+    if (!req.user?.userId || !req.user.institutionId) {
       res.json({ success: true, data: null });
       return;
     }
@@ -81,7 +81,11 @@ export async function getOwnCoi(
     if (!evaluationProjectId) {
       throw new ValidationError('Project id is required');
     }
-    const row = await coiService.getMine(evaluationProjectId, req.user.userId);
+    const row = await coiService.getMine(
+      evaluationProjectId,
+      req.user.userId,
+      req.user.institutionId,
+    );
     res.json({ success: true, data: row });
   } catch (err) {
     next(err);
