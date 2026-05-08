@@ -24,13 +24,11 @@ export function SkeletonCard() {
   return (
     <div
       className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 space-y-3"
-      role="status"
-      aria-label="Loading card"
+      aria-hidden="true"
     >
       <Skeleton className="h-4 w-3/4" />
       <Skeleton className="h-3 w-1/2" />
       <Skeleton className="h-8 w-full" />
-      <span className="sr-only">Loading…</span>
     </div>
   );
 }
