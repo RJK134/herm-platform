@@ -45,12 +45,12 @@ router.get('/:id/progress', getTeamProgress);
 
 // Phase 14.9 — Conflict-of-Interest declarations. Submit is self-only
 // (the evaluator signs their own declaration) and requires a real JWT
-// because the row carries per-user audit attribution. Reads use
-// optionalJWT (tenant-scoped to the project members) so the CoI
-// review surface in TeamWorkspaces can show project-lead audit
-// summaries without forcing additional auth gymnastics.
+// because the row carries per-user audit attribution. Project-wide CoI
+// review data is sensitive (including declaration text), so read access
+// also requires a real JWT rather than relying on router-level
+// optionalJWT.
 router.post('/:id/coi', authenticateJWT, submitOwnCoi);
 router.get('/:id/coi/me', authenticateJWT, getOwnCoi);
-router.get('/:id/coi', listProjectCoi);
+router.get('/:id/coi', authenticateJWT, listProjectCoi);
 
 export default router;
