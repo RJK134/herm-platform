@@ -21,6 +21,14 @@ export function SkeletonBar({ className = '', width = 'w-full' }: { className?: 
 }
 
 export function SkeletonCard() {
+  // Phase 14.4 (revised after Copilot review on PR #101): individual
+  // SkeletonCard renders are aria-hidden — `role="status"` belongs on
+  // the CONTAINER that holds a batch of skeletons, not on each card.
+  // VendorShowcase renders 6 of these at once; six separate
+  // role="status" regions cause screen readers to announce "Loading…"
+  // six times in rapid succession. Callers who render multiple cards
+  // should wrap them in a `<div role="status" aria-label="...">` and
+  // optionally add an `<span class="sr-only">Loading…</span>` once.
   return (
     <div
       className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 space-y-3"

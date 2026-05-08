@@ -5,12 +5,25 @@
 // Ireland have separate calendars; UK HE procurement law applies
 // the England & Wales calendar by default.
 //
-// Strategy: a small hardcoded set of holiday dates covering the UAT
-// horizon (2026 – 2028). Refreshing the table is an annual op task.
-// We deliberately don't fetch from the GOV.UK Bank Holidays JSON feed
-// at runtime because (a) standstill calculations must be deterministic
-// during procurement disputes, (b) the feed is occasionally
-// rate-limited, and (c) the dataset is small.
+// Strategy: a small hardcoded set of holiday dates covering 2026–2030.
+// Refreshing the table is an annual op task: extend the SUPPORTED_YEARS
+// constant alongside the new entries when 2031+ data is published. We
+// deliberately don't fetch from the GOV.UK Bank Holidays JSON feed at
+// runtime because (a) standstill calculations must be deterministic
+// during procurement disputes, (b) the feed is occasionally rate-
+// limited, and (c) the dataset is small.
+//
+// Timezone posture: all classification runs in UTC via getUTC* methods.
+// Callers should pass Date objects whose UTC components represent the
+// intended UK date (e.g. `new Date(Date.UTC(2026, 4, 25))` for the
+// 2026 Spring bank holiday). On servers running outside Europe/London
+// this avoids the local-day boundary shifting around the calendar
+// — Copilot review on PR #101 flagged the prior local-TZ implementation
+// as "UK day can shift and misclassify bank holidays" depending on the
+// runtime TZ. UTC is the deterministic floor; if the caller wants
+// strict Europe/London semantics (BST/GMT day-shift handling around
+// midnight UK), they should normalise the input via Intl.DateTimeFormat
+// before calling.
 //
 // Source: https://www.gov.uk/bank-holidays (England and Wales).
 
@@ -42,25 +55,62 @@ const ENGLAND_AND_WALES_BANK_HOLIDAYS_ISO: ReadonlySet<string> = new Set([
   '2028-08-28',
   '2028-12-25',
   '2028-12-26',
+  // 2029
+  '2029-01-01',
+  '2029-03-30', // Good Friday
+  '2029-04-02', // Easter Monday
+  '2029-05-07',
+  '2029-05-28',
+  '2029-08-27',
+  '2029-12-25',
+  '2029-12-26',
+  // 2030
+  '2030-01-01',
+  '2030-04-19', // Good Friday
+  '2030-04-22', // Easter Monday
+  '2030-05-06',
+  '2030-05-27',
+  '2030-08-26',
+  '2030-12-25',
+  '2030-12-26',
 ]);
 
-function toIsoDate(d: Date): string {
-  // Local timezone date as YYYY-MM-DD. We use the date in the caller's
-  // wall-clock — if the caller passes a UTC midnight, that's what we
-  // compare against. For procurement-clock purposes the contracting
-  // authority's local-day boundary is what matters, so callers are
-  // expected to construct dates in the relevant timezone before
-  // passing them in.
-  const yyyy = d.getFullYear().toString().padStart(4, '0');
-  const mm = (d.getMonth() + 1).toString().padStart(2, '0');
-  const dd = d.getDate().toString().padStart(2, '0');
+const SUPPORTED_YEAR_MIN = 2026;
+const SUPPORTED_YEAR_MAX = 2030;
+
+function toIsoDateUtc(d: Date): string {
+  // UTC date as YYYY-MM-DD. Using getUTC* keeps the classification
+  // deterministic regardless of the runtime TZ — see file header for
+  // the rationale.
+  const yyyy = d.getUTCFullYear().toString().padStart(4, '0');
+  const mm = (d.getUTCMonth() + 1).toString().padStart(2, '0');
+  const dd = d.getUTCDate().toString().padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function assertSupportedYear(d: Date): void {
+  // Phase 14.2 — fail fast for years outside the hardcoded bank
+  // holiday table. Silently treating a 2031 New Year's Day as a
+  // working day would produce a legally incorrect standstill end
+  // date that an aggrieved bidder could challenge under PA 2023
+  // s.99 (procurement remedies). Throwing here forces the operator
+  // to extend SUPPORTED_YEAR_MAX + the holiday set when the
+  // calendar moves past 2030.
+  const year = d.getUTCFullYear();
+  if (year < SUPPORTED_YEAR_MIN || year > SUPPORTED_YEAR_MAX) {
+    throw new RangeError(
+      `UK bank holiday table only covers ${SUPPORTED_YEAR_MIN}-${SUPPORTED_YEAR_MAX} (got ${year}). Refresh ENGLAND_AND_WALES_BANK_HOLIDAYS_ISO + SUPPORTED_YEAR_MAX before classifying dates outside that range.`,
+    );
+  }
+}
+
 export function isUkWorkingDay(date: Date): boolean {
-  const day = date.getDay();
-  if (day === 0 || day === 6) return false; // Sunday=0, Saturday=6
-  return !ENGLAND_AND_WALES_BANK_HOLIDAYS_ISO.has(toIsoDate(date));
+  assertSupportedYear(date);
+  // 0 = Sunday, 6 = Saturday in both UTC and local-day APIs; UTC keeps
+  // it deterministic across timezones.
+  const day = date.getUTCDay();
+  if (day === 0 || day === 6) return false;
+  return !ENGLAND_AND_WALES_BANK_HOLIDAYS_ISO.has(toIsoDateUtc(date));
 }
 
 /**
@@ -71,7 +121,10 @@ export function isUkWorkingDay(date: Date): boolean {
  * standstill clock begins the day after the Contract Award Notice is
  * dispatched.
  *
- * Throws if `workingDays` is negative or non-finite.
+ * `start` should carry UTC components representing the intended UK
+ * date — see the file header for the timezone posture. Throws if
+ * `workingDays` is negative or non-finite, or if any date in the
+ * count window falls outside the supported year range.
  */
 export function addUkWorkingDays(start: Date, workingDays: number): Date {
   if (!Number.isFinite(workingDays) || workingDays < 0) {
@@ -80,7 +133,7 @@ export function addUkWorkingDays(start: Date, workingDays: number): Date {
   const cursor = new Date(start.getTime());
   let added = 0;
   while (added < workingDays) {
-    cursor.setDate(cursor.getDate() + 1);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
     if (isUkWorkingDay(cursor)) added += 1;
   }
   return cursor;
