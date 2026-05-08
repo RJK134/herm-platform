@@ -10,14 +10,13 @@
 // Tenant-scoping posture (per Bugbot/Vade/Copilot review on PR #101):
 // every read AND write filters EvaluationProject by `institutionId` so
 // a user from institution A can't probe / read / write CoI rows for
-// institution B's projects even if they know a project ID. The
-// failure mode for cross-tenant probes is uniformly NotFoundError
-// (write path) or empty list (read path) so the response shape
-// doesn't leak project existence across tenants.
+// institution B's projects even if they know a project ID. The write
+// path fails as NotFoundError for cross-tenant probes; project-wide
+// review additionally requires the caller to be the evaluation lead.
 
 import { createHash } from 'node:crypto';
 import prisma from '../../utils/prisma';
-import { NotFoundError, ValidationError } from '../../utils/errors';
+import { ForbiddenError, NotFoundError, ValidationError } from '../../utils/errors';
 
 export interface SubmitCoiInput {
   evaluationProjectId: string;
@@ -106,34 +105,33 @@ export class CoiService {
     });
   }
 
-  /**
-   * Tenant-scoped list of every declaration on a project. Caller MUST
-   * be authenticated, the project MUST belong to the caller's
-   * institution, AND the caller MUST be a member of the project.
-   * Cross-tenant probes and non-member access both return [] (NOT
-   * 403) so the response shape doesn't reveal project existence on
-   * probed IDs. Project leads see every declaration; ordinary
-   * evaluators get the same project-wide list because PA 2023 audit
-   * posture is "every member sees every other member's declaration
-   * so collusion can't be laundered through private declarations".
-   */
   async listForProject(
     evaluationProjectId: string,
-    requestingUserId: string | null | undefined,
-    requestingInstitutionId: string | null | undefined,
+    requestingUserId: string,
+    requestingInstitutionId: string,
   ): Promise<CoiDeclarationView[]> {
-    if (!requestingUserId || !requestingInstitutionId) return [];
-    // Single round-trip: project must exist AND be in the caller's
-    // institution AND have the caller as a member.
     const project = await prisma.evaluationProject.findFirst({
       where: {
         id: evaluationProjectId,
         institutionId: requestingInstitutionId,
-        members: { some: { userId: requestingUserId } },
       },
-      select: { id: true },
+      select: {
+        id: true,
+        members: {
+          where: { userId: requestingUserId },
+          select: { role: true },
+        },
+      },
     });
-    if (!project) return [];
+    if (!project) {
+      throw new NotFoundError('Evaluation project not found');
+    }
+    if (project.members[0]?.role !== 'lead') {
+      throw new ForbiddenError(
+        'Only evaluation leads may review project Conflict of Interest declarations',
+      );
+    }
+
     return prisma.conflictOfInterestDeclaration.findMany({
       where: { evaluationProjectId },
       orderBy: { signedAt: 'desc' },

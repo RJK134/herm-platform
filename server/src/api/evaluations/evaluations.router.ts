@@ -48,10 +48,8 @@ router.get('/:id/progress', getTeamProgress);
 // attribution that must never fall back to the 'anonymous' sentinel,
 // and (b) reads expose `declaredText` which can carry commercially-
 // sensitive disclosure content. The list endpoint additionally
-// gates on project membership AND tenant institutionId inside the
-// service layer — non-members and cross-tenant probes both get
-// 200 + [] (rather than 403) so probed project IDs can't be
-// confirmed as existing.
+// gates on tenant institutionId + evaluation-lead membership inside
+// the service layer before returning any project-wide declarations.
 router.post('/:id/coi', authenticateJWT, submitOwnCoi);
 router.get('/:id/coi/me', authenticateJWT, getOwnCoi);
 router.get('/:id/coi', authenticateJWT, listProjectCoi);

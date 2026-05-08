@@ -94,19 +94,18 @@ export async function listProjectCoi(
   next: NextFunction,
 ): Promise<void> {
   try {
+    if (!req.user?.userId || !req.user.institutionId) {
+      res.json({ success: true, data: [] });
+      return;
+    }
     const evaluationProjectId = req.params['id'];
     if (!evaluationProjectId) {
       throw new ValidationError('Project id is required');
     }
-    // Pass the caller identity (userId + institutionId) through so
-    // listForProject can enforce the tenant-scope + membership gate.
-    // Anonymous callers, cross-tenant requests, and non-members all
-    // receive an empty list (200 + []) rather than a 403, so a
-    // probed project ID can't be confirmed as existing.
     const rows = await coiService.listForProject(
       evaluationProjectId,
-      req.user?.userId,
-      req.user?.institutionId,
+      req.user.userId,
+      req.user.institutionId,
     );
 
     // Light tamper-check pass: surface the row's stored hash alongside a
