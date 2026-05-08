@@ -605,22 +605,53 @@ export function TcoCalculator() {
                         annual: result.breakdown.customDev,
                         total: result.breakdown.customDev * horizon,
                       },
-                    ].map((row) => (
-                      <tr
-                        key={row.label}
-                        className="border-b border-gray-100 dark:border-gray-700/50"
-                      >
-                        <td className="py-2 text-gray-700 dark:text-gray-300">
-                          {row.label}
-                        </td>
-                        <td className="py-2 text-right text-gray-600 dark:text-gray-400">
-                          {row.annual > 0 ? formatCurrency(row.annual) : '—'}
-                        </td>
-                        <td className="py-2 text-right font-medium text-gray-900 dark:text-white">
-                          {formatCurrency(row.total)}
-                        </td>
-                      </tr>
-                    ))}
+                    ].map((row) => {
+                      // UAT D-05 — Workday Student and other SaaS vendors
+                      // intentionally have £0 for Support & Infrastructure
+                      // because both are bundled into the licence fee. UAT
+                      // reviewer read the bare £0 as missing data; render
+                      // an "Included in licence" pill for the
+                      // SaaS-bundled cost categories instead. Heuristic
+                      // (label name + zero value) keeps this fix
+                      // self-contained for 14.1; a future sub-phase will
+                      // surface explicit `included_in_licence` flags from
+                      // the benchmark dataset so on-prem £0 rows don't
+                      // get incorrectly badged.
+                      const isLicenceBundled =
+                        row.annual === 0 &&
+                        (row.label === 'Support & Maintenance' ||
+                          row.label === 'Infrastructure');
+                      return (
+                        <tr
+                          key={row.label}
+                          className="border-b border-gray-100 dark:border-gray-700/50"
+                        >
+                          <td className="py-2 text-gray-700 dark:text-gray-300">
+                            {row.label}
+                          </td>
+                          <td className="py-2 text-right text-gray-600 dark:text-gray-400">
+                            {isLicenceBundled ? (
+                              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-medium bg-teal/10 text-teal">
+                                Included in licence
+                              </span>
+                            ) : row.annual > 0 ? (
+                              formatCurrency(row.annual)
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+                          <td className="py-2 text-right font-medium text-gray-900 dark:text-white">
+                            {isLicenceBundled ? (
+                              <span className="text-gray-400 dark:text-gray-500 italic">
+                                bundled
+                              </span>
+                            ) : (
+                              formatCurrency(row.total)
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                     <tr className="border-t-2 border-gray-300 dark:border-gray-600">
                       <td className="py-2 font-bold text-gray-900 dark:text-white">
                         Total

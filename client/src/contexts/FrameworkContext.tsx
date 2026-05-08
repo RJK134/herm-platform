@@ -52,10 +52,21 @@ export function FrameworkProvider({ children }: { children: React.ReactNode }) {
 
       const isPaid = isPaidTier(user?.tier);
 
+      // UAT D-01 (May 2026) — empty frameworks land users on a 0% / 0-of-0
+      // experience that destroys credibility in the first 30 seconds.
+      // Filter out frameworks with zero capabilities BEFORE choosing a
+      // default so a misseded "FHE Capability Framework" placeholder
+      // (`isDefault: true`, capabilityCount: 0) can't outrank UCISA HERM
+      // v3.1 (`isPublic: true`, capabilityCount: 165). Falls back to the
+      // unfiltered list only if every framework is empty — degraded but
+      // not broken state, e.g. mid-migration.
+      const nonEmpty = list.filter((f) => f.capabilityCount > 0);
+      const candidates = nonEmpty.length > 0 ? nonEmpty : list;
+
       // Paid users default to isDefault=true; free/anonymous default to isPublic=true.
       const preferred = isPaid
-        ? list.find((f) => f.isDefault) ?? list.find((f) => f.isPublic) ?? list[0]
-        : list.find((f) => f.isPublic) ?? list[0];
+        ? candidates.find((f) => f.isDefault) ?? candidates.find((f) => f.isPublic) ?? candidates[0]
+        : candidates.find((f) => f.isPublic) ?? candidates[0];
 
       return preferred;
     },

@@ -444,7 +444,7 @@ async function main() {
   console.log(`Demo basket seeded with ${coreCaps.length} capabilities`);
 
   // ── Demo procurement project ──────────────────────────────────────────────
-  await prisma.procurementProject.upsert({
+  const demoProject = await prisma.procurementProject.upsert({
     where: { id: 'demo-project-001' },
     update: {},
     create: {
@@ -459,7 +459,81 @@ async function main() {
       procurementRoute: 'open',
     },
   });
-  console.log('Demo procurement project seeded');
+
+  // UAT D-06 — Pipeline UI reads ProcurementStage rows; without these
+  // the Pipeline tab on the demo project renders empty on first login.
+  // We hardcode the 7-stage UK Procurement Act 2023 workflow here
+  // (mirrors UK_STAGES in server/src/services/domain/procurement-engine.ts)
+  // rather than importing the engine to keep the seed independent of
+  // the server prisma singleton (the seed has its own PrismaClient).
+  // The runtime equivalent fires for new projects via
+  // procurement.service.ts:createProject() which DOES import the engine.
+  const UK_DEMO_STAGES: Array<{ stageCode: string; stageName: string; stageOrder: number; status: 'IN_PROGRESS' | 'NOT_STARTED' }> = [
+    { stageCode: 'PLANNING', stageName: 'Planning & Business Case', stageOrder: 1, status: 'IN_PROGRESS' },
+    { stageCode: 'MARKET_ANALYSIS', stageName: 'Market Engagement', stageOrder: 2, status: 'NOT_STARTED' },
+    { stageCode: 'SPECIFICATION', stageName: 'Requirements Specification', stageOrder: 3, status: 'NOT_STARTED' },
+    { stageCode: 'NOTICE', stageName: 'Tender Notice & Submission', stageOrder: 4, status: 'NOT_STARTED' },
+    { stageCode: 'EVALUATION', stageName: 'Evaluation & Scoring', stageOrder: 5, status: 'NOT_STARTED' },
+    { stageCode: 'STANDSTILL', stageName: 'Standstill Period', stageOrder: 6, status: 'NOT_STARTED' },
+    { stageCode: 'AWARD', stageName: 'Contract Award', stageOrder: 7, status: 'NOT_STARTED' },
+  ];
+  for (const def of UK_DEMO_STAGES) {
+    await prisma.procurementStage.upsert({
+      where: { projectId_stageCode: { projectId: demoProject.id, stageCode: def.stageCode } },
+      update: {},
+      create: {
+        projectId: demoProject.id,
+        stageCode: def.stageCode,
+        stageName: def.stageName,
+        stageOrder: def.stageOrder,
+        status: def.status,
+      },
+    });
+  }
+  console.log(`Demo procurement project seeded with ${UK_DEMO_STAGES.length} UK stages`);
+
+  // ── Demo evaluation project (Team Workspaces source data) ────────────────
+  // UAT reviewer reported Team Workspaces as a "stub" — the feature is
+  // fully implemented (see client/src/pages/TeamWorkspaces.tsx) but had no
+  // EvaluationProject seeded for the demo institution, so the four tabs
+  // (Projects / Domain Assignment / Team Progress / Score Aggregation)
+  // had no data to render. Seed one mid-flight project for Priya's
+  // institution (Midshire) so the demo lands on populated tabs.
+  const priyaUser = await prisma.user.findUnique({
+    where: { email: 'priya@midshire.ac.uk' },
+    select: { id: true, institutionId: true },
+  });
+  if (priyaUser) {
+    const evalDeadline = new Date();
+    evalDeadline.setDate(evalDeadline.getDate() + 30);
+    const demoEval = await prisma.evaluationProject.upsert({
+      where: { id: 'demo-evaluation-001' },
+      update: {},
+      create: {
+        id: 'demo-evaluation-001',
+        name: 'SIS Replacement — Capability Evaluation',
+        description: 'Team-led scoring of 3 shortlisted SIS vendors against the Core SIS basket.',
+        frameworkId: hermFramework.id,
+        institutionId: priyaUser.institutionId,
+        leadUserId: priyaUser.id,
+        status: 'in_progress',
+        basketId: demoBasket.id,
+        deadline: evalDeadline,
+      },
+    });
+    await prisma.evaluationMember.upsert({
+      where: { projectId_userId: { projectId: demoEval.id, userId: priyaUser.id } },
+      update: {},
+      create: {
+        projectId: demoEval.id,
+        userId: priyaUser.id,
+        role: 'lead',
+      },
+    });
+    console.log('Demo evaluation project seeded for Priya (Midshire)');
+  } else {
+    console.warn('Priya not found; skipping EvaluationProject seed');
+  }
 
   console.log('Seeding complete!');
 }
