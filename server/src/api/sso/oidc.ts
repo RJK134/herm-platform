@@ -12,16 +12,12 @@
  * JWKS on a key-id miss so the cache TTL only governs discovery doc
  * refreshes, not signing-key rotation.
  *
- * v6 is ESM-only. The project's root package.json sets `"type": "module"`,
- * so file resolution is ESM by default — but the server's tsconfig still
- * compiles to module:commonjs, which means the *output* uses require().
- * CI baseline is Node 20 (.github/workflows/ci.yml NODE_VERSION=20); the
- * Vercel runtime ships with Node 24 as of 2026-05. require(esm) is not
- * enabled in either, so a synchronous `require('openid-client')` throws
- * ERR_REQUIRE_ESM at module load. Resolve it lazily via dynamic import()
- * instead — values are pulled inside the async functions that actually
- * need them; the type comes from a type-only namespace import so the
- * compile-time API stays unchanged.
+ * v6 is ESM-only. Our supported baseline is Node 20, while the server
+ * build output is CommonJS (tsconfig `module: commonjs`), so synchronous
+ * `require('openid-client')` throws ERR_REQUIRE_ESM at module load.
+ * Resolve it lazily via dynamic import() instead — values are pulled
+ * inside the async functions that actually need them; the type comes from
+ * a type-only namespace import so the compile-time API stays unchanged.
  */
 import type * as OidcMod from 'openid-client';
 type OidcModule = typeof import('openid-client');

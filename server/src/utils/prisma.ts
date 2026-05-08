@@ -80,26 +80,12 @@ function encodePostgresQuery(params: URLSearchParams): string {
 const databaseUrl = applyConnectionDefaults(process.env['DATABASE_URL']);
 
 /**
- * Resolves the Neon-over-HTTPS switch for the server Prisma singleton.
- *
- * `PRISMA_NEON_HTTP` is the canonical server-side flag. `USE_NEON_HTTP`
- * is also accepted as a backward-compatible alias so operators don't
- * have to remember different env var names for server vs seed/script
- * contexts. If both are set, `PRISMA_NEON_HTTP` wins.
- */
-function getPrismaNeonHttpFlag(): string | undefined {
-  return process.env['PRISMA_NEON_HTTP'] ?? process.env['USE_NEON_HTTP'];
-}
-
-/**
  * Some hosts (Vercel Hobby Functions, Claude Code's web sandbox, locked-
  * down corporate networks) only allow outbound HTTPS — no raw TCP to
- * Postgres on 5432. When the resolved Neon-over-HTTPS flag is enabled
- * (`PRISMA_NEON_HTTP=1`, or legacy alias `USE_NEON_HTTP=1`), route
- * Prisma queries through the @neondatabase/serverless WebSocket pool
- * instead, which speaks the wire protocol over an HTTPS upgrade.
- * Otherwise this is a no-op and the standard libpq TCP path runs
- * unchanged.
+ * Postgres on 5432. When `PRISMA_NEON_HTTP=1`, route Prisma queries
+ * through the @neondatabase/serverless WebSocket pool instead, which
+ * speaks the wire protocol over an HTTPS upgrade. Otherwise this is a
+ * no-op and the standard libpq TCP path runs unchanged.
  *
  * This branch is required (not optional) for the live Vercel deploy at
  * https://herm-platform-client-*.vercel.app — without it every API
