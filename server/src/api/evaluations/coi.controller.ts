@@ -19,18 +19,19 @@ export async function submitOwnCoi(
   next: NextFunction,
 ): Promise<void> {
   try {
-    if (!req.user?.userId) {
+    if (!req.user?.userId || !req.user.institutionId) {
       throw new ValidationError('Authentication required to submit a CoI declaration');
     }
     const body = req.body as SubmitCoiBody;
-    const declaredText = (body.declaredText ?? '').toString();
+    // Validate the field is a string BEFORE coercing — a payload like
+    // `{declaredText: {toString(){throw new Error()}}}` would otherwise
+    // crash the request with a 500 instead of returning a clean 400.
     // Empty string is permitted ("no conflicts to declare") — the row's
     // existence is the audit signal that the declaration step happened.
-    // We DO require the caller to send the field so accidental submission
-    // of a stale browser tab (no body) gets rejected.
     if (typeof body.declaredText !== 'string') {
       throw new ValidationError('declaredText is required (use empty string for "no conflicts")');
     }
+    const declaredText = body.declaredText;
 
     const evaluationProjectId = req.params['id'];
     if (!evaluationProjectId) {
@@ -40,6 +41,7 @@ export async function submitOwnCoi(
     const row = await coiService.submit({
       evaluationProjectId,
       userId: req.user.userId,
+      requestingInstitutionId: req.user.institutionId,
       declaredText,
     });
 
@@ -96,7 +98,16 @@ export async function listProjectCoi(
     if (!evaluationProjectId) {
       throw new ValidationError('Project id is required');
     }
-    const rows = await coiService.listForProject(evaluationProjectId);
+    // Pass the caller identity (userId + institutionId) through so
+    // listForProject can enforce the tenant-scope + membership gate.
+    // Anonymous callers, cross-tenant requests, and non-members all
+    // receive an empty list (200 + []) rather than a 403, so a
+    // probed project ID can't be confirmed as existing.
+    const rows = await coiService.listForProject(
+      evaluationProjectId,
+      req.user?.userId,
+      req.user?.institutionId,
+    );
 
     // Light tamper-check pass: surface the row's stored hash alongside a
     // freshly-recomputed hash so callers can spot any text mutation that

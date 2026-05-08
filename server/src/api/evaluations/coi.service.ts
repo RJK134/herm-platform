@@ -6,6 +6,14 @@
 // Express Request needed by the shared audit() helper). The
 // declaredHash is captured at signing time so a later mutation of
 // declaredText is detectable via re-hash + compare.
+//
+// Tenant-scoping posture (per Bugbot/Vade/Copilot review on PR #101):
+// every read AND write filters EvaluationProject by `institutionId` so
+// a user from institution A can't probe / read / write CoI rows for
+// institution B's projects even if they know a project ID. The
+// failure mode for cross-tenant probes is uniformly NotFoundError
+// (write path) or empty list (read path) so the response shape
+// doesn't leak project existence across tenants.
 
 import { createHash } from 'node:crypto';
 import prisma from '../../utils/prisma';
@@ -14,6 +22,13 @@ import { NotFoundError, ValidationError } from '../../utils/errors';
 export interface SubmitCoiInput {
   evaluationProjectId: string;
   userId: string;
+  /**
+   * Caller's home institution, taken from the JWT in the controller.
+   * The project lookup filters on this so cross-tenant calls return
+   * the same NotFoundError as "project doesn't exist at all" — closes
+   * the existence-oracle that bot review flagged.
+   */
+  requestingInstitutionId: string;
   declaredText: string;
 }
 
@@ -36,17 +51,21 @@ export function hashCoiDeclaration(text: string): string {
 
 export class CoiService {
   async submit(input: SubmitCoiInput): Promise<CoiDeclarationView> {
-    // Confirm the project exists and the user is allowed to declare for
-    // it (must be a member of the evaluation). Both checks done in one
-    // round-trip via the membership join.
-    const project = await prisma.evaluationProject.findUnique({
-      where: { id: input.evaluationProjectId },
+    // Confirm the project exists, belongs to the caller's institution,
+    // and the user is allowed to declare for it (must be a member of
+    // the evaluation). The institutionId filter on findFirst ensures a
+    // cross-tenant ID returns the same NotFoundError as a non-existent
+    // ID — same response shape, no existence oracle.
+    const project = await prisma.evaluationProject.findFirst({
+      where: {
+        id: input.evaluationProjectId,
+        institutionId: input.requestingInstitutionId,
+      },
       select: {
         id: true,
-        institutionId: true,
         members: {
           where: { userId: input.userId },
-          select: { id: true, role: true },
+          select: { id: true },
         },
       },
     });
@@ -87,7 +106,34 @@ export class CoiService {
     });
   }
 
-  async listForProject(evaluationProjectId: string): Promise<CoiDeclarationView[]> {
+  /**
+   * Tenant-scoped list of every declaration on a project. Caller MUST
+   * be authenticated, the project MUST belong to the caller's
+   * institution, AND the caller MUST be a member of the project.
+   * Cross-tenant probes and non-member access both return [] (NOT
+   * 403) so the response shape doesn't reveal project existence on
+   * probed IDs. Project leads see every declaration; ordinary
+   * evaluators get the same project-wide list because PA 2023 audit
+   * posture is "every member sees every other member's declaration
+   * so collusion can't be laundered through private declarations".
+   */
+  async listForProject(
+    evaluationProjectId: string,
+    requestingUserId: string | null | undefined,
+    requestingInstitutionId: string | null | undefined,
+  ): Promise<CoiDeclarationView[]> {
+    if (!requestingUserId || !requestingInstitutionId) return [];
+    // Single round-trip: project must exist AND be in the caller's
+    // institution AND have the caller as a member.
+    const project = await prisma.evaluationProject.findFirst({
+      where: {
+        id: evaluationProjectId,
+        institutionId: requestingInstitutionId,
+        members: { some: { userId: requestingUserId } },
+      },
+      select: { id: true },
+    });
+    if (!project) return [];
     return prisma.conflictOfInterestDeclaration.findMany({
       where: { evaluationProjectId },
       orderBy: { signedAt: 'desc' },

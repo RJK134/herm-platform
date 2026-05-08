@@ -43,12 +43,15 @@ router.post('/:id/domains/:domainId/scores', authenticateJWT, submitDomainScores
 router.get('/:id/aggregate', getAggregatedScores);
 router.get('/:id/progress', getTeamProgress);
 
-// Phase 14.9 — Conflict-of-Interest declarations. Submit is self-only
-// (the evaluator signs their own declaration) and requires a real JWT
-// because the row carries per-user audit attribution. Project-wide CoI
-// review data is sensitive (including declaration text), so read access
-// also requires a real JWT rather than relying on router-level
-// optionalJWT.
+// Phase 14.9 — Conflict-of-Interest declarations. Every endpoint
+// requires a real JWT because (a) submit carries per-user audit
+// attribution that must never fall back to the 'anonymous' sentinel,
+// and (b) reads expose `declaredText` which can carry commercially-
+// sensitive disclosure content. The list endpoint additionally
+// gates on project membership AND tenant institutionId inside the
+// service layer — non-members and cross-tenant probes both get
+// 200 + [] (rather than 403) so probed project IDs can't be
+// confirmed as existing.
 router.post('/:id/coi', authenticateJWT, submitOwnCoi);
 router.get('/:id/coi/me', authenticateJWT, getOwnCoi);
 router.get('/:id/coi', authenticateJWT, listProjectCoi);

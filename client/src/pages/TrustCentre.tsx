@@ -34,7 +34,7 @@ const CERT_STATUS: Certification[] = [
     name: 'ISO/IEC 27001:2022',
     status: 'planned',
     description:
-      'International standard for information security management systems. Scope will cover the entire HERM platform, the Vercel-hosted SPA, and the Neon-hosted production database.',
+      'International standard for information security management systems. Scope will cover the entire Future Horizons ASPT platform, the Vercel-hosted SPA, and the Neon-hosted production database.',
     expectedAt: '2027 Q2',
   },
   {

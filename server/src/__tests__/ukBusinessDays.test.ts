@@ -62,7 +62,7 @@ describe('addUkWorkingDays', () => {
 });
 
 describe('calculatePa2023StandstillEndDate', () => {
-  it('lands 8 working days after the notice date when a bank holiday falls in the window', () => {
+  it('skips an in-window bank holiday and lands 8 working days after the notice date', () => {
     // Notice Wed 2026-05-13 → +8 working days with the Spring bank holiday in the window
     // Thu 14, Fri 15, Mon 18, Tue 19, Wed 20, Thu 21, Fri 22, Mon 25 (BH!)
     // → 25 May is Spring BH, so actual counted days are 14,15,18,19,20,21,22,26 = Tue 26 May
