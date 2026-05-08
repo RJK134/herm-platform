@@ -4,6 +4,12 @@
   "outputDirectory": "client/dist",
   "installCommand": "npm install --include=dev",
   "framework": null,
+  "functions": {
+    "api/[...slug].ts": {
+      "maxDuration": 30,
+      "includeFiles": "node_modules/.prisma/client/**"
+    }
+  },
   "rewrites": [
     {
       "source": "/metrics",
@@ -14,7 +20,11 @@
       "destination": "/api/scim/v2/:path*"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/api/(.*)",
+      "destination": "/api/[...slug]"
+    },
+    {
+      "source": "/((?!api/|assets/).*)",
       "destination": "/index.html"
     }
   ],

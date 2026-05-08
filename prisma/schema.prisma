@@ -1,11 +1,12 @@
 generator client {
-  provider      = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
   // `native` covers local dev (macOS/Linux); `rhel-openssl-3.0.x` is the
   // Vercel Serverless Functions runtime (Amazon Linux 2 + Node 20). Both
   // engines are baked into the generated client so a Prisma client built
   // on a Mac and deployed to Vercel still finds a usable engine binary.
   // See progress/phase-13-vercel-serverless-evaluation.md.
-  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  binaryTargets   = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
