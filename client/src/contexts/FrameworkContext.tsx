@@ -55,7 +55,7 @@ export function FrameworkProvider({ children }: { children: React.ReactNode }) {
       // UAT D-01 (May 2026) — empty frameworks land users on a 0% / 0-of-0
       // experience that destroys credibility in the first 30 seconds.
       // Filter out frameworks with zero capabilities BEFORE choosing a
-      // default so a misseded "FHE Capability Framework" placeholder
+      // default so a mis-seeded "FHE Capability Framework" placeholder
       // (`isDefault: true`, capabilityCount: 0) can't outrank UCISA HERM
       // v3.1 (`isPublic: true`, capabilityCount: 165). Falls back to the
       // unfiltered list only if every framework is empty — degraded but
