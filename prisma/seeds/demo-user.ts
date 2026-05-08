@@ -4,8 +4,9 @@
  */
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { getPrismaClient } from '../_neon-http-prisma';
 
-const prisma = new PrismaClient();
+const prisma: PrismaClient = await getPrismaClient();
 const DEMO_PASSWORD = process.env['DEMO_PASSWORD'] ?? 'demo12345';
 
 async function main() {

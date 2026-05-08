@@ -45,4 +45,22 @@ import { initSentry } from '../server/dist/lib/sentry.js';
 initSentry();
 
 const { createApp } = await import('../server/dist/app.js');
-export default createApp();
+const app = createApp();
+
+// Disable Vercel's default body parser so Express's own express.json() /
+// express.urlencoded() see the untouched stream. Without this, POST
+// routes go through Vercel's preprocessor first; for some Content-Type
+// + method combinations Vercel's edge then refuses to forward to the
+// function entirely (404 NOT_FOUND), which is what was happening to
+// every POST in early UAT smoke tests.
+export const config = {
+  api: { bodyParser: false },
+};
+
+// Wrap as a (req, res) handler rather than exporting the Express app
+// directly. Vercel accepts both shapes for a default export, but the
+// handler form is the documented contract and avoids edge-case method
+// detection — the symptoms here were that GET worked and POST 404-d.
+export default function handler(req: unknown, res: unknown): void {
+  (app as (r: unknown, s: unknown) => void)(req, res);
+}
