@@ -104,7 +104,7 @@ function makePrisma(): PrismaClient {
   if (process.env['PRISMA_NEON_HTTP'] === '1') {
     const rawUrl = process.env['DATABASE_URL'];
     if (!rawUrl) {
-      throw new Error('PRISMA_NEON_HTTP=1 or USE_NEON_HTTP=1 requires DATABASE_URL to be set');
+      throw new Error('PRISMA_NEON_HTTP=1 requires DATABASE_URL to be set');
     }
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { Pool, neonConfig } = require('@neondatabase/serverless') as typeof import('@neondatabase/serverless');
