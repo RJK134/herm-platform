@@ -22,8 +22,9 @@
 // inside the async functions that actually need them, types come from a
 // type-only import so the compile-time API stays unchanged.
 import type * as OidcMod from 'openid-client';
-let _oidc: typeof OidcMod | null = null;
-async function loadOidc(): Promise<typeof OidcMod> {
+type OidcModule = typeof import('openid-client');
+let _oidc: OidcModule | null = null;
+async function loadOidc(): Promise<OidcModule> {
   _oidc ??= await import('openid-client');
   return _oidc;
 }
