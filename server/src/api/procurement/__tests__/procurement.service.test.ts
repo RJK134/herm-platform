@@ -108,10 +108,8 @@ describe('ProcurementService.createProject', () => {
       id: 'workflow-1',
       projectId: 'project-1',
     } as never);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (prisma.procurementStage.create as any).mockImplementation(
-      ({ data }: { data: { stageCode: string } }) =>
-        Promise.resolve({ id: `stage-${data.stageCode}`, ...data }),
+    vi.mocked(prisma.procurementStage.create).mockImplementation(({ data }) =>
+      Promise.resolve({ id: `stage-${data.stageCode}`, ...data }) as never,
     );
     vi.mocked(prisma.stageTask.createMany).mockResolvedValue({ count: 1 } as never);
 
@@ -191,9 +189,10 @@ describe('ProcurementService.createProject', () => {
         sortOrder: task.sortOrder,
       })),
     });
+    const lastStageDef = stageDefs.at(-1);
     expect(prisma.stageTask.createMany).toHaveBeenLastCalledWith({
-      data: stageDefs.at(-1)?.tasks.map((task) => ({
-        stageId: `stage-${stageDefs.at(-1)?.stageCode}`,
+      data: lastStageDef?.tasks.map((task) => ({
+        stageId: `stage-${lastStageDef?.stageCode}`,
         title: task.title,
         description: task.description ?? null,
         isMandatory: task.isMandatory,
