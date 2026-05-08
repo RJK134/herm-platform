@@ -15,6 +15,11 @@ import {
   getAggregatedScores,
   getTeamProgress,
 } from './evaluations.controller';
+import {
+  submitOwnCoi,
+  getOwnCoi,
+  listProjectCoi,
+} from './coi.controller';
 
 const router = Router();
 // Reads keep `optionalJWT` so tenant-scoped lists can still be served to
@@ -37,5 +42,15 @@ router.get('/:id/domains', getDomainProgress);
 router.post('/:id/domains/:domainId/scores', authenticateJWT, submitDomainScores);
 router.get('/:id/aggregate', getAggregatedScores);
 router.get('/:id/progress', getTeamProgress);
+
+// Phase 14.9 — Conflict-of-Interest declarations. Submit is self-only
+// (the evaluator signs their own declaration) and requires a real JWT
+// because the row carries per-user audit attribution. Reads use
+// optionalJWT (tenant-scoped to the project members) so the CoI
+// review surface in TeamWorkspaces can show project-lead audit
+// summaries without forcing additional auth gymnastics.
+router.post('/:id/coi', authenticateJWT, submitOwnCoi);
+router.get('/:id/coi/me', authenticateJWT, getOwnCoi);
+router.get('/:id/coi', listProjectCoi);
 
 export default router;
