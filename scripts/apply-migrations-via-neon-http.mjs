@@ -39,6 +39,19 @@ async function main() {
   const client = await pool.connect();
   try {
     await client.query(PRISMA_MIGRATIONS_DDL);
+    const { rows: inProgress } = await client.query(
+      `SELECT migration_name
+         FROM _prisma_migrations
+        WHERE finished_at IS NULL
+          AND rolled_back_at IS NULL`,
+    );
+    if (inProgress.length > 0) {
+      const names = inProgress.map(r => r.migration_name).join(', ');
+      throw new Error(
+        `[setup] found in-progress/failed migrations in _prisma_migrations: ${names}. ` +
+          'Resolve these rows manually before rerunning this script.',
+      );
+    }
     const { rows: existing } = await client.query(
       'SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL',
     );
