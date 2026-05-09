@@ -1,5 +1,9 @@
 import { PrismaClient } from '@prisma/client';
-import * as hermToFheMappingModule from '../../server/src/data/herm-to-fhe-mapping';
+// Phase 14.7b — colocated mapping data so the seed runs without
+// crossing the workspace tsconfig boundary (same fix as 14.7 +
+// fhe-scores). Server runtime never imports HERM_TO_FHE_MAPPINGS
+// so the relocation is safe.
+import * as hermToFheMappingModule from './herm-to-fhe-mapping-data';
 
 const { HERM_TO_FHE_MAPPINGS } = hermToFheMappingModule;
 
