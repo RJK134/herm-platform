@@ -5,10 +5,17 @@ after PR #101 merged the demo-impact bundle (14.2 + 14.4 + 14.7 +
 14.9 + 14.10) onto master `133fb16`. The seven items below are the
 remaining UAT sub-phases the May 2026 review identified, sequenced
 for an overnight Claude run that drives each item through push,
-CI, and the reviewer-bot fix-up loop, leaving every PR
-ready-for-review for Freddie's merge (per CLAUDE.md "Final merge
-is always left to Freddie") using the GitHub MCP tools the
+CI, the reviewer-bot fix-up loop, and (where green + Freddie has
+auto-merge configured) merge using the GitHub MCP tools the
 existing PRs have been using.
+
+> **Auto-merge override.** CLAUDE.md's default "Final merge is
+> always left to Freddie" rule is **explicitly suspended for this
+> overnight session** at Freddie's request (PR #102 thread,
+> "Automerge ok"). If a PR has GitHub auto-merge enabled at the
+> repo level and every required check is green + every reviewer-
+> bot thread is closed, the overnight session may merge it. The
+> default rule still applies to all other Claude sessions.
 
 The paste-ready overnight prompt is at the bottom of this file.
 
@@ -309,9 +316,12 @@ starting.
 Mission: ship as many of the seven sub-phases (14.7b, 14.2b, 14.9b,
 14.3, 14.5, 14.6, 14.8) as fits in the available context budget,
 strictly in queue order. Each item is its own branch + draft PR;
-draft is flipped to ready-for-review only after every reviewer-bot
-comment is addressed. Never merge — final merge is always left to
-Freddie (CLAUDE.md "PR batching rule").
+draft is flipped to ready-for-review once every reviewer-bot
+comment is addressed. Auto-merge is authorised for this session
+only (Freddie's explicit override on PR #102) — if the PR has
+auto-merge enabled at the repo level AND every required check is
+green AND every reviewer-bot thread is closed, you may merge it.
+Otherwise leave it ready-for-review for Freddie's manual merge.
 
 Per-item loop:
 
