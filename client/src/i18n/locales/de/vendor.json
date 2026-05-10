@@ -76,7 +76,11 @@
     "quickActions": "Schnellaktionen",
     "viewFullScore": "Vollständige Score-Analyse",
     "addToRadar": "Zum Radar-Vergleich hinzufügen",
-    "evaluateInBasket": "Im Korb bewerten"
+    "evaluateInBasket": "Im Korb bewerten",
+    "recentNews": "Recent News & Updates",
+    "noProfile": "No detailed profile available for this system yet.",
+    "strengths": "Strengths",
+    "gaps": "Gaps"
   },
   "scores": {
     "overallHermScore": "HERM-Gesamtscore",

@@ -11,7 +11,9 @@
     "test": "vitest",
     "test:ci": "vitest run",
     "test:watch": "vitest",
-    "size:check": "size-limit"
+    "size:check": "size-limit",
+    "i18n:coverage": "node scripts/i18n-coverage.mjs",
+    "i18n:coverage:strict": "node scripts/i18n-coverage.mjs --strict --locales=fr,de"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.17.19",
