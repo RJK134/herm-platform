@@ -1,4 +1,4 @@
-// server/src/data/herm-to-fhe-mapping.ts
+// prisma/seeds/herm-to-fhe-mapping-data.ts
 // HERM v3.1 → FHE Capability Framework v1.0 cross-framework mapping.
 //
 // Each entry links a HERM Business Capability (BCxxx) to a corresponding
@@ -11,8 +11,12 @@
 //   ~30 partial — capabilities with meaningful but incomplete overlap
 //   ~10 weak    — capabilities sharing only tangential concerns
 //
-// Used by: prisma/seeds/framework-mappings.ts
-//          server/src/api/framework-mappings/*
+// Phase 14.7b — relocated from server/src/data/herm-to-fhe-mapping.ts.
+// Seed-only at runtime: consumed by prisma/seeds/framework-mappings.ts
+// during `npm run db:seed`, which writes the mapping into
+// FrameworkMapping + CapabilityMapping rows. The server-side
+// /api/framework-mappings endpoints read those rows from the DB —
+// they don't import this module — so the relocation is safe.
 
 export type MappingStrength = 'exact' | 'strong' | 'partial' | 'weak';
 

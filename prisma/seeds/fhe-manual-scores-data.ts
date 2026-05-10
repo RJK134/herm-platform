@@ -1,8 +1,9 @@
-// server/src/data/fhe-manual-scores.ts
+// prisma/seeds/fhe-manual-scores-data.ts
 // Hand-curated FHE capability score overrides.
 //
-// These scores take precedence over the rules engine in fhe-scoring-rules.ts.
-// They capture vendor-specific nuance the rule set cannot infer from metadata alone:
+// These scores take precedence over the rules engine in
+// ./fhe-scoring-rules-data.ts. They capture vendor-specific nuance
+// the rule set cannot infer from metadata alone:
 //   • SJMS: UK HE regulatory depth and incomplete alumni/research modules
 //   • Banner/SITS: dominant install bases with extensive ecosystem partnerships
 //   • Workday Student+HCM: cloud-native leader with unified platform reach
@@ -11,8 +12,13 @@
 //
 // Keys: systemSlug -> capabilityCode -> { value, rationale }
 // Target: ~33 overrides per system (~700 total), ~30% of the 2,478 final scores.
+//
+// Phase 14.7b — relocated from server/src/data/fhe-manual-scores.ts so
+// the seed-only data lives entirely under prisma/seeds/. Consumed by
+// ./fhe-scores.ts during `npm run db:seed`. Server runtime never
+// imports this module.
 
-import type { ScoreValue } from './fhe-scoring-rules';
+import type { ScoreValue } from './fhe-scoring-rules-data';
 
 export interface ManualScore {
   value: ScoreValue;
