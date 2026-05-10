@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 import {
   Users, Plus, Calendar, CheckCircle, AlertTriangle,
   BarChart2, ChevronDown, ChevronRight, Award, FileText,
@@ -12,7 +12,7 @@ import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { Header } from '../components/layout/Header';
 import { useNavigate } from 'react-router-dom';
-import { api, type CoiDeclaration } from '../lib/api';
+import { api, ApiError, type CoiDeclaration } from '../lib/api';
 
 // ── Interfaces ────────────────────────────────────────────────────────────────
 
@@ -545,6 +545,7 @@ function DomainAssignmentPanel({
 
       {scoringGated && (
         <div
+          id="coi-gate-banner"
           role="alert"
           aria-live="polite"
           className="rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-6"
@@ -602,11 +603,16 @@ function DomainAssignmentPanel({
                 <td className="px-4 py-3"><StatusBadge status={da.status} /></td>
                 <td className="px-4 py-3">
                   {da.status === 'IN_PROGRESS' && (
+                    // The disabled <Button> uses `pointer-events-none` so a
+                    // `title` on it is silently dropped. The amber gate banner
+                    // above the table is the canonical explanation; the
+                    // `aria-describedby` link makes the relationship explicit
+                    // for screen readers when the button is disabled.
                     <Button
                       size="sm"
                       className="bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                       disabled={scoringGated}
-                      title={scoringGated ? 'Submit your Conflict of Interest declaration first' : undefined}
+                      aria-describedby={scoringGated ? 'coi-gate-banner' : undefined}
                     >
                       Enter Scores
                     </Button>
@@ -650,11 +656,16 @@ function CoiPanel({ projectId, coi, loading }: CoiPanelProps) {
       setError(null);
     },
     onError: (err: unknown) => {
-      const ax = err as AxiosError<{ error?: { message?: string } }>;
-      setError(
-        ax.response?.data?.error?.message ??
-          'Could not save the declaration. Please try again.',
-      );
+      // `api.submitCoi` goes through the shared axios `client` whose
+      // response interceptor rejects with `ApiError` (server-provided
+      // message + code), not raw AxiosError. Surface that message
+      // directly when present so the user sees the real validation
+      // failure rather than the generic fallback.
+      if (err instanceof ApiError) {
+        setError(err.message);
+        return;
+      }
+      setError('Could not save the declaration. Please try again.');
     },
   });
 
