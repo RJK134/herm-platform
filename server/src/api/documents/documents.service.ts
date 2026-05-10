@@ -194,7 +194,7 @@ async function generateRfpItt(input: GenerateDocumentInput): Promise<DocumentSec
       id: 'technical',
       title: '5. Technical Requirements',
       order: 5,
-      content: `### 5.1 Non-Functional Requirements\n\n| Requirement | Standard |\n|-------------|----------|\n| Availability | 99.9% uptime during term time |\n| Performance | <3s page load, <200ms API response |\n| Security | ISO 27001 / Cyber Essentials Plus |\n| Data residency | UK/EEA data centres only |\n| GDPR | Article 28 Data Processing Agreement required |\n| Accessibility | WCAG 2.1 AA minimum |\n| API | REST/JSON, OpenAPI 3.0 documentation |\n| Integration | Standard protocols: REST, SFTP, SAML 2.0 SSO |\n| Data migration | Full historical data migration with validation |\n\n### 5.2 Infrastructure\n\nPreferred deployment: Cloud-native SaaS. On-premise and hybrid will be considered.\n\n### 5.3 Authentication\n\nMandatory: SAML 2.0 / OIDC integration with institutional identity provider. Support for MFA.`,
+      content: `### 5.1 Non-Functional Requirements\n\n| Requirement | Standard |\n|-------------|----------|\n| Availability | 99.9% uptime during term time |\n| Performance | <3s page load, <200ms API response |\n| Security | ISO 27001 / Cyber Essentials Plus |\n| Data residency | UK/EEA data centres only |\n| GDPR | Article 28 Data Processing Agreement required |\n| Accessibility | WCAG 2.1 AA minimum |\n| API | REST/JSON, OpenAPI 3.0 documentation |\n| Integration | Standard protocols: REST, SFTP, SAML 2.0 SSO |\n| Data migration | Full historical data migration with validation |\n\n### 5.2 Infrastructure\n\nPreferred deployment: Cloud-native SaaS. On-premise and hybrid will be considered.\n\n### 5.3 Authentication\n\nMandatory: SAML 2.0 / OIDC integration with institutional identity provider. Support for MFA.\n\n### 5.4 Procurement Policy Note (PPN) Compliance\n\nIn accordance with Cabinet Office procurement policy notes applicable to this procurement under the Procurement Act 2023, tenderers must:\n\n- **PPN 03/24 — Cyber Essentials**: hold a current Cyber Essentials certificate (or recognised equivalent) and provide certificate evidence with the tender response. Cyber Essentials Plus is preferred for contracts that handle student personal data.\n- **PPN 09/14 — Modern Slavery**: provide a copy of the most recent Modern Slavery and Human Trafficking statement (Modern Slavery Act 2015 s.54). Tenderers with annual turnover under the £36m s.54 threshold should confirm this in writing instead.\n- **PPN 06/20 / Carbon Reduction**: provide a Carbon Reduction Plan committing to net-zero by 2050 in line with the Procurement Act 2023 transparency requirements.\n\nFailure to provide the documents above with the tender response will result in disqualification at the selection stage.`,
     },
     {
       id: 'evaluation',
@@ -403,6 +403,12 @@ export class DocumentsService {
         status: 'DRAFT',
         wordCount,
         createdById: input.institutionId ?? 'anonymous',
+        // Phase 14.2b — stamp the regulatory regime on every newly-
+        // generated document. Phase 14.2 swung the templates over to
+        // PA 2023 + Procurement Regulations 2024, so any document
+        // produced post-merge is unambiguously PA2023. Pre-Phase-14.2
+        // rows have null and render as "(legacy)" in the UI.
+        regulationVersion: 'PA2023',
       },
     });
   }
