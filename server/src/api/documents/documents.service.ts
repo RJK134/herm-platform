@@ -431,6 +431,12 @@ export class DocumentsService {
         wordCount: true,
         createdAt: true,
         updatedAt: true,
+        // Phase 14.2b — explicit select required so the listing card
+        // can render the regulation-version badge. Without this field
+        // every card falls through the UI ternary to "(legacy)" even
+        // for newly-created PA 2023 documents (Bugbot found this on
+        // the original 14.2b PR).
+        regulationVersion: true,
       },
     });
   }
