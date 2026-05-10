@@ -1,6 +1,14 @@
 import { Router } from 'express';
 import { authenticateJWT, optionalJWT } from '../../middleware/auth';
-import { generatePreview, saveDocument, listDocuments, getDocument, updateDocument, deleteDocument } from './documents.controller';
+import {
+  generatePreview,
+  saveDocument,
+  listDocuments,
+  getDocument,
+  updateDocument,
+  deleteDocument,
+  exportDocumentPdf,
+} from './documents.controller';
 
 const router = Router();
 
@@ -27,5 +35,12 @@ router.patch('/:id', updateDocument);
 
 /** DELETE /api/documents/:id */
 router.delete('/:id', deleteDocument);
+
+/**
+ * GET /api/documents/:id/export.pdf — Phase 14.3 Business Case PDF export.
+ * Tenant-scoped via the parent router's authenticateJWT; pilot is
+ * BUSINESS_CASE only (other types return 400).
+ */
+router.get('/:id/export.pdf', exportDocumentPdf);
 
 export default router;
