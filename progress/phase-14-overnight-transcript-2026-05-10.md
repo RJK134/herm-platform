@@ -19,7 +19,9 @@ reviewer-bot thread is closed.
 - **Head SHA:** `8bc54bd`
 - **CI:** all required checks green (lint, typecheck, test, build, Validate
   Prisma schema). Vercel preview deployment success.
-- **Reviewer bots:** zero comments / threads / reviews observed at flip time.
+- **Reviewer bots:** no bot threads visible at flip time. Threads
+  arrived post-flip and are recorded in the "PR #104 + #105
+  reviewer-bot status" snapshot below.
 - **Status:** ready-for-review (flipped from draft 2026-05-10). Waiting on
   reviewer-bot pass before any further action.
 
@@ -29,7 +31,9 @@ reviewer-bot thread is closed.
 - **PR:** [#105](https://github.com/RJK134/herm-platform/pull/105)
 - **Head SHA:** `99e840b`
 - **CI:** all required checks green. Vercel preview deployment success.
-- **Reviewer bots:** zero comments / threads / reviews observed at flip time.
+- **Reviewer bots:** no bot threads visible at flip time. Threads
+  arrived post-flip and are recorded in the "PR #104 + #105
+  reviewer-bot status" snapshot below.
 - **Status:** ready-for-review (flipped from draft 2026-05-10). Waiting on
   reviewer-bot pass before any further action.
 
