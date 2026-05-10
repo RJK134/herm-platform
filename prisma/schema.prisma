@@ -308,6 +308,18 @@ enum UserRole {
   INSTITUTION_ADMIN
   PROCUREMENT_LEAD
   EVALUATOR
+  // Phase 14.8 — Enterprise RBAC role taxonomy. UAT report 4.1 named
+  // three additional roles needed for procurement-team workflows:
+  //   FINANCE     — TCO calculator + cost-comparison surfaces only
+  //   AUDITOR     — read-only access to audit logs + compliance views
+  //   STAKEHOLDER — read-only access to procurement narrative + scoring
+  // Existing PROCUREMENT_LEAD remains the broadest non-admin role and
+  // can do everything these three can plus the score-aggregation +
+  // document-generation surfaces. SUPER_ADMIN / INSTITUTION_ADMIN keep
+  // their cross-cutting-admin posture.
+  FINANCE
+  AUDITOR
+  STAKEHOLDER
   VENDOR_ADMIN
   VENDOR_CONTRIBUTOR
   VIEWER
