@@ -15,13 +15,34 @@
     @apply bg-gray-900 text-gray-100;
   }
 
+  /*
+   * Phase 14.5a — WCAG 2.4.7 (Focus Visible). Single explicit focus
+   * indicator, used by every keyboard-reachable element on the page.
+   * Many components carry `focus:outline-none focus:ring-*` to swap
+   * the native browser ring for a Tailwind one — those are still
+   * conformant (the ring IS the focus indicator), but the !important
+   * here makes the global outline win on any element whose only focus
+   * style was native + later set to outline-none without a ring.
+   */
   *:focus-visible {
-    outline: 2px solid #01696F;
-    outline-offset: 2px;
+    outline: 2px solid #01696F !important;
+    outline-offset: 2px !important;
   }
 
   ::selection {
     background-color: rgba(1, 105, 111, 0.15);
     color: #01696F;
+  }
+}
+
+@layer utilities {
+  /*
+   * `.focus-ring` — drop-in helper for components that swap the native
+   * outline (`focus:outline-none`) for a Tailwind ring. Centralises the
+   * teal focus colour so a future brand-colour change is a one-line
+   * edit instead of a grep across 70+ component files.
+   */
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal focus-visible:ring-offset-2;
   }
 }
