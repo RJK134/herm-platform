@@ -16,7 +16,7 @@ reviewer-bot thread is closed.
 
 - **Branch:** `claude/p14-7b-relocate-fhe-data`
 - **PR:** [#104](https://github.com/RJK134/herm-platform/pull/104)
-- **Head SHA:** `8bc54bd479203324b0e4f37452fea6faa5f2ba4f`
+- **Head SHA:** `8bc54bd`
 - **CI:** all required checks green (lint, typecheck, test, build, Validate
   Prisma schema). Vercel preview deployment success.
 - **Reviewer bots:** zero comments / threads / reviews observed at flip time.
@@ -27,7 +27,7 @@ reviewer-bot thread is closed.
 
 - **Branch:** `claude/p14-2b-regulation-version`
 - **PR:** [#105](https://github.com/RJK134/herm-platform/pull/105)
-- **Head SHA:** `99e840bd2162dda3eee0a911e412fad25963618e`
+- **Head SHA:** `99e840b`
 - **CI:** all required checks green. Vercel preview deployment success.
 - **Reviewer bots:** zero comments / threads / reviews observed at flip time.
 - **Status:** ready-for-review (flipped from draft 2026-05-10). Waiting on
@@ -176,8 +176,10 @@ reviewer-bot thread is closed.
 All 7 queue items shipped as PRs. None merged — auto-merge gate
 requires every required check green AND every reviewer-bot thread
 closed; the later PRs are still mid-CI / pre-bot-pass and need
-Freddie's morning review either way for the sub-phases that touch
-schema (14.2b migration already merged on 105, 14.8 migration on 110).
+Freddie's morning review either way. Two PRs carry a Prisma
+migration that needs `prisma migrate deploy` after merge: PR #105
+(`20260510000000_add_regulation_version`) and PR #110
+(`20260510010000_add_rbac_roles`).
 
 Next-morning review notes for Freddie:
 - 14.5a Card refactor (clickable cards now `<button>`) is the most
