@@ -7,8 +7,8 @@
 // missing keys so CI can gate on this signal.
 //
 // Mode: advisory by default — exits 1 only when --strict is passed (or
-// HERM_I18N_STRICT=1 is set). The default exit code is 0 with a
-// missing-keys table printed to stderr; gives the team time to backfill
+// HERM_I18N_STRICT=1 is set). The default exit code is 0 while still
+// printing a missing-keys table; this gives the team time to backfill
 // translations without blocking unrelated PRs. Switch to strict once
 // the gap closes (or once HERM_I18N_STRICT becomes the default in CI).
 //
