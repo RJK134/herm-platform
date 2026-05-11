@@ -50,8 +50,15 @@ interface SavedDoc {
   wordCount: number;
   createdAt: string;
   updatedAt: string;
-  sections: DocumentSection[];
+  // `/api/documents` returns a summary payload, so detail fields such as
+  // `sections` may be absent until the full document is fetched via
+  // `/api/documents/:id`.
+  sections?: DocumentSection[];
   metadata?: DocumentMeta;
+  // Phase 14.2b — regulatory regime under which the document was
+  // generated. New rows stamp 'PA2023' on save; pre-Phase-14.2 rows
+  // are null and render as "(legacy)" on the card.
+  regulationVersion?: string | null;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -246,7 +253,27 @@ function SavedDocRow({ doc, onOpen, onDelete }: {
       <Icon className="w-5 h-5 text-gray-400 flex-shrink-0" />
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{doc.title}</div>
-        <div className="text-xs text-gray-500 dark:text-gray-400">{typeConf?.label} · {doc.wordCount.toLocaleString()} words · {fmtDate(doc.createdAt)}</div>
+        <div className="text-xs text-gray-500 dark:text-gray-400">
+          {typeConf?.label} · {doc.wordCount.toLocaleString()} words · {fmtDate(doc.createdAt)}
+          {/*
+            Phase 14.2b — surface the regulatory regime so operators
+            can spot legacy (pre-PA2023) documents at a glance. New
+            documents stamp "PA2023" on save; older rows fall back
+            to a "(legacy)" label.
+          */}
+          {' · '}
+          {doc.regulationVersion === 'PA2023' ? (
+            <span className="text-teal" title="Generated under the Procurement Act 2023">
+              PA 2023
+            </span>
+          ) : doc.regulationVersion ? (
+            <span title={`Generated under ${doc.regulationVersion}`}>{doc.regulationVersion}</span>
+          ) : (
+            <span className="italic text-gray-400" title="Pre-14.2 document; regulatory regime not stamped">
+              (legacy)
+            </span>
+          )}
+        </div>
       </div>
       <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${statusConf.colour}`}>{statusConf.label}</span>
       {doc.type === 'BUSINESS_CASE' && (
