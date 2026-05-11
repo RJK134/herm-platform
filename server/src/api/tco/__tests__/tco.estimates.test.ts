@@ -16,7 +16,11 @@ function makeToken(over: Partial<{
       userId: over.userId ?? 'u-1',
       email: 'u@test.com',
       name: over.name ?? 'Alice',
-      role: over.role ?? 'VIEWER',
+      // Phase 14.8 — TCO estimates are now role-gated to FINANCE /
+      // PROCUREMENT_LEAD / INSTITUTION_ADMIN / SUPER_ADMIN. The
+      // happy-path identity in this suite is a procurement lead;
+      // tests that exercise the gate explicitly pass `role`.
+      role: over.role ?? 'PROCUREMENT_LEAD',
       institutionId: over.institutionId ?? 'inst-1',
       institutionName: 'Test Uni',
       tier: over.tier ?? 'free',
@@ -192,4 +196,49 @@ describe('GET /api/tco/estimates/:id — cross-tenant isolation', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.id).toBe('tco-1');
   });
+});
+
+// Phase 14.8 — RBAC gate. TCO estimates carry commercially-sensitive
+// pricing data; the brief restricts access to FINANCE / PROCUREMENT_LEAD
+// and the two admin roles. Other authenticated roles get 403.
+describe('TCO estimates — Phase 14.8 role gate', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  for (const role of ['VIEWER', 'EVALUATOR', 'STAKEHOLDER', 'AUDITOR'] as const) {
+    it(`returns 403 AUTHORIZATION_ERROR for role=${role} on POST /estimates`, async () => {
+      const token = makeToken({ role });
+      const res = await request(app)
+        .post('/api/tco/estimates')
+        .set('Authorization', `Bearer ${token}`)
+        .send(validSaveBody);
+
+      expect(res.status).toBe(403);
+      expect(res.body).toMatchObject({
+        success: false,
+        error: expect.objectContaining({ code: 'AUTHORIZATION_ERROR' }),
+      });
+      expect(prisma.tcoEstimate.create).not.toHaveBeenCalled();
+    });
+
+    it(`returns 403 for role=${role} on GET /estimates`, async () => {
+      const token = makeToken({ role });
+      const res = await request(app)
+        .get('/api/tco/estimates')
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(403);
+      expect(prisma.tcoEstimate.findMany).not.toHaveBeenCalled();
+    });
+  }
+
+  for (const role of ['FINANCE', 'PROCUREMENT_LEAD', 'INSTITUTION_ADMIN', 'SUPER_ADMIN'] as const) {
+    it(`grants access to role=${role} on GET /estimates`, async () => {
+      vi.mocked(prisma.tcoEstimate.findMany).mockResolvedValueOnce([] as never);
+      const token = makeToken({ role });
+      const res = await request(app)
+        .get('/api/tco/estimates')
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(200);
+      expect(prisma.tcoEstimate.findMany).toHaveBeenCalled();
+    });
+  }
 });

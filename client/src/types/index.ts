@@ -198,6 +198,10 @@ export type UserRole =
   | 'INSTITUTION_ADMIN'
   | 'PROCUREMENT_LEAD'
   | 'EVALUATOR'
+  // Phase 14.8 — Enterprise RBAC role taxonomy
+  | 'FINANCE'
+  | 'AUDITOR'
+  | 'STAKEHOLDER'
   | 'VENDOR_ADMIN'
   | 'VENDOR_CONTRIBUTOR'
   | 'VIEWER';

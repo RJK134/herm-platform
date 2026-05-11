@@ -11,11 +11,20 @@ const updateInstitutionSchema = z.object({
   domain: z.string().optional(),
 });
 
+// Phase 14.8 — accept the three new RBAC role values (FINANCE, AUDITOR,
+// STAKEHOLDER) on the institution-admin role-assignment surface.
+// SUPER_ADMIN is deliberately omitted — that role is granted via
+// platform operations only, not via the customer-facing institution
+// admin UI. VENDOR_* stay since the institution admin may onboard
+// internal vendor-portal contacts.
 const updateRoleSchema = z.object({
   role: z.enum([
     'INSTITUTION_ADMIN',
     'PROCUREMENT_LEAD',
     'EVALUATOR',
+    'FINANCE',
+    'AUDITOR',
+    'STAKEHOLDER',
     'VENDOR_ADMIN',
     'VENDOR_CONTRIBUTOR',
     'VIEWER',
