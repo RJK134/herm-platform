@@ -88,6 +88,17 @@ function main() {
     .filter((entry) => fs.statSync(path.join(LOCALES_DIR, entry)).isDirectory())
     .sort();
 
+  if (localeFilter) {
+    const unknownLocales = [...localeFilter].filter((locale) => !locales.includes(locale));
+    if (unknownLocales.length > 0) {
+      console.error(
+        `✗ Unknown locale filter value(s): ${unknownLocales.join(', ')}. ` +
+          `Available locales: ${locales.join(', ')}`
+      );
+      process.exit(1);
+    }
+  }
+
   if (!locales.includes(CANONICAL)) {
     console.error(`✗ Canonical locale "${CANONICAL}" not found under ${LOCALES_DIR}`);
     process.exit(1);
