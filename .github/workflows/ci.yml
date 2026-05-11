@@ -5,6 +5,17 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+    paths:
+      - 'client/**'
+      - 'server/**'
+      - 'api/**'
+      - 'prisma/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+      - 'Dockerfile'
+      - '.github/workflows/ci.yml'
 
 permissions:
   contents: read
