@@ -120,6 +120,26 @@ const CLASSIFICATIONS: Classification[] = ['Public', 'Internal', 'Restricted', '
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
+// Phase 14.3 — Business Case PDF download. The server endpoint
+// `GET /api/documents/:id/export.pdf` streams a PDF buffer (rendered by
+// pdfkit) with `Content-Type: application/pdf`. Pilot scope is
+// BUSINESS_CASE only — the server returns 400 for other types so the
+// button is hidden for non-Business-Case documents to avoid an
+// unnecessary error toast. axios is configured with `responseType: blob`
+// so the binary body comes through intact rather than being coerced to
+// a string.
+const downloadPdf = async (id: string, title: string): Promise<void> => {
+  const response = await axios.get<Blob>(`/api/documents/${id}/export.pdf`, {
+    responseType: 'blob',
+  });
+  const url = URL.createObjectURL(response.data);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${title.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
 const downloadHtml = (title: string, sections: DocumentSection[], meta?: DocumentMeta) => {
   const metaHtml = meta
     ? `<table style="font-size:11px;color:#555;border-collapse:collapse;width:100%;margin-bottom:2rem">
@@ -229,6 +249,15 @@ function SavedDocRow({ doc, onOpen, onDelete }: {
         <div className="text-xs text-gray-500 dark:text-gray-400">{typeConf?.label} · {doc.wordCount.toLocaleString()} words · {fmtDate(doc.createdAt)}</div>
       </div>
       <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${statusConf.colour}`}>{statusConf.label}</span>
+      {doc.type === 'BUSINESS_CASE' && (
+        <button
+          onClick={() => { void downloadPdf(doc.id, doc.title); }}
+          className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors flex-shrink-0"
+          title={t("docgen.downloadPdfTitle", "Download a PDF rendering of this Business Case (board-pack ready)") ?? undefined}
+        >
+          <Download className="w-3.5 h-3.5" /> {t("docgen.pdf", "PDF")}
+        </button>
+      )}
       <button onClick={onOpen} className="text-xs text-teal-600 dark:text-teal-400 hover:underline flex-shrink-0">{t("docgen.open", "Open")}</button>
       <button onClick={onDelete} className="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0">
         <Trash2 className="w-3.5 h-3.5" />
@@ -678,6 +707,15 @@ export function DocumentGenerator() {
               >
                 <Download className="w-3.5 h-3.5" /> {t("docgen.exportHtml", "Export HTML")}
               </button>
+              {savedDocId && generated.type === 'BUSINESS_CASE' && (
+                <button
+                  onClick={() => { void downloadPdf(savedDocId, generated.title); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  title={t("docgen.downloadPdfTitle", "Download a PDF rendering of this Business Case (board-pack ready)") ?? undefined}
+                >
+                  <Download className="w-3.5 h-3.5" /> {t("docgen.downloadPdf", "Download PDF")}
+                </button>
+              )}
               {savedDocId ? (
                 <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
                   <CheckCircle className="w-3.5 h-3.5" /> {t("docgen.savedLabel", "Saved")}
