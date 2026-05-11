@@ -5,12 +5,14 @@ import axios from 'axios';
 import {
   Users, Plus, Calendar, CheckCircle, AlertTriangle,
   BarChart2, ChevronDown, ChevronRight, Award, FileText,
+  ShieldCheck, Lock,
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { Header } from '../components/layout/Header';
 import { useNavigate } from 'react-router-dom';
+import { api, ApiError, type CoiDeclaration } from '../lib/api';
 
 // ── Interfaces ────────────────────────────────────────────────────────────────
 
@@ -86,7 +88,13 @@ interface SystemOption {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const TABS = ['Projects', 'Domain Assignment', 'Team Progress', 'Score Aggregation'] as const;
+const TABS = [
+  'Projects',
+  'Domain Assignment',
+  'Conflict of Interest',
+  'Team Progress',
+  'Score Aggregation',
+] as const;
 type Tab = typeof TABS[number];
 
 const STATUS_COLOURS: Record<string, string> = {
@@ -287,6 +295,19 @@ export function TeamWorkspaces() {
     enabled: !!selectedProjectId && activeTab === 'Score Aggregation',
   });
 
+  // Phase 14.9b — CoI declaration query feeds two consumers:
+  //   1. The Conflict of Interest tab (which lets the evaluator submit/revise)
+  //   2. The Domain Assignment scoring gate (which blocks "Enter Scores" until a
+  //      declaration exists, so PA 2023 ss.81-83 audit trail is non-bypassable)
+  // Loaded whenever a project is selected so the gate can render the right
+  // affordance even if the user lands directly on Domain Assignment.
+  const coiQuery = useQuery<CoiDeclaration | null>({
+    queryKey: ['evaluation-coi', selectedProjectId],
+    queryFn: () =>
+      api.getMyCoi(selectedProjectId as string).then(r => r.data.data ?? null),
+    enabled: !!selectedProjectId,
+  });
+
   const markCompleteMutation = useMutation({
     mutationFn: () =>
       axios.patch(`/api/evaluations/${selectedProjectId}`, { status: 'completed' }),
@@ -413,8 +434,28 @@ export function TeamWorkspaces() {
           ) : (
             <DomainAssignmentPanel
               project={selectedProject}
+              coi={coiQuery.data ?? null}
+              coiLoading={coiQuery.isPending}
+              onGoToCoi={() => setActiveTab('Conflict of Interest')}
               onAutoAssign={() => autoAssignMutation.mutate()}
               onAssign={(domainId, userId) => assignDomainMutation.mutate({ domainId, userId })}
+            />
+          )}
+        </div>
+      )}
+
+      {/* ── Tab: Conflict of Interest ─────────────────────────────── */}
+      {activeTab === 'Conflict of Interest' && (
+        <div>
+          {!selectedProjectId ? (
+            <Card className="text-center py-8">
+              <p className="text-gray-500 dark:text-gray-400 text-sm">Select a project from the Projects tab to manage your CoI declaration.</p>
+            </Card>
+          ) : (
+            <CoiPanel
+              projectId={selectedProjectId}
+              coi={coiQuery.data ?? null}
+              loading={coiQuery.isPending}
             />
           )}
         </div>
@@ -471,12 +512,23 @@ export function TeamWorkspaces() {
 
 interface DomainAssignmentPanelProps {
   project: EvaluationProject;
+  coi: CoiDeclaration | null;
+  coiLoading: boolean;
+  onGoToCoi: () => void;
   onAutoAssign: () => void;
   onAssign: (domainId: string, userId: string) => void;
 }
 
-function DomainAssignmentPanel({ project, onAutoAssign, onAssign }: DomainAssignmentPanelProps) {
+function DomainAssignmentPanel({
+  project,
+  coi,
+  coiLoading,
+  onGoToCoi,
+  onAutoAssign,
+  onAssign,
+}: DomainAssignmentPanelProps) {
   const evaluators = project.members.filter(m => m.role === 'evaluator' || m.role === 'EVALUATOR' || true);
+  const scoringGated = !coi && !coiLoading;
 
   return (
     <div className="space-y-4">
@@ -490,6 +542,35 @@ function DomainAssignmentPanel({ project, onAutoAssign, onAssign }: DomainAssign
           <Users className="w-4 h-4" /> Auto-assign
         </Button>
       </div>
+
+      {scoringGated && (
+        <div
+          id="coi-gate-banner"
+          role="alert"
+          aria-live="polite"
+          className="rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-6"
+        >
+          <div className="flex items-start gap-3">
+            <Lock className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                Conflict of Interest declaration required
+              </p>
+              <p className="text-xs text-amber-800 dark:text-amber-300 mt-1">
+                UK Procurement Act 2023 (ss.81-83) requires every evaluator to record a CoI declaration
+                before scoring. Score entry is disabled until you submit yours.
+              </p>
+              <Button
+                size="sm"
+                className="bg-amber-600 hover:bg-amber-700 text-white mt-3"
+                onClick={onGoToCoi}
+              >
+                Declare now
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Card className="p-0 overflow-hidden">
         <table className="w-full text-sm">
@@ -522,7 +603,17 @@ function DomainAssignmentPanel({ project, onAutoAssign, onAssign }: DomainAssign
                 <td className="px-4 py-3"><StatusBadge status={da.status} /></td>
                 <td className="px-4 py-3">
                   {da.status === 'IN_PROGRESS' && (
-                    <Button size="sm" className="bg-teal-600 hover:bg-teal-700 text-white">
+                    // The disabled <Button> uses `pointer-events-none` so a
+                    // `title` on it is silently dropped. The amber gate banner
+                    // above the table is the canonical explanation; the
+                    // `aria-describedby` link makes the relationship explicit
+                    // for screen readers when the button is disabled.
+                    <Button
+                      size="sm"
+                      className="bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={scoringGated}
+                      aria-describedby={scoringGated ? 'coi-gate-banner' : undefined}
+                    >
                       Enter Scores
                     </Button>
                   )}
@@ -532,6 +623,151 @@ function DomainAssignmentPanel({ project, onAutoAssign, onAssign }: DomainAssign
           </tbody>
         </table>
       </Card>
+    </div>
+  );
+}
+
+// ── Conflict of Interest Panel ─────────────────────────────────────────────
+// Phase 14.9b — UK Procurement Act 2023 (ss.81-83) audit-trail entry. Each
+// evaluator declares (or confirms "no conflicts") before they may score.
+// First-pass UI: textarea + submit. Existing declarations are displayed
+// with signed-at timestamp; "Revise" re-opens the textarea and re-submits
+// (server upserts and re-stamps signedAt).
+
+interface CoiPanelProps {
+  projectId: string;
+  coi: CoiDeclaration | null;
+  loading: boolean;
+}
+
+function CoiPanel({ projectId, coi, loading }: CoiPanelProps) {
+  const qc = useQueryClient();
+
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const submitMutation = useMutation({
+    mutationFn: () => api.submitCoi(projectId, text),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['evaluation-coi', projectId] });
+      setEditing(false);
+      setText('');
+      setError(null);
+    },
+    onError: (err: unknown) => {
+      // `api.submitCoi` goes through the shared axios `client` whose
+      // response interceptor rejects with `ApiError` (server-provided
+      // message + code), not raw AxiosError. Surface that message
+      // directly when present so the user sees the real validation
+      // failure rather than the generic fallback.
+      if (err instanceof ApiError) {
+        setError(err.message);
+        return;
+      }
+      setError('Could not save the declaration. Please try again.');
+    },
+  });
+
+  if (loading) {
+    return <p className="text-gray-500 dark:text-gray-400 text-sm">Loading…</p>;
+  }
+
+  const existing = coi;
+  const showForm = editing || !existing;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <ShieldCheck className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+        <div>
+          <h2 className="font-bold dark:text-white">Conflict of Interest declaration</h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Required before you may score systems on this evaluation (PA 2023 ss.81-83).
+          </p>
+        </div>
+      </div>
+
+      {existing && !editing && (
+        <Card>
+          <div className="flex items-start gap-3">
+            <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-xs uppercase tracking-wide text-emerald-700 dark:text-emerald-400 font-semibold">
+                Declaration recorded
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Signed {new Date(existing.signedAt).toLocaleString('en-GB')}
+              </p>
+              {existing.declaredText.trim() === '' ? (
+                <p className="text-sm dark:text-white mt-3 italic text-gray-600 dark:text-gray-400">
+                  No conflicts declared.
+                </p>
+              ) : (
+                <p className="text-sm dark:text-white mt-3 whitespace-pre-wrap">
+                  {existing.declaredText}
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="flex justify-end mt-4">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setText(existing.declaredText);
+                setEditing(true);
+                setError(null);
+              }}
+            >
+              Revise declaration
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {showForm && (
+        <Card>
+          <label htmlFor="coi-declared-text" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Declared interests
+          </label>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+            Disclose any commercial, professional, personal, or financial interest you hold in any
+            vendor under evaluation. Leave blank if you have nothing to declare.
+          </p>
+          <textarea
+            id="coi-declared-text"
+            value={text}
+            onChange={e => setText(e.target.value)}
+            rows={6}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-teal-500 outline-none resize-y"
+            placeholder="e.g. I previously consulted for Vendor X (2021-2022). My spouse is employed by Vendor Y."
+          />
+          {error && (
+            <p role="alert" className="text-xs text-red-600 dark:text-red-400 mt-2">{error}</p>
+          )}
+          <div className="flex justify-end gap-2 mt-4">
+            {editing && existing && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setEditing(false);
+                  setText('');
+                  setError(null);
+                }}
+              >
+                Cancel
+              </Button>
+            )}
+            <Button
+              className="bg-teal-600 hover:bg-teal-700 text-white"
+              onClick={() => submitMutation.mutate()}
+              disabled={submitMutation.isPending}
+            >
+              {submitMutation.isPending ? 'Submitting…' : existing ? 'Save revision' : 'Submit declaration'}
+            </Button>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
