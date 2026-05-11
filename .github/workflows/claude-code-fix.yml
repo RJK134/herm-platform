@@ -24,17 +24,16 @@ jobs:
       id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Run Claude Code
         uses: anthropics/claude-code-action@v1
         with:
-          # Authenticate using your Claude subscription via OAuth token
-          # (set CLAUDE_CODE_OAUTH_TOKEN as a repo or org secret).
-          # Alternatively swap to anthropic_api_key for pay-per-use API billing.
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Pay-per-use Anthropic API key (sk-ant-api03-...).
+          # Stored as a repository secret named ANTHROPIC_API_KEY.
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           # Optional: pin a model. Default is the latest Claude Code default.
           # model: claude-sonnet-4-5
           # Tell Claude what to do for bug-labeled issues
