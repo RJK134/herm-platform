@@ -1,16 +1,22 @@
 // prisma/seeds/fhe-scores.ts
 // Seeds CapabilityScore records for the FHE Capability Framework.
 //
-// Strategy (see server/src/data/fhe-scoring-rules.ts for details):
-//   1. Manual override (fhe-manual-scores.ts) — wins if present
-//   2. Rule (fhe-scoring-rules.ts) — applied if no manual override
+// Strategy (see ./fhe-scoring-rules-data.ts for the rule taxonomy):
+//   1. Manual override (./fhe-manual-scores-data.ts) — wins if present
+//   2. Rule (./fhe-scoring-rules-data.ts) — applied if no manual override
 //   3. Default 0 — applied if neither is available
 //
 // Expected output: 21 systems × 118 capabilities = 2,478 CapabilityScore rows.
+//
+// Phase 14.7b — data files were previously imported from
+// server/src/data/{fhe-scoring-rules,fhe-manual-scores}, which crossed
+// the workspace tsconfig boundary and triggered the same tsx-ESM
+// resolution gremlins that 14.7 fixed for the framework data. The
+// seeders now live entirely under prisma/seeds/.
 
 import { PrismaClient } from '@prisma/client';
-import * as fheScoringRulesModule from '../../server/src/data/fhe-scoring-rules';
-import * as fheManualScoresModule from '../../server/src/data/fhe-manual-scores';
+import * as fheScoringRulesModule from './fhe-scoring-rules-data';
+import * as fheManualScoresModule from './fhe-manual-scores-data';
 
 const { FHE_SCORING_RULES } = fheScoringRulesModule;
 const { FHE_MANUAL_SCORES } = fheManualScoresModule;

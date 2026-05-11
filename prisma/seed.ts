@@ -219,26 +219,18 @@ async function main() {
   await seedFheFramework(prisma);
   console.log('FHE framework seeded');
 
-  // FHE scores + framework-mappings still cross-import from server/src/data/
-  // (fhe-scoring-rules, fhe-manual-scores, herm-to-fhe-mapping). Those data
-  // files are seed-only at runtime so they can be relocated in a follow-up
-  // sub-phase the same way fhe-framework-data was relocated in 14.7. Until
-  // then keep them on a tight try/catch — the framework itself (the
-  // demo-critical 8 domains + ~120 capabilities) seeds cleanly above; only
-  // the score-and-mapping data degrades gracefully.
-  try {
-    const { seedFheScores } = await import('./seeds/fhe-scores');
-    await seedFheScores(prisma);
-    console.log('FHE scores seeded');
+  // Phase 14.7b — relocated fhe-scoring-rules / fhe-manual-scores /
+  // herm-to-fhe-mapping data files into prisma/seeds/, so the
+  // defensive try/catch that 14.7 left around scores + mappings is
+  // no longer needed. Failures here are now genuine errors (DB
+  // connectivity, schema drift) that should surface, not module-
+  // resolution noise that masks them.
+  const { seedFheScores } = await import('./seeds/fhe-scores');
+  await seedFheScores(prisma);
+  console.log('FHE scores seeded');
 
-    const { seedFrameworkMappings } = await import('./seeds/framework-mappings');
-    await seedFrameworkMappings(prisma);
-  } catch (err) {
-    console.warn(
-      '[seed] FHE scores / mappings skipped (cross-tree import path; will be relocated in follow-up):',
-      err instanceof Error ? err.message : err,
-    );
-  }
+  const { seedFrameworkMappings } = await import('./seeds/framework-mappings');
+  await seedFrameworkMappings(prisma);
 
   // ── Demo institution & user ──────────────────────────────────────────────
   const demoInstitution = await prisma.institution.upsert({
