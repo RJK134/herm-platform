@@ -460,10 +460,26 @@ export function DocumentGenerator() {
                 <SavedDocRow
                   key={doc.id}
                   doc={doc}
-                  onOpen={() => {
-                    setGenerated({ sections: doc.sections, title: doc.title, type: doc.type, wordCount: doc.wordCount, metadata: doc.metadata });
-                    setEditedSections(doc.sections);
-                    setSavedDocId(doc.id);
+                  onOpen={async () => {
+                    // `GET /api/documents` returns a summary payload (no
+                    // sections/metadata since PR #105's listDocuments
+                    // select tightened to the badge-relevant columns).
+                    // Fetch the full document so the editor has the
+                    // sections it needs to render.
+                    const full = await axios.get<ApiResponse<SavedDoc>>(
+                      `/api/documents/${doc.id}`,
+                    );
+                    const fullDoc = full.data.data;
+                    const sections = fullDoc.sections ?? [];
+                    setGenerated({
+                      sections,
+                      title: fullDoc.title,
+                      type: fullDoc.type,
+                      wordCount: fullDoc.wordCount,
+                      metadata: fullDoc.metadata,
+                    });
+                    setEditedSections(sections);
+                    setSavedDocId(fullDoc.id);
                     setView('preview');
                   }}
                   onDelete={() => deleteMutation.mutate(doc.id)}
