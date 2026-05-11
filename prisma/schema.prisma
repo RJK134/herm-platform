@@ -706,21 +706,27 @@ model ValueAnalysis {
 // ── Document Generation ───────────────────────────────────────────────────────
 
 model GeneratedDocument {
-  id              String         @id @default(cuid())
-  title           String
-  type            DocumentType
-  institutionId   String?
-  projectId       String?
-  basketId        String?
-  tcoEstimateId   String?
-  valueAnalysisId String?
-  sections        Json
-  metadata        Json?
-  status          DocumentStatus @default(DRAFT)
-  wordCount       Int            @default(0)
-  createdById     String         @default("anonymous")
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  id                String         @id @default(cuid())
+  title             String
+  type              DocumentType
+  institutionId     String?
+  projectId         String?
+  basketId          String?
+  tcoEstimateId     String?
+  valueAnalysisId   String?
+  sections          Json
+  metadata          Json?
+  status            DocumentStatus @default(DRAFT)
+  wordCount         Int            @default(0)
+  createdById       String         @default("anonymous")
+  // Phase 14.2b — regulatory regime under which this document was
+  // generated, e.g. "PA2023" / "PCR2015". Pre-Phase-14.2 rows have
+  // null and render as "(legacy)" in the DocumentGenerator card UI.
+  // The server stamps "PA2023" on every newly-generated document
+  // post-14.2 — see server/src/api/documents/documents.service.ts.
+  regulationVersion String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
   @@index([institutionId])
   @@index([projectId])
