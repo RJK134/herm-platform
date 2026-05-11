@@ -45,6 +45,19 @@ export interface SsoIdpListEntry extends SsoIdpReadShape {
   institutionSlug: string;
 }
 
+// ── Phase 14.9 — Conflict of Interest declaration shape ──────────────────
+// Mirrors the server's `CoiDeclarationView` (server/src/api/evaluations/coi.service.ts).
+// `declaredText` may be the empty string ("no conflicts to declare") — the
+// row's existence is the audit signal that the declaration step happened.
+export interface CoiDeclaration {
+  id: string;
+  evaluationProjectId: string;
+  userId: string;
+  declaredText: string;
+  declaredHash: string;
+  signedAt: string;
+}
+
 export interface SsoIdpUpsertPayload {
   protocol?: 'SAML' | 'OIDC';
   displayName?: string;
@@ -502,6 +515,18 @@ export const api = {
     client.get<ApiResponse<unknown[]>>(`/evaluations/${id}/aggregate`),
   getEvaluationTeamProgress: (id: string) =>
     client.get<ApiResponse<unknown[]>>(`/evaluations/${id}/progress`),
+
+  // Phase 14.9 — Conflict of Interest declarations. PA 2023 ss.81-83 require
+  // contracting authorities to capture an evaluator CoI declaration before
+  // scoring begins. `getMyCoi` is the gate signal — null means "no
+  // declaration yet, scoring blocked"; non-null means the evaluator has
+  // signed and may proceed. `submitCoi` upserts; subsequent calls revise.
+  getMyCoi: (projectId: string) =>
+    client.get<ApiResponse<CoiDeclaration | null>>(`/evaluations/${projectId}/coi/me`),
+  submitCoi: (projectId: string, declaredText: string) =>
+    client.post<ApiResponse<CoiDeclaration>>(`/evaluations/${projectId}/coi`, { declaredText }),
+  listProjectCoi: (projectId: string) =>
+    client.get<ApiResponse<CoiDeclaration[]>>(`/evaluations/${projectId}/coi`),
 
   // Phase 5: Subscriptions
   getSubscription: () =>
