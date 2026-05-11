@@ -50,7 +50,10 @@ interface SavedDoc {
   wordCount: number;
   createdAt: string;
   updatedAt: string;
-  sections: DocumentSection[];
+  // `/api/documents` returns a summary payload, so detail fields such as
+  // `sections` may be absent until the full document is fetched via
+  // `/api/documents/:id`.
+  sections?: DocumentSection[];
   metadata?: DocumentMeta;
   // Phase 14.2b — regulatory regime under which the document was
   // generated. New rows stamp 'PA2023' on save; pre-Phase-14.2 rows
