@@ -43,7 +43,28 @@
   },
   "architecture": {
     "title": "Évaluation de l'architecture et du paysage système",
-    "subtitle": "Cartographiez votre parc informatique et obtenez un score de préparation."
+    "subtitle": "Cartographiez votre parc informatique et obtenez un score de préparation.",
+    "steps": {
+      "landscape": "Landscape",
+      "integrations": "Integrations",
+      "pattern": "Pattern",
+      "risk": "Risk",
+      "results": "Results"
+    },
+    "addSystem": "Add System",
+    "noSystems": "No systems added yet. Add your first system above.",
+    "integrationMap": "System Integration Map",
+    "architecturePattern": "Current Architecture Pattern",
+    "riskAssessment": "Risk Assessment",
+    "generateAnalysis": "Generate Analysis",
+    "analysing": "Analysing architecture...",
+    "overallRiskScore": "Overall Risk Score",
+    "architectureReadiness": "Architecture Readiness",
+    "riskBreakdown": "Risk Breakdown",
+    "recommendations": "Recommendations",
+    "landscapeSummary": "Landscape Summary",
+    "saveAssessment": "Save Assessment",
+    "saved": "Saved!"
   },
   "tco": {
     "title": "Calculateur TCO",
@@ -52,10 +73,49 @@
     "singleSystem": "Système unique",
     "compare": "Comparer",
     "calculateTco": "Calculer le TCO",
-    "calculating": "Calcul en cours…"
+    "calculating": "Calcul en cours…",
+    "system": "System",
+    "compareSystems": "Compare Systems (select up to 6)",
+    "institutionSize": "Institution Size",
+    "customStudentCount": "Custom student count",
+    "timeHorizon": "Time Horizon (years)",
+    "disclaimer": "TCO figures are indicative benchmarks based on typical UK HE implementations. Actual costs vary significantly. Always obtain formal quotes.",
+    "configurePrompt": "Configure your institution and click Calculate TCO",
+    "benchmarkData": "Benchmark data for 21 systems included",
+    "yearTco": "{{horizon}}-Year TCO",
+    "annualRunRate": "Annual Run Rate",
+    "perStudentYear": "Per Student / Year",
+    "costBreakdown": "Cost Breakdown",
+    "cumulativeSpend": "Cumulative Spend",
+    "costComponentDetail": "Cost Component Detail",
+    "tcoComparison": "{{horizon}}-Year TCO Comparison",
+    "detailedComparison": "Detailed Comparison"
   },
   "value": {
     "title": "Analyse coûts et valeur",
-    "subtitle": "Construisez un business case avec la méthodologie du Livre vert HM Treasury."
+    "subtitle": "Construisez un business case avec la méthodologie du Livre vert HM Treasury.",
+    "steps": {
+      "setup": "Setup",
+      "currentState": "Current State",
+      "benefits": "Benefits",
+      "investment": "Investment",
+      "results": "Results"
+    },
+    "analysisSetup": "Analysis Setup",
+    "analysisName": "Analysis Name *",
+    "targetSystem": "Target System (optional)",
+    "institutionType": "Institution Type",
+    "aboutThisTool": "About This Tool",
+    "currentSystemCosts": "Current System Costs (Annual)",
+    "administrativeEfficiency": "Administrative Efficiency",
+    "registryEfficiency": "Registry & Academic Services Efficiency",
+    "strategicBenefits": "Strategic & Compliance Benefits",
+    "newSystemInvestment": "New System Investment Costs",
+    "annualRunningCosts": "Annual Running Costs",
+    "calculateRoi": "Calculate ROI & NPV",
+    "saveAnalysis": "Save Analysis",
+    "annualBenefitBreakdown": "Annual Benefit Breakdown",
+    "costComparison": "Cost Comparison",
+    "cashflowProjection": "5-Year Cashflow Projection"
   }
 }
