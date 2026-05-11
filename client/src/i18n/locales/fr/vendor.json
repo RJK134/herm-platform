@@ -76,7 +76,11 @@
     "quickActions": "Actions rapides",
     "viewFullScore": "Analyse complète des scores",
     "addToRadar": "Ajouter au radar",
-    "evaluateInBasket": "Évaluer dans le panier"
+    "evaluateInBasket": "Évaluer dans le panier",
+    "recentNews": "Recent News & Updates",
+    "noProfile": "No detailed profile available for this system yet.",
+    "strengths": "Strengths",
+    "gaps": "Gaps"
   },
   "scores": {
     "overallHermScore": "Score HERM global",

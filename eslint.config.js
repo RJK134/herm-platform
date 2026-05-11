@@ -15,6 +15,7 @@ export default [
       'client/public/**',
       'prisma/migrations/**',
       'scripts/**',
+      'client/scripts/**',
     ],
   },
   js.configs.recommended,
