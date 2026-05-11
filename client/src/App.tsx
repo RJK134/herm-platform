@@ -41,6 +41,7 @@ import { AdminVendors } from './pages/AdminVendors';
 import { AdminSso } from './pages/AdminSso';
 import { AdminSsoAll } from './pages/AdminSsoAll';
 import { AdminSsoForInstitution } from './pages/AdminSsoForInstitution';
+import { RoleAssignment } from './pages/admin/RoleAssignment';
 import { Subscriptions } from './pages/Subscriptions';
 import { SecuritySettings } from './pages/SecuritySettings';
 import { SectorAnalytics } from './pages/SectorAnalytics';
@@ -194,6 +195,14 @@ export default function App() {
                           element={
                             <ProtectedRoute roles={ADMIN_ROLES}>
                               <AdminVendors />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="/admin/roles"
+                          element={
+                            <ProtectedRoute roles={ADMIN_ROLES}>
+                              <RoleAssignment />
                             </ProtectedRoute>
                           }
                         />

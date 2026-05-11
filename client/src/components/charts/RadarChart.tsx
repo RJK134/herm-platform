@@ -20,9 +20,21 @@ interface RadarDataset {
 interface RadarChartProps {
   labels: string[];
   datasets: RadarDataset[];
+  /**
+   * WCAG 1.1.1 (Non-text Content). Screen-reader summary for the chart.
+   * If omitted, a generic summary listing the dataset labels is built
+   * so the chart never appears to AT users as a nameless `<canvas>`.
+   */
+  ariaLabel?: string;
 }
 
-export function RadarChart({ labels, datasets }: RadarChartProps) {
+function autoRadarSummary(datasets: RadarDataset[]): string {
+  if (datasets.length === 0) return 'Empty radar chart';
+  const names = datasets.map(d => d.label).join(', ');
+  return `Radar chart comparing ${datasets.length} system${datasets.length === 1 ? '' : 's'}: ${names}.`;
+}
+
+export function RadarChart({ labels, datasets, ariaLabel }: RadarChartProps) {
   const data = {
     labels,
     datasets: datasets.map(d => ({
@@ -50,5 +62,9 @@ export function RadarChart({ labels, datasets }: RadarChartProps) {
     },
   };
 
-  return <Radar data={data} options={options} />;
+  return (
+    <div role="img" aria-label={ariaLabel ?? autoRadarSummary(datasets)}>
+      <Radar data={data} options={options} />
+    </div>
+  );
 }
