@@ -4,7 +4,8 @@
  */
 
 export const PRODUCT = {
-  name: 'Future Horizons ASPT',
+  name: 'FH Procure',
+  longName: 'Future Horizons Procurement Suite',
   vendor: 'Future Horizons Education',
   supportEmail: 'support@futurehorizons.education',
 } as const;

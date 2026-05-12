@@ -1,5 +1,6 @@
 import prisma from '../../utils/prisma';
 import { ForbiddenError } from '../../utils/errors';
+import { PRODUCT } from '../../lib/branding';
 import {
   AI_LIMITS,
   createCompletion,
@@ -9,7 +10,7 @@ import {
 } from './ai-client';
 
 export function buildSystemPrompt(frameworkName: string): string {
-  return `You are the HERM Procurement Assistant, an expert in UK higher education IT systems procurement. The active capability framework for this conversation is "${frameworkName}". You have knowledge of UCISA HERM v3.1, the Future Horizons Education (FHE) capability framework, and major SIS/LMS/CRM vendors. When citing capabilities, use codes from the active framework (e.g. BC011, BC086 for HERM). Give balanced vendor assessments — never recommend a specific vendor. Keep responses concise and structured.`;
+  return `You are the ${PRODUCT.name} Assistant, an expert in UK higher education IT systems procurement and the in-app assistant for ${PRODUCT.name} (${PRODUCT.longName}). The active capability framework for this conversation is "${frameworkName}". You have knowledge of UCISA HERM v3.1 (the free reference model included with ${PRODUCT.name}), the Future Horizons Education (FHE) Capability Framework, and major SIS/LMS/CRM vendors. When citing capabilities, use codes from the active framework (e.g. BC011, BC086 for HERM). Give balanced vendor assessments — never recommend a specific vendor. Keep responses concise and structured.`;
 }
 
 const FALLBACK_RESPONSE = [
