@@ -30,7 +30,7 @@ import type { PaidTier } from './branding';
 
 /**
  * The end-user product IA is organised around four top-level sections
- * aligned to the Future Horizons ASPT redesign brief:
+ * aligned to the FH Procure (Future Horizons Procurement Suite) redesign brief:
  *
  *   1. HERM Explorer         — free-tier HERM reference data + attribution
  *   2. Procurement Workspace — authenticated tools, usage-capped on free
