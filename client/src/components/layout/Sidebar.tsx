@@ -24,12 +24,12 @@ import { isPaidTier, PRODUCT } from '../../lib/branding';
 
 const TIER_COLOURS: Record<string, string> = {
   enterprise: 'bg-amber-500/20 text-amber-300',
-  professional: 'bg-teal/20 text-teal',
+  pro: 'bg-teal/20 text-teal',
   free: 'bg-white/10 text-white/50',
 };
 
 const TIER_LABELS: Record<string, string> = {
-  professional: 'Professional',
+  pro: 'Pro',
   enterprise: 'Enterprise',
 };
 

@@ -74,7 +74,7 @@ import { optionalJWT } from '../middleware/auth';
 
 const SECRET = process.env['JWT_SECRET'] ?? 'test-jwt-secret-do-not-use-in-prod';
 
-function token(tier: 'free' | 'professional' | 'enterprise', overrides: Record<string, unknown> = {}): string {
+function token(tier: 'free' | 'pro' | 'enterprise', overrides: Record<string, unknown> = {}): string {
   return jwt.sign(
     {
       userId: `user-${tier}`,
@@ -194,7 +194,7 @@ describe('tier-control invariants', () => {
       expect(capabilitiesServiceMock.listCapabilities).not.toHaveBeenCalled();
     });
 
-    it('PROFESSIONAL-tier caller can read FHE (paid framework)', async () => {
+    it('PRO-tier caller can read FHE (paid framework)', async () => {
       prismaMock.framework.findUnique.mockResolvedValueOnce(PRIVATE_FHE_FRAMEWORK);
       capabilitiesServiceMock.listCapabilities.mockResolvedValueOnce({
         capabilities: [],
@@ -202,7 +202,7 @@ describe('tier-control invariants', () => {
       });
       const res = await request(buildApp())
         .get('/api/capabilities?frameworkId=fw-fhe')
-        .set('Authorization', `Bearer ${token('professional')}`);
+        .set('Authorization', `Bearer ${token('pro')}`);
       expect(res.status).toBe(200);
     });
   });
@@ -218,10 +218,10 @@ describe('tier-control invariants', () => {
       expect(frameworkMappingsServiceMock.list).not.toHaveBeenCalled();
     });
 
-    it('PROFESSIONAL blocked from /api/framework-mappings (enterprise-only)', async () => {
+    it('PRO blocked from /api/framework-mappings (enterprise-only)', async () => {
       const res = await request(buildApp())
         .get('/api/framework-mappings')
-        .set('Authorization', `Bearer ${token('professional')}`);
+        .set('Authorization', `Bearer ${token('pro')}`);
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('SUBSCRIPTION_REQUIRED');
       expect(res.body.error.details.requiredTiers).toEqual(['enterprise']);

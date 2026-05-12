@@ -154,7 +154,7 @@ describe('POST /api/admin/impersonate — start', () => {
       name: 'Target',
       role: 'INSTITUTION_ADMIN',
       institutionId: 'inst-cust',
-      institution: { name: 'Customer Co', subscription: { tier: 'PROFESSIONAL' } },
+      institution: { name: 'Customer Co', subscription: { tier: 'PRO' } },
     });
     const res = await request(buildApp())
       .post('/api/admin/impersonate')
@@ -180,7 +180,7 @@ describe('POST /api/admin/impersonate — start', () => {
     expect(decoded.userId).toBe('u-target');
     expect(decoded.role).toBe('INSTITUTION_ADMIN');
     expect(decoded.institutionId).toBe('inst-cust');
-    expect(decoded.tier).toBe('professional');
+    expect(decoded.tier).toBe('pro');
     expect(decoded.impersonator).toEqual({
       userId: 'u-super',
       email: 'super@platform.test',

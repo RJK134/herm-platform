@@ -4,6 +4,36 @@ import type { NextFunction, Request, Response } from 'express';
 import type { VendorJwtPayload } from '../api/vendor-portal/vendor-portal.service';
 import prisma from '../utils/prisma';
 import { isRevoked, recordSession } from '../lib/session-store';
+import { LEGACY_TIER_ALIASES, normaliseTier } from '../lib/branding';
+import { logger } from '../lib/logger';
+
+/**
+ * Phase 15.2 JWT alias shim. The `professional` tier was renamed to
+ * `pro` in Postgres + branding constants; tokens minted before the
+ * rebrand still carry `tier: 'professional'`. Rewrite the claim
+ * in-place so downstream middleware (`requirePaidTier(['pro'])`, the
+ * client's `RequireTier`) admits the bearer transparently. Log once
+ * per rewrite at info level so we can watch the legacy traffic decline
+ * and remove the shim when it stops firing (see RUNBOOK § "Tier-alias
+ * deprecation").
+ */
+function aliasLegacyTierClaim(decoded: JwtPayload): void {
+  const original = decoded.tier;
+  if (!original) return;
+  const lower = original.toLowerCase();
+  if (LEGACY_TIER_ALIASES[lower] !== undefined) {
+    decoded.tier = normaliseTier(original);
+    logger.info(
+      {
+        event: 'auth.jwt.tier.aliased',
+        userId: decoded.userId,
+        legacy: lower,
+        resolved: decoded.tier,
+      },
+      'Rewrote legacy tier claim on JWT',
+    );
+  }
+}
 
 if (!process.env['JWT_SECRET']) {
   if (process.env['NODE_ENV'] === 'production') {
@@ -260,6 +290,7 @@ export async function authenticateJWT(
       });
       return;
     }
+    aliasLegacyTierClaim(decoded);
     req.user = decoded;
     next();
   } catch {
@@ -301,6 +332,7 @@ export async function optionalJWT(req: Request, _res: Response, next: NextFuncti
         next();
         return;
       }
+      aliasLegacyTierClaim(decoded);
       req.user = decoded;
     } catch {
       // proceed as anonymous

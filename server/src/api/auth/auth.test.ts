@@ -14,7 +14,7 @@ const MOCK_USER = {
   passwordHash: HASH,
   role: 'INSTITUTION_ADMIN',
   institutionId: 'inst1',
-  institution: { name: 'Demo University', tier: 'professional' },
+  institution: { name: 'Demo University', tier: 'pro' },
   createdAt: new Date(),
   updatedAt: new Date(),
 };
@@ -29,8 +29,8 @@ vi.mock('../../utils/prisma', () => ({
       findFirst: vi.fn(),
     },
     institution: {
-      findUnique: vi.fn().mockResolvedValue({ id: 'inst1', name: 'Demo University', tier: 'professional' }),
-      create: vi.fn().mockResolvedValue({ id: 'inst1', name: 'Demo University', tier: 'professional' }),
+      findUnique: vi.fn().mockResolvedValue({ id: 'inst1', name: 'Demo University', tier: 'pro' }),
+      create: vi.fn().mockResolvedValue({ id: 'inst1', name: 'Demo University', tier: 'pro' }),
     },
     subscription: { findUnique: vi.fn().mockResolvedValue(null) },
   },
@@ -99,7 +99,7 @@ describe('POST /api/auth/login — tier claim on JWT', () => {
     ...MOCK_USER,
     institution: {
       ...MOCK_USER.institution,
-      subscription: { tier: 'PROFESSIONAL', status: 'active' },
+      subscription: { tier: 'PRO', status: 'active' },
     },
   };
 
@@ -117,7 +117,7 @@ describe('POST /api/auth/login — tier claim on JWT', () => {
 
     expect(res.status).toBe(200);
     const decoded = jwt.decode(res.body.data.token) as { tier?: string } | null;
-    expect(decoded?.tier).toBe('professional');
+    expect(decoded?.tier).toBe('pro');
   });
 
   it('with DEV_UNLOCK_ALL_TIERS=true, tier claim is forced to "enterprise"', async () => {

@@ -92,7 +92,7 @@ describe('<Sidebar /> — role-gated Admin section', () => {
   });
 
   it('hides the Admin section for an authenticated PROCUREMENT_LEAD', () => {
-    setUser(makeUser({ role: 'PROCUREMENT_LEAD', tier: 'professional' }));
+    setUser(makeUser({ role: 'PROCUREMENT_LEAD', tier: 'pro' }));
     renderSidebar();
     expect(screen.queryByText('Admin')).not.toBeInTheDocument();
   });

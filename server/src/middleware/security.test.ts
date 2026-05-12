@@ -23,7 +23,7 @@ describe('tieredMax — per-tier rate-limit ceiling', () => {
   });
 
   it('returns the professional ceiling for tier=professional', () => {
-    const req = makeReq({ user: { tier: 'professional' } as never });
+    const req = makeReq({ user: { tier: 'pro' } as never });
     expect(tieredMax(req)).toBe(1500);
   });
 

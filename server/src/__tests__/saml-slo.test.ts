@@ -263,7 +263,7 @@ describe('GET /api/sso/:slug/saml/slo (IdP-initiated SLO)', () => {
     // below Enterprise — service flattens this to the same opaque 404.
     ssoFindFirstMock.mockResolvedValue({
       ...ENTERPRISE_IDP_ROW,
-      institution: { ...ENTERPRISE_INSTITUTION, subscription: { tier: 'PROFESSIONAL' } },
+      institution: { ...ENTERPRISE_INSTITUTION, subscription: { tier: 'PRO' } },
     });
     const res = await request(buildApp()).get('/api/sso/acme/saml/slo?SAMLRequest=x');
     expect(res.status).toBe(404);

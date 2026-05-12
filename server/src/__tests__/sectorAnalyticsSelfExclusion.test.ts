@@ -40,7 +40,7 @@ import sectorAnalyticsRouter from '../api/sector-analytics/sector-analytics.rout
 
 const SECRET = process.env['JWT_SECRET'] ?? 'test-jwt-secret-do-not-use-in-prod';
 
-function tokenFor(institutionId: string, tier: 'professional' | 'enterprise' = 'enterprise'): string {
+function tokenFor(institutionId: string, tier: 'pro' | 'enterprise' = 'enterprise'): string {
   return jwt.sign(
     {
       userId: `user-${institutionId}`,

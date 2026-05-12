@@ -17,7 +17,7 @@ interface UpgradeCardProps {
 }
 
 const TIER_LABELS: Record<PaidTier, string> = {
-  professional: 'Professional',
+  pro: 'Pro',
   enterprise: 'Enterprise',
 };
 

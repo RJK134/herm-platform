@@ -185,7 +185,7 @@ describe('stripe webhook — customer.subscription.updated', () => {
     prismaMock.subscription.findFirst.mockResolvedValueOnce({
       id: 'sub_db_2',
       institutionId: 'inst-2',
-      tier: 'PROFESSIONAL',
+      tier: 'PRO',
     });
 
     await handleWebhook(Buffer.from('payload'), 'sig');
@@ -210,7 +210,7 @@ describe('stripe webhook — customer.subscription.updated', () => {
     prismaMock.subscription.findFirst.mockResolvedValueOnce({
       id: 'sub_db_3',
       institutionId: 'inst-3',
-      tier: 'PROFESSIONAL',
+      tier: 'PRO',
     });
     await handleWebhook(Buffer.from('payload'), 'sig');
     expect(prismaMock.subscription.update).not.toHaveBeenCalled();
@@ -229,7 +229,7 @@ describe('stripe webhook — customer.subscription.updated', () => {
     prismaMock.subscription.findFirst.mockResolvedValueOnce({
       id: 'sub_db_4',
       institutionId: 'inst-4',
-      tier: 'PROFESSIONAL',
+      tier: 'PRO',
     });
     await handleWebhook(Buffer.from('payload'), 'sig');
     expect(prismaMock.subscription.update).not.toHaveBeenCalled();
@@ -406,7 +406,7 @@ describe('stripe webhook — checkout.session.completed (regression: dunningStat
       data: {
         object: {
           metadata: {
-            tier: 'institutionProfessional',
+            tier: 'institutionPro',
             isVendor: 'false',
             institutionId: 'inst-7',
           },
@@ -425,7 +425,7 @@ describe('stripe webhook — checkout.session.completed (regression: dunningStat
     expect(prismaMock.subscription.update).toHaveBeenCalledWith({
       where: { id: 'sub_db_7' },
       data: expect.objectContaining({
-        tier: 'PROFESSIONAL',
+        tier: 'PRO',
         status: 'active',
         dunningState: 'active',
       }),

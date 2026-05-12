@@ -229,9 +229,9 @@ describe('SSO tier-gating (Q7 — Enterprise only)', () => {
     expect(res.body.error.code).toBe('SSO_NOT_CONFIGURED');
   });
 
-  it('rejects PROFESSIONAL tier the same way', async () => {
+  it('rejects PRO tier the same way', async () => {
     const idp = enterpriseSamlIdpFixture();
-    idp.institution.subscription = { tier: 'PROFESSIONAL' };
+    idp.institution.subscription = { tier: 'PRO' };
     prismaMock.ssoIdentityProvider.findFirst.mockResolvedValue(idp);
 
     const res = await request(buildApp()).get('/api/sso/uni-1/login');

@@ -18,7 +18,7 @@ const MIN_INSTITUTIONS = 5;
  * caller will hide everything (count=4 fails the threshold) — by design.
  *
  * Authentication is enforced upstream by `authenticateJWT +
- * requirePaidTier(['professional','enterprise'])` on the router, so
+ * requirePaidTier(['pro','enterprise'])` on the router, so
  * `req.user` is guaranteed in every handler.
  */
 
