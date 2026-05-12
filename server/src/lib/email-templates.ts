@@ -57,7 +57,7 @@ export function renderBillingEmail(input: BillingEmailInput): RenderedEmail {
   if (link) {
     textParts.push('', `View details: ${link}`);
   }
-  textParts.push('', '— HERM Platform');
+  textParts.push('', '— FH Procure');
   const text = textParts.join('\n');
 
   const linkBlock = link
@@ -70,7 +70,7 @@ export function renderBillingEmail(input: BillingEmailInput): RenderedEmail {
     `<p>${escapeHtml(input.message)}</p>`,
     linkBlock,
     '<hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 24px 0;">',
-    '<p style="color: #6b7280; font-size: 12px;">— HERM Platform</p>',
+    '<p style="color: #6b7280; font-size: 12px;">— FH Procure</p>',
     '</body></html>',
   ].join('\n');
 

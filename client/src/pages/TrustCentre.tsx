@@ -34,7 +34,7 @@ const CERT_STATUS: Certification[] = [
     name: 'ISO/IEC 27001:2022',
     status: 'planned',
     description:
-      'International standard for information security management systems. Scope will cover the entire Future Horizons ASPT platform, the Vercel-hosted SPA, and the Neon-hosted production database.',
+      'International standard for information security management systems. Scope will cover the entire FH Procure platform, the Vercel-hosted SPA, and the Neon-hosted production database.',
     expectedAt: '2027 Q2',
   },
   {
@@ -102,8 +102,9 @@ export function TrustCentre() {
             Trust Centre
           </h1>
           <p className="mt-3 text-base text-gray-600 dark:text-gray-300">
-            How Future Horizons ASPT protects institutional data and meets
-            UK higher-education InfoSec gating requirements.
+            How FH Procure (Future Horizons Procurement Suite) protects
+            institutional data and meets UK higher-education InfoSec
+            gating requirements.
           </p>
         </header>
 
@@ -186,8 +187,8 @@ export function TrustCentre() {
           <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-5 bg-white dark:bg-gray-800">
             <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
               We operate a coordinated-disclosure programme. If you have
-              identified a security issue affecting Future Horizons ASPT,
-              please email{' '}
+              identified a security issue affecting FH Procure, please
+              email{' '}
               <a
                 href="mailto:security@futurehorizonseducation.com"
                 className="text-teal underline"

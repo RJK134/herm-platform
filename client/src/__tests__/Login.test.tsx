@@ -40,7 +40,7 @@ describe('Login — post-login redirect safety', () => {
     mockLogin.mockResolvedValue({ type: 'success' });
   });
 
-  it('renders the Future Horizons ASPT product branding', () => {
+  it('renders the FH Procure product branding', () => {
     renderLoginAt('/login');
 
     expect(

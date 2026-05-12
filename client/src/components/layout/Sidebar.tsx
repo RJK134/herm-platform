@@ -307,8 +307,8 @@ export function Sidebar() {
           </div>
           {!isCollapsed && (
             <div>
-              <div className="text-xs font-semibold text-teal">Future Horizons Education</div>
-              <div className="text-[10px] text-white/50">Powered by FHE</div>
+              <div className="text-xs font-semibold text-teal">FH Procure</div>
+              <div className="text-[10px] text-white/50">by Future Horizons Education</div>
             </div>
           )}
         </div>
