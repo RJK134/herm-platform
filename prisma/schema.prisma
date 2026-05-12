@@ -240,7 +240,7 @@ model Subscription {
 
 enum SubscriptionTier {
   FREE
-  PROFESSIONAL
+  PRO
   ENTERPRISE
 }
 

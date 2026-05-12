@@ -172,8 +172,8 @@ describe('GET /api/framework-mappings (Enterprise gate)', () => {
     expect(res.body.error.details.requiredTiers).toContain('enterprise');
   });
 
-  it('returns 403 SUBSCRIPTION_REQUIRED for professional-tier users', async () => {
-    const token = makeToken('professional');
+  it('returns 403 SUBSCRIPTION_REQUIRED for pro-tier users', async () => {
+    const token = makeToken('pro');
     const res = await request(app)
       .get('/api/framework-mappings')
       .set('Authorization', `Bearer ${token}`);
@@ -181,7 +181,7 @@ describe('GET /api/framework-mappings (Enterprise gate)', () => {
     expect(res.status).toBe(403);
     expect(res.body.success).toBe(false);
     expect(res.body.error.code).toBe('SUBSCRIPTION_REQUIRED');
-    expect(res.body.error.details.currentTier).toBe('professional');
+    expect(res.body.error.details.currentTier).toBe('pro');
   });
 
   it('returns 200 with data for enterprise-tier users', async () => {
@@ -355,7 +355,7 @@ describe('GET /api/framework-mappings/:id/lookup', () => {
   });
 
   it('returns 403 SUBSCRIPTION_REQUIRED for non-enterprise users', async () => {
-    const token = makeToken('professional');
+    const token = makeToken('pro');
     const res = await request(app)
       .get('/api/framework-mappings/map-1/lookup?sourceCode=BC008')
       .set('Authorization', `Bearer ${token}`);

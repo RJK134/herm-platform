@@ -23,7 +23,7 @@ describe('<UpgradeCard />', () => {
   it('links to /subscription by default', () => {
     renderCard(
       <UpgradeCard
-        requiredTiers={['professional', 'enterprise']}
+        requiredTiers={['pro', 'enterprise']}
         featureName="Sector Intelligence"
       />,
     );

@@ -117,7 +117,7 @@ export const openApiSpec = {
           role: { type: 'string', enum: ['SUPER_ADMIN', 'INSTITUTION_ADMIN', 'EVALUATOR', 'VIEWER'] },
           institutionId: { type: 'string' },
           institutionName: { type: 'string' },
-          tier: { type: 'string', enum: ['free', 'professional', 'enterprise'] },
+          tier: { type: 'string', enum: ['free', 'pro', 'enterprise'] },
         },
       },
       AuthResponse: {

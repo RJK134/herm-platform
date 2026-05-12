@@ -60,7 +60,7 @@ const validToken = jwt.sign(
     role: 'INSTITUTION_ADMIN',
     institutionId: 'inst-1',
     institutionName: 'Inst',
-    tier: 'professional',
+    tier: 'pro',
   },
   'dev-secret',
   { expiresIn: '1h' },

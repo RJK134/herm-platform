@@ -45,7 +45,7 @@ function renderAt(path: string) {
           path="/paid"
           element={
             <RequireTier
-              tiers={['professional', 'enterprise']}
+              tiers={['pro', 'enterprise']}
               featureName="Sector Intelligence"
               description="Paid analytics feature"
             >
@@ -80,8 +80,8 @@ describe('<RequireTier />', () => {
     expect(screen.getByRole('link', { name: /Compare plans/ })).toHaveAttribute('href', '/subscription');
   });
 
-  it('lets professional-tier users through when listed', () => {
-    setUser(makeUser({ tier: 'professional' }));
+  it('lets pro-tier users through when listed', () => {
+    setUser(makeUser({ tier: 'pro' }));
     renderAt('/paid');
     expect(screen.getByText('PAID CONTENT')).toBeInTheDocument();
   });
@@ -106,7 +106,7 @@ describe('<RequireTier />', () => {
   });
 
   it('shows the upgrade card if the user is listed on a stricter gate they do not meet', () => {
-    setUser(makeUser({ tier: 'professional' }));
+    setUser(makeUser({ tier: 'pro' }));
     render(
       <MemoryRouter initialEntries={['/ent']}>
         <Routes>

@@ -123,7 +123,7 @@ const procurementItems: readonly NavItem[] = [
 // ── Sector Intelligence — paid tier analytics ───────────────────────────────
 
 const sectorItems: readonly NavItem[] = [
-  { to: '/sector', label: 'Sector Analytics', icon: PieChart, tier: ['professional', 'enterprise'] as const },
+  { to: '/sector', label: 'Sector Analytics', icon: PieChart, tier: ['pro', 'enterprise'] as const },
   { to: '/framework-mapping', label: 'Framework Mapping', icon: Map, tier: ['enterprise'] as const },
 ];
 

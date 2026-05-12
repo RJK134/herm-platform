@@ -136,7 +136,7 @@ describe('tierGate middleware', () => {
         role: 'user',
         institutionId: 'inst1',
         institutionName: 'Test Uni',
-        tier: 'professional',
+        tier: 'pro',
       },
     });
     const res = makeMockRes();

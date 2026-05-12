@@ -250,7 +250,7 @@ export default function App() {
                           path="/sector"
                           element={
                             <RequireTier
-                              tiers={['professional', 'enterprise']}
+                              tiers={['pro', 'enterprise']}
                               featureName="Sector Intelligence"
                               description="Cross-institution sector analytics: adoption trends, capability coverage aggregates, and peer benchmarking. HERM capability data remains free — this view adds Future Horizons Education's comparative intelligence layer."
                             >

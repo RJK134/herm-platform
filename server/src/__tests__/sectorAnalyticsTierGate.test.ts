@@ -6,7 +6,7 @@
  * only privacy floor and `jurisdictions` / `trends` exposed unconditionally.
  *
  * Post-fix the router gates with `authenticateJWT + requirePaidTier(
- * ['professional','enterprise'])`. These tests pin that contract end-to-end
+ * ['pro','enterprise'])`. These tests pin that contract end-to-end
  * through the real router + middleware stack:
  *   - anonymous → 401 AUTHENTICATION_ERROR (no controller / Prisma side-effects)
  *   - FREE     → 403 SUBSCRIPTION_REQUIRED with details.requiredTiers
@@ -46,7 +46,7 @@ import sectorAnalyticsRouter from '../api/sector-analytics/sector-analytics.rout
 
 const SECRET = process.env['JWT_SECRET'] ?? 'test-jwt-secret-do-not-use-in-prod';
 
-function token(tier: 'free' | 'professional' | 'enterprise', overrides: Record<string, unknown> = {}): string {
+function token(tier: 'free' | 'pro' | 'enterprise', overrides: Record<string, unknown> = {}): string {
   return jwt.sign(
     {
       userId: `user-${tier}`,
@@ -107,7 +107,7 @@ describe('/api/sector/analytics tier gate', () => {
         .set('Authorization', `Bearer ${token('free')}`);
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('SUBSCRIPTION_REQUIRED');
-      expect(res.body.error.details.requiredTiers).toEqual(['professional', 'enterprise']);
+      expect(res.body.error.details.requiredTiers).toEqual(['pro', 'enterprise']);
       expect(res.body.error.details.currentTier).toBe('free');
       expect(prismaMock.institution.count).not.toHaveBeenCalled();
     });
@@ -115,13 +115,13 @@ describe('/api/sector/analytics tier gate', () => {
 
   // ── Tier (PROFESSIONAL passes; controller reached) ──────────────────────
 
-  it('PROFESSIONAL reaches the overview controller', async () => {
+  it('PRO reaches the overview controller', async () => {
     prismaMock.institution.count.mockResolvedValueOnce(3); // below k-anon threshold
     prismaMock.evaluationProject.count.mockResolvedValueOnce(0);
     prismaMock.procurementProject.count.mockResolvedValueOnce(0);
     const res = await request(buildApp())
       .get('/api/sector/analytics/overview')
-      .set('Authorization', `Bearer ${token('professional')}`);
+      .set('Authorization', `Bearer ${token('pro')}`);
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(prismaMock.institution.count).toHaveBeenCalled();

@@ -63,9 +63,9 @@ describe('requirePaidTier middleware', () => {
     );
   });
 
-  it('allows professional-tier users through the default gate', () => {
+  it('allows pro-tier users through the default gate', () => {
     const mw = requirePaidTier();
-    const req = { user: makeUser({ tier: 'professional' }), id: 'req-3' } as unknown as Request;
+    const req = { user: makeUser({ tier: 'pro' }), id: 'req-3' } as unknown as Request;
     const res = makeRes();
     const next = vi.fn() as unknown as NextFunction;
 
@@ -75,9 +75,9 @@ describe('requirePaidTier middleware', () => {
     expect(res.status).not.toHaveBeenCalled();
   });
 
-  it('rejects professional-tier users on an enterprise-only gate', () => {
+  it('rejects pro-tier users on an enterprise-only gate', () => {
     const mw = requirePaidTier(['enterprise']);
-    const req = { user: makeUser({ tier: 'professional' }), id: 'req-4' } as unknown as Request;
+    const req = { user: makeUser({ tier: 'pro' }), id: 'req-4' } as unknown as Request;
     const res = makeRes();
     const next = vi.fn() as unknown as NextFunction;
 
@@ -92,7 +92,7 @@ describe('requirePaidTier middleware', () => {
           code: 'SUBSCRIPTION_REQUIRED',
           details: expect.objectContaining({
             requiredTiers: ['enterprise'],
-            currentTier: 'professional',
+            currentTier: 'pro',
           }),
         }),
       }),

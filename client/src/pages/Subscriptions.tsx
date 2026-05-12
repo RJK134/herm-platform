@@ -54,22 +54,22 @@ const STRIPE_BILLING_PORTAL_URL = import.meta.env.VITE_STRIPE_BILLING_PORTAL_URL
 interface TierFeature {
   feature: string;
   free: string | boolean;
-  professional: string | boolean;
+  pro: string | boolean;
   enterprise: string | boolean;
 }
 
 const TIER_FEATURES: TierFeature[] = [
-  { feature: 'Procurement projects', free: '3', professional: 'Unlimited', enterprise: 'Unlimited' },
-  { feature: 'Team workspace members', free: '2', professional: '10', enterprise: 'Unlimited' },
-  { feature: 'Capability baskets', free: '3', professional: 'Unlimited', enterprise: 'Unlimited' },
-  { feature: 'Document generation', free: '5/mo', professional: 'Unlimited', enterprise: 'Unlimited' },
-  { feature: 'TCO calculations', free: '10/mo', professional: 'Unlimited', enterprise: 'Unlimited' },
-  { feature: 'Export formats', free: 'PDF', professional: 'PDF + Word', enterprise: 'All formats' },
-  { feature: 'Sector analytics', free: false, professional: true, enterprise: true },
-  { feature: 'Priority support', free: false, professional: true, enterprise: true },
-  { feature: 'White-label exports', free: false, professional: false, enterprise: true },
-  { feature: 'API access', free: false, professional: false, enterprise: true },
-  { feature: 'Dedicated CSM', free: false, professional: false, enterprise: true },
+  { feature: 'Procurement projects', free: '3', pro: 'Unlimited', enterprise: 'Unlimited' },
+  { feature: 'Team workspace members', free: '2', pro: '10', enterprise: 'Unlimited' },
+  { feature: 'Capability baskets', free: '3', pro: 'Unlimited', enterprise: 'Unlimited' },
+  { feature: 'Document generation', free: '5/mo', pro: 'Unlimited', enterprise: 'Unlimited' },
+  { feature: 'TCO calculations', free: '10/mo', pro: 'Unlimited', enterprise: 'Unlimited' },
+  { feature: 'Export formats', free: 'PDF', pro: 'PDF + Word', enterprise: 'All formats' },
+  { feature: 'Sector analytics', free: false, pro: true, enterprise: true },
+  { feature: 'Priority support', free: false, pro: true, enterprise: true },
+  { feature: 'White-label exports', free: false, pro: false, enterprise: true },
+  { feature: 'API access', free: false, pro: false, enterprise: true },
+  { feature: 'Dedicated CSM', free: false, pro: false, enterprise: true },
 ];
 
 const STATUS_COLOURS: Record<string, string> = {
@@ -261,7 +261,7 @@ export function Subscriptions() {
                 <th className="pb-4 text-center font-semibold text-xs">
                   <div className="flex flex-col items-center gap-1">
                     <Zap className="w-4 h-4 text-teal-500" />
-                    <span className="dark:text-white">{t("subscription.professional", "Professional")}</span>
+                    <span className="dark:text-white">{t("subscription.pro", "Pro")}</span>
                     <span className="font-normal text-gray-400">£2,500/yr</span>
                     {currentTier === 'PROFESSIONAL' && (
                       <span className="text-xs bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 px-1.5 py-0.5 rounded-full">{t("subscription.current", "Current")}</span>
@@ -285,7 +285,7 @@ export function Subscriptions() {
                 <tr key={row.feature} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
                   <td className="py-3 text-gray-700 dark:text-gray-300 text-xs">{row.feature}</td>
                   <td className="py-3"><FeatureValue val={row.free} /></td>
-                  <td className="py-3"><FeatureValue val={row.professional} /></td>
+                  <td className="py-3"><FeatureValue val={row.pro} /></td>
                   <td className="py-3"><FeatureValue val={row.enterprise} /></td>
                 </tr>
               ))}
@@ -299,11 +299,11 @@ export function Subscriptions() {
             <>
               <Button
                 className="bg-teal-600 hover:bg-teal-700 text-white flex items-center gap-2"
-                onClick={() => checkoutMutation.mutate('institutionProfessional')}
+                onClick={() => checkoutMutation.mutate('institutionPro')}
                 disabled={checkoutMutation.isPending}
               >
                 <Zap className="w-4 h-4" />
-                {t("subscription.upgradeProfessional", "Upgrade to Professional — £2,500/yr")}
+                {t("subscription.upgradePro", "Upgrade to Pro — £2,500/yr")}
               </Button>
               <Button
                 className="bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-2"

@@ -15,7 +15,7 @@ function makeAdminToken(role = 'SUPER_ADMIN') {
       role,
       institutionId: 'inst1',
       institutionName: 'Test University',
-      tier: 'professional',
+      tier: 'pro',
     },
     JWT_SECRET,
     { expiresIn: '1h' },

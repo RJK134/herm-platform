@@ -161,7 +161,7 @@ export type { AuthUser } from '../contexts/AuthContext';
 export interface Subscription {
   id: string;
   institutionId: string;
-  tier: 'FREE' | 'PROFESSIONAL' | 'ENTERPRISE';
+  tier: 'FREE' | 'PRO' | 'ENTERPRISE';
   status: string;
   stripeCustomerId?: string;
   currentPeriodEnd?: string;
