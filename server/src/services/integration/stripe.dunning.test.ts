@@ -16,6 +16,7 @@ const { constructEvent } = vi.hoisted(() => {
   process.env['STRIPE_SECRET_KEY'] = 'sk_test_xxx';
   process.env['STRIPE_WEBHOOK_SECRET'] = 'whsec_xxx';
   process.env['STRIPE_PRICE_INST_PRO'] = 'price_pro';
+  process.env['STRIPE_PRICE_INST_PRO_LEGACY'] = 'price_pro_legacy';
   process.env['STRIPE_PRICE_INST_ENT'] = 'price_ent';
   return { constructEvent: vi.fn() };
 });
@@ -233,6 +234,34 @@ describe('stripe webhook — customer.subscription.updated', () => {
     });
     await handleWebhook(Buffer.from('payload'), 'sig');
     expect(prismaMock.subscription.update).not.toHaveBeenCalled();
+  });
+
+  // Phase 15.2 — STRIPE_PRICE_INST_PRO_LEGACY safety net. A pre-rebrand
+  // price ID still flowing through live Stripe webhooks must resolve to
+  // PRO (not fall through as unrecognised) so the tier reconciliation
+  // doesn't silently mis-tier the institution during the deploy window.
+  it('reconciles the legacy Pro price ID to PRO via STRIPE_PRICE_INST_PRO_LEGACY', async () => {
+    constructEvent.mockReturnValueOnce({
+      type: 'customer.subscription.updated',
+      data: {
+        object: {
+          id: 'sub_stripe_legacy',
+          items: { data: [{ price: { id: 'price_pro_legacy' } }] },
+        },
+      },
+    });
+    prismaMock.subscription.findFirst.mockResolvedValueOnce({
+      id: 'sub_db_legacy',
+      institutionId: 'inst-legacy',
+      tier: 'FREE',
+    });
+
+    await handleWebhook(Buffer.from('payload'), 'sig');
+
+    expect(prismaMock.subscription.update).toHaveBeenCalledWith({
+      where: { id: 'sub_db_legacy' },
+      data: { tier: 'PRO' },
+    });
   });
 });
 

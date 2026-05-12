@@ -261,7 +261,7 @@ export function Subscriptions() {
                 <th className="pb-4 text-center font-semibold text-xs">
                   <div className="flex flex-col items-center gap-1">
                     <Zap className="w-4 h-4 text-teal-500" />
-                    <span className="dark:text-white">{t("subscription.pro", t("subscription.professional", "Pro"))}</span>
+                    <span className="dark:text-white">{t("subscription.pro", "Pro")}</span>
                     <span className="font-normal text-gray-400">£2,500/yr</span>
                     {currentTier === 'PROFESSIONAL' && (
                       <span className="text-xs bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 px-1.5 py-0.5 rounded-full">{t("subscription.current", "Current")}</span>
@@ -303,7 +303,7 @@ export function Subscriptions() {
                 disabled={checkoutMutation.isPending}
               >
                 <Zap className="w-4 h-4" />
-                {t("subscription.upgradePro", t("subscription.upgradeProfessional", "Upgrade to Pro — £2,500/yr"))}
+                {t("subscription.upgradePro", "Upgrade to Pro — £2,500/yr")}
               </Button>
               <Button
                 className="bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-2"

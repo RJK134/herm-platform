@@ -80,7 +80,7 @@ describe('<RequireTier />', () => {
     expect(screen.getByRole('link', { name: /Compare plans/ })).toHaveAttribute('href', '/subscription');
   });
 
-  it('lets professional-tier users through when listed', () => {
+  it('lets pro-tier users through when listed', () => {
     setUser(makeUser({ tier: 'pro' }));
     renderAt('/paid');
     expect(screen.getByText('PAID CONTENT')).toBeInTheDocument();

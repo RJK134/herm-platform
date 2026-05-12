@@ -9,20 +9,25 @@ const STRIPE_SECRET = process.env['STRIPE_SECRET_KEY'];
 const STRIPE_WEBHOOK_SECRET = process.env['STRIPE_WEBHOOK_SECRET'];
 const APP_URL = process.env['APP_URL'] ?? 'http://localhost:5173';
 
-// Price IDs from environment. `institutionPro` is the canonical key
-// post-Phase-15.2 rebrand; `STRIPE_PRICE_INST_PRO_LEGACY` is an optional
-// alias that maps the pre-rebrand price ID (if Stripe ever issued a
-// distinct one) back to the same `PRO` tier — keeps live webhooks safe
-// across the deploy window. Both envs can point at the same Stripe
-// price; the legacy slot exists to avoid a tier flip mid-deploy if the
-// price ID itself gets rotated as part of a marketing rename.
+// Price IDs from environment. Only the keys in `PRICE_IDS` are valid
+// checkout targets — `institutionProLegacy` is intentionally hoisted
+// out so it can't leak into the `TierKey` union and accidentally
+// become a checkout-callable option (the legacy slot is webhook-only).
 const PRICE_IDS = {
-  institutionPro:       process.env['STRIPE_PRICE_INST_PRO'] ?? '',
-  institutionProLegacy: process.env['STRIPE_PRICE_INST_PRO_LEGACY'] ?? '',
+  institutionPro:        process.env['STRIPE_PRICE_INST_PRO'] ?? '',
   institutionEnterprise: process.env['STRIPE_PRICE_INST_ENT'] ?? '',
   vendorEnhanced:        process.env['STRIPE_PRICE_VENDOR_ENH'] ?? '',
   vendorPremium:         process.env['STRIPE_PRICE_VENDOR_PREM'] ?? '',
 };
+
+// Phase 15.2 — `STRIPE_PRICE_INST_PRO_LEGACY` is an optional alias that
+// maps a pre-rebrand price ID back to the `PRO` tier — keeps live
+// webhooks safe across the deploy window. Both envs can point at the
+// same Stripe price; the legacy slot exists to avoid a tier flip
+// mid-deploy if the price ID itself gets rotated as part of a
+// marketing rename. Webhook-side only: `tierFromPriceId` consults it,
+// but it is NOT a `TierKey` so the checkout API cannot target it.
+const LEGACY_PRO_PRICE_ID = process.env['STRIPE_PRICE_INST_PRO_LEGACY'] ?? '';
 
 type TierKey = keyof typeof PRICE_IDS;
 
@@ -174,7 +179,7 @@ function tierFromPriceId(priceId: string | null | undefined): import('@prisma/cl
   if (priceId === PRICE_IDS.institutionPro) return 'PRO';
   // Legacy alias — only set if STRIPE_PRICE_INST_PRO_LEGACY is configured;
   // non-empty guard avoids a false-positive match against unset envs.
-  if (PRICE_IDS.institutionProLegacy && priceId === PRICE_IDS.institutionProLegacy) return 'PRO';
+  if (LEGACY_PRO_PRICE_ID && priceId === LEGACY_PRO_PRICE_ID) return 'PRO';
   if (priceId === PRICE_IDS.institutionEnterprise) return 'ENTERPRISE';
   return null;
 }

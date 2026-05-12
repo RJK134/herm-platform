@@ -172,7 +172,7 @@ describe('GET /api/framework-mappings (Enterprise gate)', () => {
     expect(res.body.error.details.requiredTiers).toContain('enterprise');
   });
 
-  it('returns 403 SUBSCRIPTION_REQUIRED for professional-tier users', async () => {
+  it('returns 403 SUBSCRIPTION_REQUIRED for pro-tier users', async () => {
     const token = makeToken('pro');
     const res = await request(app)
       .get('/api/framework-mappings')

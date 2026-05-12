@@ -4,7 +4,11 @@ import prisma from '../../utils/prisma';
 
 export const createCheckout = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { tier } = req.body as { tier: string };
+    const rawTier = (req.body as { tier: string }).tier;
+    // Phase 15.2 alias: pre-rebrand clients post `institutionProfessional`
+    // — remap so a mid-deploy user doesn't hit "Price not configured".
+    // Drop with the rest of the legacy shims once the rebrand is stale.
+    const tier = rawTier === 'institutionProfessional' ? 'institutionPro' : rawTier;
     // Router-level authenticateJWT guarantees req.user is present.
     const { institutionId, email } = req.user!;
     const result = await stripeService.createCheckoutSession({
