@@ -122,7 +122,7 @@ async function generateBusinessCase(input: GenerateDocumentInput, _date: string)
       id: 'delivery',
       title: '8. Delivery Approach',
       order: 8,
-      content: `### 8.1 Procurement Route\n\nOpen procedure under Public Contracts Regulations 2015 (PCR 2015), advertised on Find a Tender Service. Estimated contract value requires OJEU notification.\n\n### 8.2 Timeline\n\n| Phase | Activity | Duration |\n|-------|----------|----------|\n| 0 | Business case approval & market engagement | 2 months |\n| 1 | ITT publication and tender period | 6 weeks |\n| 2 | Evaluation and shortlisting | 6 weeks |\n| 3 | Demonstrations and BAFO | 4 weeks |\n| 4 | Contract award | 2 weeks |\n| 5 | Implementation | 12-18 months |\n| 6 | Go-live and parallel running | 3 months |\n\n### 8.3 Governance\n\n- SRO: Director of IT / Registrar\n- Project Board: IT, Registry, Finance, Academic representation\n- Reporting: Monthly to IT Committee, quarterly to governors`,
+      content: `### 8.1 Procurement Route\n\nCompetitive tendering procedure under the Procurement Act 2023 (in force from 24 February 2025) and the Procurement Regulations 2024, advertised via the Find a Tender Service. Estimated contract value exceeds the goods/services threshold so a Tender Notice is required on the Central Digital Platform.\n\n### 8.2 Timeline\n\n| Phase | Activity | Duration |\n|-------|----------|----------|\n| 0 | Business case approval & pre-market engagement | 2 months |\n| 1 | Tender Notice publication and tender period | 6 weeks |\n| 2 | Evaluation and shortlisting | 6 weeks |\n| 3 | Demonstrations and best-and-final-offer | 4 weeks |\n| 4 | Standstill (8 working days) and contract award | 2 weeks |\n| 5 | Implementation | 12-18 months |\n| 6 | Go-live and parallel running | 3 months |\n\n### 8.3 Governance\n\n- SRO: Director of IT / Registrar\n- Project Board: IT, Registry, Finance, Academic representation\n- Reporting: Monthly to IT Committee, quarterly to governors`,
     },
     {
       id: 'recommendation',
@@ -170,7 +170,7 @@ async function generateRfpItt(input: GenerateDocumentInput): Promise<DocumentSec
       id: 'cover',
       title: '1. Invitation to Tender',
       order: 1,
-      content: `**Reference:** ${ref}\n**Contracting Authority:** ${inst}\n**Subject:** Student Information System — Invitation to Tender\n**Procedure:** Open (PCR 2015 Regulation 27)\n**CPV Code:** 48440000-4 (Financial analysis and accounting software package)\n\n---\n\nThis Invitation to Tender (ITT) is issued by ${inst} ('the Contracting Authority') for the supply, implementation, and support of a Student Information System (SIS) in accordance with the Public Contracts Regulations 2015.\n\nTenderers should read this document in full and respond to all sections. Failure to respond to any mandatory question may result in disqualification.`,
+      content: `**Reference:** ${ref}\n**Contracting Authority:** ${inst}\n**Subject:** Student Information System — Invitation to Tender\n**Procedure:** Open competitive tendering procedure (Procurement Act 2023)\n**CPV Code:** 48440000-4 (Financial analysis and accounting software package)\n\n---\n\nThis Invitation to Tender (ITT) is issued by ${inst} ('the Contracting Authority') for the supply, implementation, and support of a Student Information System (SIS) in accordance with the Procurement Act 2023 and the Procurement Regulations 2024.\n\nTenderers should read this document in full and respond to all sections. Failure to respond to any mandatory question may result in disqualification.`,
     },
     {
       id: 'background',
@@ -194,7 +194,7 @@ async function generateRfpItt(input: GenerateDocumentInput): Promise<DocumentSec
       id: 'technical',
       title: '5. Technical Requirements',
       order: 5,
-      content: `### 5.1 Non-Functional Requirements\n\n| Requirement | Standard |\n|-------------|----------|\n| Availability | 99.9% uptime during term time |\n| Performance | <3s page load, <200ms API response |\n| Security | ISO 27001 / Cyber Essentials Plus |\n| Data residency | UK/EEA data centres only |\n| GDPR | Article 28 Data Processing Agreement required |\n| Accessibility | WCAG 2.1 AA minimum |\n| API | REST/JSON, OpenAPI 3.0 documentation |\n| Integration | Standard protocols: REST, SFTP, SAML 2.0 SSO |\n| Data migration | Full historical data migration with validation |\n\n### 5.2 Infrastructure\n\nPreferred deployment: Cloud-native SaaS. On-premise and hybrid will be considered.\n\n### 5.3 Authentication\n\nMandatory: SAML 2.0 / OIDC integration with institutional identity provider. Support for MFA.`,
+      content: `### 5.1 Non-Functional Requirements\n\n| Requirement | Standard |\n|-------------|----------|\n| Availability | 99.9% uptime during term time |\n| Performance | <3s page load, <200ms API response |\n| Security | ISO 27001 / Cyber Essentials Plus |\n| Data residency | UK/EEA data centres only |\n| GDPR | Article 28 Data Processing Agreement required |\n| Accessibility | WCAG 2.1 AA minimum |\n| API | REST/JSON, OpenAPI 3.0 documentation |\n| Integration | Standard protocols: REST, SFTP, SAML 2.0 SSO |\n| Data migration | Full historical data migration with validation |\n\n### 5.2 Infrastructure\n\nPreferred deployment: Cloud-native SaaS. On-premise and hybrid will be considered.\n\n### 5.3 Authentication\n\nMandatory: SAML 2.0 / OIDC integration with institutional identity provider. Support for MFA.\n\n### 5.4 Procurement Policy Note (PPN) Compliance\n\nIn accordance with Cabinet Office procurement policy notes applicable to this procurement under the Procurement Act 2023, tenderers must:\n\n- **PPN 03/24 — Cyber Essentials**: hold a current Cyber Essentials certificate (or recognised equivalent) and provide certificate evidence with the tender response. Cyber Essentials Plus is preferred for contracts that handle student personal data.\n- **PPN 09/14 — Modern Slavery**: provide a copy of the most recent Modern Slavery and Human Trafficking statement (Modern Slavery Act 2015 s.54). Tenderers with annual turnover under the £36m s.54 threshold should confirm this in writing instead.\n- **PPN 06/20 / Carbon Reduction**: provide a Carbon Reduction Plan committing to net-zero by 2050 in line with the Procurement Act 2023 transparency requirements.\n\nFailure to provide the documents above with the tender response will result in disqualification at the selection stage.`,
     },
     {
       id: 'evaluation',
@@ -212,7 +212,7 @@ async function generateRfpItt(input: GenerateDocumentInput): Promise<DocumentSec
       id: 'submission',
       title: '8. Submission Instructions',
       order: 8,
-      content: `### 8.1 Tender Deadline\n\n[INSERT DATE] at 17:00 GMT via [INSERT PORTAL URL]\n\nLate submissions will not be accepted.\n\n### 8.2 Clarification Questions\n\nClarification questions must be submitted via [INSERT PORTAL] by [INSERT DATE - 10 DAYS BEFORE DEADLINE]. Responses will be published anonymously to all tenderers.\n\n### 8.3 Tender Documents Required\n\n1. Completed Response Schedule (Section 4 requirements matrix)\n2. Technical response (Section 5)\n3. Implementation plan and timeline\n4. Commercial response including itemised pricing\n5. Case studies from at least 2 UK higher education institutions\n6. Financial accounts (last 2 years)\n7. Insurance certificates\n8. Data Processing Agreement draft\n\n### 8.4 Standstill Period\n\nA minimum 10-day standstill period will apply before contract award per Regulation 87 PCR 2015.`,
+      content: `### 8.1 Tender Deadline\n\n[INSERT DATE] at 17:00 GMT via [INSERT PORTAL URL]\n\nLate submissions will not be accepted.\n\n### 8.2 Clarification Questions\n\nClarification questions must be submitted via [INSERT PORTAL] by [INSERT DATE - 10 DAYS BEFORE DEADLINE]. Responses will be published anonymously to all tenderers.\n\n### 8.3 Tender Documents Required\n\n1. Completed Response Schedule (Section 4 requirements matrix)\n2. Technical response (Section 5)\n3. Implementation plan and timeline\n4. Commercial response including itemised pricing\n5. Case studies from at least 2 UK higher education institutions\n6. Financial accounts (last 2 years)\n7. Insurance certificates\n8. Data Processing Agreement draft\n\n### 8.4 Standstill Period\n\nA minimum 8-working-day standstill period will apply before contract award, calculated in accordance with Schedule 4 of the Procurement Act 2023 (excluding weekends and English & Welsh public holidays). The standstill clock starts on the day after the Contract Award Notice is sent to all tenderers.`,
     },
   ];
 }
@@ -403,6 +403,12 @@ export class DocumentsService {
         status: 'DRAFT',
         wordCount,
         createdById: input.institutionId ?? 'anonymous',
+        // Phase 14.2b — stamp the regulatory regime on every newly-
+        // generated document. Phase 14.2 swung the templates over to
+        // PA 2023 + Procurement Regulations 2024, so any document
+        // produced post-merge is unambiguously PA2023. Pre-Phase-14.2
+        // rows have null and render as "(legacy)" in the UI.
+        regulationVersion: 'PA2023',
       },
     });
   }
@@ -425,6 +431,12 @@ export class DocumentsService {
         wordCount: true,
         createdAt: true,
         updatedAt: true,
+        // Phase 14.2b — explicit select required so the listing card
+        // can render the regulation-version badge. Without this field
+        // every card falls through the UI ternary to "(legacy)" even
+        // for newly-created PA 2023 documents (Bugbot found this on
+        // the original 14.2b PR).
+        regulationVersion: true,
       },
     });
   }

@@ -79,8 +79,50 @@ function encodePostgresQuery(params: URLSearchParams): string {
 
 const databaseUrl = applyConnectionDefaults(process.env['DATABASE_URL']);
 
-const prisma = databaseUrl
-  ? new PrismaClient({ datasources: { db: { url: databaseUrl } } })
-  : new PrismaClient();
+/**
+ * Some hosts (Vercel Hobby Functions, Claude Code's web sandbox, locked-
+ * down corporate networks) only allow outbound HTTPS — no raw TCP to
+ * Postgres on 5432. When `PRISMA_NEON_HTTP=1`, route Prisma queries
+ * through the @neondatabase/serverless WebSocket pool instead, which
+ * speaks the wire protocol over an HTTPS upgrade. (Seed/scripts keep
+ * their own flag in `prisma/_neon-http-prisma.ts`.) Otherwise this is
+ * a no-op and the standard libpq TCP path runs unchanged.
+ *
+ * This branch is required (not optional) for the live Vercel deploy at
+ * https://herm-platform-client-*.vercel.app — without it every API
+ * request returns DATABASE_UNAVAILABLE because the function host can't
+ * reach Neon's TCP endpoint. Empirically demonstrated by master's
+ * current production deploy, which lacks this path and 500s on every
+ * read. Tracked under the Phase 13 audit.
+ *
+ * Uses the raw DATABASE_URL — Neon's pooled proxy rejects the
+ * `options=-c statement_timeout=…` startup parameter that
+ * applyConnectionDefaults() adds (Postgres error 08P01: "unsupported
+ * startup parameter in options"). connection_limit is also irrelevant
+ * here because the Neon pool manages connections at the edge.
+ */
+function makePrisma(): PrismaClient {
+  if (process.env['PRISMA_NEON_HTTP'] === '1') {
+    const rawUrl = process.env['DATABASE_URL'];
+    if (!rawUrl) {
+      throw new Error('PRISMA_NEON_HTTP=1 requires DATABASE_URL to be set');
+    }
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Pool, neonConfig } = require('@neondatabase/serverless') as typeof import('@neondatabase/serverless');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { PrismaNeon } = require('@prisma/adapter-neon') as typeof import('@prisma/adapter-neon');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const ws = require('ws');
+    neonConfig.webSocketConstructor = ws as typeof globalThis.WebSocket;
+    const pool = new Pool({ connectionString: rawUrl });
+    const adapter = new PrismaNeon(pool);
+    return new PrismaClient({ adapter } as ConstructorParameters<typeof PrismaClient>[0]);
+  }
+  return databaseUrl
+    ? new PrismaClient({ datasources: { db: { url: databaseUrl } } })
+    : new PrismaClient();
+}
+
+const prisma = makePrisma();
 
 export default prisma;

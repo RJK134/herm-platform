@@ -58,7 +58,13 @@ export const authRateLimiter = rateLimit({
 
 const TIER_LIMIT_ANONYMOUS = Number(process.env['RATE_LIMIT_ANONYMOUS'] ?? 100);
 const TIER_LIMIT_FREE = Number(process.env['RATE_LIMIT_FREE'] ?? 300);
-const TIER_LIMIT_PROFESSIONAL = Number(process.env['RATE_LIMIT_PROFESSIONAL'] ?? 1500);
+// Phase 15.2 renamed the env from `RATE_LIMIT_PROFESSIONAL` to
+// `RATE_LIMIT_PRO`. The legacy name is honoured as a fallback for one
+// release so a cluster rolling out the rebrand doesn't lose its
+// configured ceiling between deploys.
+const TIER_LIMIT_PRO = Number(
+  process.env['RATE_LIMIT_PRO'] ?? process.env['RATE_LIMIT_PROFESSIONAL'] ?? 1500,
+);
 const TIER_LIMIT_ENTERPRISE = Number(process.env['RATE_LIMIT_ENTERPRISE'] ?? 15000);
 const TIER_LIMIT_API_KEY = Number(process.env['RATE_LIMIT_API_KEY'] ?? 600);
 
@@ -72,8 +78,8 @@ export function tieredMax(req: Request): number {
   switch (tier) {
     case 'enterprise':
       return TIER_LIMIT_ENTERPRISE;
-    case 'professional':
-      return TIER_LIMIT_PROFESSIONAL;
+    case 'pro':
+      return TIER_LIMIT_PRO;
     case 'free':
       return TIER_LIMIT_FREE;
     default:

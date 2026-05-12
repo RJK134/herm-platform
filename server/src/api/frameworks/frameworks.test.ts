@@ -133,7 +133,7 @@ describe('GET /api/frameworks', () => {
       [publicFramework, privateFramework] as never,
     );
 
-    const token = makeToken('professional');
+    const token = makeToken('pro');
     const res = await request(app)
       .get('/api/frameworks')
       .set('Authorization', `Bearer ${token}`);

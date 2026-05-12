@@ -9,13 +9,25 @@ const STRIPE_SECRET = process.env['STRIPE_SECRET_KEY'];
 const STRIPE_WEBHOOK_SECRET = process.env['STRIPE_WEBHOOK_SECRET'];
 const APP_URL = process.env['APP_URL'] ?? 'http://localhost:5173';
 
-// Price IDs from environment
+// Price IDs from environment. Only the keys in `PRICE_IDS` are valid
+// checkout targets — `institutionProLegacy` is intentionally hoisted
+// out so it can't leak into the `TierKey` union and accidentally
+// become a checkout-callable option (the legacy slot is webhook-only).
 const PRICE_IDS = {
-  institutionProfessional: process.env['STRIPE_PRICE_INST_PRO'] ?? '',
-  institutionEnterprise:   process.env['STRIPE_PRICE_INST_ENT'] ?? '',
-  vendorEnhanced:          process.env['STRIPE_PRICE_VENDOR_ENH'] ?? '',
-  vendorPremium:           process.env['STRIPE_PRICE_VENDOR_PREM'] ?? '',
+  institutionPro:        process.env['STRIPE_PRICE_INST_PRO'] ?? '',
+  institutionEnterprise: process.env['STRIPE_PRICE_INST_ENT'] ?? '',
+  vendorEnhanced:        process.env['STRIPE_PRICE_VENDOR_ENH'] ?? '',
+  vendorPremium:         process.env['STRIPE_PRICE_VENDOR_PREM'] ?? '',
 };
+
+// Phase 15.2 — `STRIPE_PRICE_INST_PRO_LEGACY` is an optional alias that
+// maps a pre-rebrand price ID back to the `PRO` tier — keeps live
+// webhooks safe across the deploy window. Both envs can point at the
+// same Stripe price; the legacy slot exists to avoid a tier flip
+// mid-deploy if the price ID itself gets rotated as part of a
+// marketing rename. Webhook-side only: `tierFromPriceId` consults it,
+// but it is NOT a `TierKey` so the checkout API cannot target it.
+const LEGACY_PRO_PRICE_ID = process.env['STRIPE_PRICE_INST_PRO_LEGACY'] ?? '';
 
 type TierKey = keyof typeof PRICE_IDS;
 
@@ -164,7 +176,10 @@ async function notifyInstitutionAdmins(
  */
 function tierFromPriceId(priceId: string | null | undefined): import('@prisma/client').SubscriptionTier | null {
   if (!priceId) return null;
-  if (priceId === PRICE_IDS.institutionProfessional) return 'PROFESSIONAL';
+  if (priceId === PRICE_IDS.institutionPro) return 'PRO';
+  // Legacy alias — only set if STRIPE_PRICE_INST_PRO_LEGACY is configured;
+  // non-empty guard avoids a false-positive match against unset envs.
+  if (LEGACY_PRO_PRICE_ID && priceId === LEGACY_PRO_PRICE_ID) return 'PRO';
   if (priceId === PRICE_IDS.institutionEnterprise) return 'ENTERPRISE';
   return null;
 }
@@ -207,7 +222,7 @@ export async function handleWebhook(rawBody: Buffer, signature: string): Promise
       });
     } else if (meta['institutionId']) {
       const tierMap: Record<string, import('@prisma/client').SubscriptionTier> = {
-        institutionProfessional: 'PROFESSIONAL',
+        institutionPro: 'PRO',
         institutionEnterprise: 'ENTERPRISE',
       };
       const sub = await prisma.subscription.findUnique({ where: { institutionId: meta['institutionId'] } });

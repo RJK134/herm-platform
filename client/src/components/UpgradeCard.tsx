@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Crown, Lock, Sparkles } from 'lucide-react';
 import type { PaidTier } from '../lib/branding';
+import { PRODUCT } from '../lib/branding';
 
 interface UpgradeCardProps {
   /** Required tier(s) to access this feature. */
@@ -16,7 +17,7 @@ interface UpgradeCardProps {
 }
 
 const TIER_LABELS: Record<PaidTier, string> = {
-  professional: 'Professional',
+  pro: 'Pro',
   enterprise: 'Enterprise',
 };
 
@@ -69,7 +70,7 @@ export function UpgradeCard({
             </div>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
               {description ??
-                `This feature is part of the ${tierName} plan. HERM capability data stays free for everyone — ${featureName.toLowerCase()} is a Future Horizons Education commercial add-on.`}
+                `This feature is part of the ${tierName} plan. HERM capability data stays free for everyone — ${featureName.toLowerCase()} is an ${PRODUCT.name} commercial add-on.`}
             </p>
 
             <div className="mt-6 flex flex-wrap items-center gap-3">

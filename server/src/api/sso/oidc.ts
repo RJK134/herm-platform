@@ -12,10 +12,20 @@
  * JWKS on a key-id miss so the cache TTL only governs discovery doc
  * refreshes, not signing-key rotation.
  *
- * v6 is ESM-only — fine; the project's root package.json sets
- * `"type": "module"`. Node 22 baseline (we run 22+ in CI and prod).
+ * v6 is ESM-only. Our supported baseline is Node 20, while the server
+ * build output is CommonJS (tsconfig `module: commonjs`), so synchronous
+ * `require('openid-client')` throws ERR_REQUIRE_ESM at module load.
+ * Resolve it lazily via dynamic import() instead — values are pulled
+ * inside the async functions that actually need them; the type comes from
+ * a type-only namespace import so the compile-time API stays unchanged.
  */
-import * as oidc from 'openid-client';
+import type * as OidcMod from 'openid-client';
+type OidcModule = typeof import('openid-client');
+let _oidc: OidcModule | null = null;
+async function loadOidc(): Promise<OidcModule> {
+  _oidc ??= await import('openid-client');
+  return _oidc;
+}
 import { createHash } from 'node:crypto';
 import { putFlowState, takeFlowState, type OidcFlowState } from './flow-store';
 import { getOidcCallbackUrl } from '../../lib/sso-config';
@@ -27,7 +37,7 @@ export interface TenantOidcConfig {
 }
 
 interface CachedConfig {
-  config: oidc.Configuration;
+  config: OidcMod.Configuration;
   fetchedAt: number;
 }
 const TTL_MS = 60 * 60 * 1000;
@@ -96,7 +106,8 @@ function pruneExpired(now: number): void {
   }
 }
 
-async function getConfig(idp: TenantOidcConfig): Promise<oidc.Configuration> {
+async function getConfig(idp: TenantOidcConfig): Promise<OidcMod.Configuration> {
+  const oidc = await loadOidc();
   const cacheKey = configCacheKey(idp);
   const now = Date.now();
   const hit = configCache.get(cacheKey);
@@ -152,6 +163,7 @@ export async function buildOidcAuthorizeUrl(
   idp: TenantOidcConfig,
   idpId?: string,
 ): Promise<string> {
+  const oidc = await loadOidc();
   const config = await getConfig(idp);
   const codeVerifier = oidc.randomPKCECodeVerifier();
   const codeChallenge = await oidc.calculatePKCECodeChallenge(codeVerifier);
@@ -206,6 +218,7 @@ export async function completeOidcCallback(
   if (flow.slug !== institutionSlug) {
     throw new Error('OIDC flow slug mismatch');
   }
+  const oidc = await loadOidc();
   const config = await getConfig(idp);
   const tokens = await oidc.authorizationCodeGrant(config, callbackUrl, {
     pkceCodeVerifier: flow.codeVerifier,

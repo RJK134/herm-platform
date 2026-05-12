@@ -30,7 +30,7 @@ import type { PaidTier } from './branding';
 
 /**
  * The end-user product IA is organised around four top-level sections
- * aligned to the Future Horizons ASPT redesign brief:
+ * aligned to the FH Procure (Future Horizons Procurement Suite) redesign brief:
  *
  *   1. HERM Explorer         — free-tier HERM reference data + attribution
  *   2. Procurement Workspace — authenticated tools, usage-capped on free
@@ -123,7 +123,7 @@ const procurementItems: readonly NavItem[] = [
 // ── Sector Intelligence — paid tier analytics ───────────────────────────────
 
 const sectorItems: readonly NavItem[] = [
-  { to: '/sector', label: 'Sector Analytics', icon: PieChart, tier: ['professional', 'enterprise'] as const },
+  { to: '/sector', label: 'Sector Analytics', icon: PieChart, tier: ['pro', 'enterprise'] as const },
   { to: '/framework-mapping', label: 'Framework Mapping', icon: Map, tier: ['enterprise'] as const },
 ];
 

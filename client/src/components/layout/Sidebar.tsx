@@ -20,16 +20,16 @@ import { NotificationBell } from '../NotificationBell';
 import { LanguageSelector } from '../LanguageSelector';
 import { NAV_SECTIONS } from '../../lib/navigation';
 import type { NavItem, NavSection as NavSectionType } from '../../lib/navigation';
-import { isPaidTier } from '../../lib/branding';
+import { isPaidTier, PRODUCT } from '../../lib/branding';
 
 const TIER_COLOURS: Record<string, string> = {
   enterprise: 'bg-amber-500/20 text-amber-300',
-  professional: 'bg-teal/20 text-teal',
+  pro: 'bg-teal/20 text-teal',
   free: 'bg-white/10 text-white/50',
 };
 
 const TIER_LABELS: Record<string, string> = {
-  professional: 'Professional',
+  pro: 'Pro',
   enterprise: 'Enterprise',
 };
 
@@ -249,26 +249,52 @@ export function Sidebar() {
               <div className="text-white font-heading font-bold text-lg leading-tight">
                 {isAuthenticated ? user!.institutionName : (activeFramework?.name ?? 'Capability Platform')}
               </div>
-              <div className="text-white/50 text-xs mt-1">
-                {activeFramework
-                  ? `${activeFramework.name} · ${activeFramework.capabilityCount} Capabilities`
-                  : 'Loading...'}
-              </div>
-              {frameworks.length > 1 && (
-                <select
-                  value={activeFramework?.id ?? ''}
-                  onChange={(e) => {
-                    const fw = frameworks.find((f) => f.id === e.target.value);
-                    if (fw) setActiveFramework(fw);
-                  }}
-                  className="mt-2 w-full px-2 py-1 text-xs bg-white/10 border border-white/20 rounded text-white/80"
-                >
-                  {frameworks.map((fw) => (
-                    <option key={fw.id} value={fw.id} className="text-gray-900">
-                      {fw.name}
-                    </option>
-                  ))}
-                </select>
+              {/*
+                Phase 14.4 — promote the framework switcher from a bare
+                <select> in the sidebar branding area to a labelled
+                "Active framework" context card. UAT D-08 flagged it as
+                "hidden in a tiny dropdown despite gating all explorer
+                data". The card now owns its own region with a clear
+                label, the active framework name, the capability +
+                domain counts, and (when more than one framework is
+                visible to the tier) a more prominent picker. Still
+                lives in the sidebar rather than a brand-new top bar
+                because adding a top bar is a bigger layout overhaul
+                tracked separately.
+              */}
+              {activeFramework && (
+                <div className="mt-3 p-2.5 bg-white/5 border border-white/10 rounded-lg">
+                  <div className="text-[10px] font-medium uppercase tracking-wider text-teal mb-1">
+                    Active Framework
+                  </div>
+                  {frameworks.length > 1 ? (
+                    <select
+                      value={activeFramework.id}
+                      onChange={(e) => {
+                        const fw = frameworks.find((f) => f.id === e.target.value);
+                        if (fw) setActiveFramework(fw);
+                      }}
+                      aria-label="Switch active capability framework"
+                      className="w-full px-2 py-1.5 text-sm bg-white/10 border border-white/20 rounded text-white cursor-pointer hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-teal/40"
+                    >
+                      {frameworks.map((fw) => (
+                        <option key={fw.id} value={fw.id} className="text-gray-900">
+                          {fw.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="text-sm font-medium text-white">
+                      {activeFramework.name}
+                    </div>
+                  )}
+                  <div className="mt-1 text-[10px] text-white/50">
+                    {activeFramework.capabilityCount} capabilities · {activeFramework.domainCount} domains
+                  </div>
+                </div>
+              )}
+              {!activeFramework && (
+                <div className="text-white/50 text-xs mt-1">Loading…</div>
               )}
             </>
           )}
@@ -281,8 +307,8 @@ export function Sidebar() {
           </div>
           {!isCollapsed && (
             <div>
-              <div className="text-xs font-semibold text-teal">Future Horizons Education</div>
-              <div className="text-[10px] text-white/50">Powered by FHE</div>
+              <div className="text-xs font-semibold text-teal">{PRODUCT.name}</div>
+              <div className="text-[10px] text-white/50">by {PRODUCT.vendor}</div>
             </div>
           )}
         </div>

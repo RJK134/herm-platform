@@ -610,7 +610,20 @@ function DecisionTreeSection({ onStartProject }: { onStartProject?: (j: Jurisdic
       {step === 1 && (
         <div className="max-w-sm">
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-            {jurisdiction && JURISDICTION_FLAGS[jurisdiction]} What is the estimated contract value?
+            {/*
+              UAT D-03 — bare-emoji JSX text-node interpolation rendered as
+              "as What is the estimated contract value?" on some platforms
+              where flag emoji fall back to their regional-indicator letters
+              (e.g. AU 🇦🇺 → "AU"/"as"). Wrapping the flag in a span with
+              aria-hidden separates the icon from the label and keeps screen
+              readers from announcing the regional-indicator letters.
+            */}
+            {jurisdiction && (
+              <span aria-hidden="true" className="mr-1">
+                {JURISDICTION_FLAGS[jurisdiction]}
+              </span>
+            )}
+            What is the estimated contract value?
           </p>
           <div className="flex gap-2">
             <input

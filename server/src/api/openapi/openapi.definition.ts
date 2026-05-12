@@ -1,5 +1,6 @@
 /**
- * OpenAPI 3.1 specification for the HERM Platform public API (Phase 10.4).
+ * OpenAPI 3.1 specification for the FH Procure public API (Phase 10.4,
+ * Phase 15.1 rebrand).
  *
  * Hand-curated rather than generated. Reasons:
  *   - We don't yet have decorators or a tsoa/zod-openapi pipeline; bolting
@@ -18,10 +19,12 @@
  * shape is documented inline.
  */
 
-const TITLE = 'HERM Platform API';
+import { PRODUCT } from '../../lib/branding';
+
+const TITLE = `${PRODUCT.name} API`;
 const VERSION = '1.0.0';
 const DESCRIPTION =
-  'Public REST API for the HERM Procurement & Capability Intelligence Platform. ' +
+  `Public REST API for ${PRODUCT.name} — ${PRODUCT.longName}. ` +
   'Authentication is JWT-bearer for end-user requests; API-key bearer (`herm_pk_…`) ' +
   'for machine-to-machine integrations. Every response uses the envelope ' +
   '`{ success, data?, error? }` — a successful response carries `data`, an ' +
@@ -43,7 +46,7 @@ export const openApiSpec = {
     version: VERSION,
     description: DESCRIPTION,
     contact: {
-      name: 'HERM Platform Support',
+      name: `${PRODUCT.name} Support`,
       url: 'https://github.com/RJK134/herm-platform',
     },
     license: {
@@ -114,7 +117,7 @@ export const openApiSpec = {
           role: { type: 'string', enum: ['SUPER_ADMIN', 'INSTITUTION_ADMIN', 'EVALUATOR', 'VIEWER'] },
           institutionId: { type: 'string' },
           institutionName: { type: 'string' },
-          tier: { type: 'string', enum: ['free', 'professional', 'enterprise'] },
+          tier: { type: 'string', enum: ['free', 'pro', 'enterprise'] },
         },
       },
       AuthResponse: {

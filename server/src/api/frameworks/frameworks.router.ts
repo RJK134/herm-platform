@@ -14,7 +14,7 @@ const router = Router();
 router.get('/', optionalJWT, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const tier = req.user?.tier ?? 'free';
-    const isPaid = ['professional', 'enterprise', 'admin'].includes(tier);
+    const isPaid = ['pro', 'enterprise', 'admin'].includes(tier);
 
     const frameworks = await prisma.framework.findMany({
       where: {
@@ -78,7 +78,7 @@ router.get('/:id', optionalJWT, async (req: Request, res: Response, next: NextFu
 
     // Free tier / anonymous cannot access non-public frameworks
     const tier = req.user?.tier ?? 'free';
-    const isPaid = ['professional', 'enterprise', 'admin'].includes(tier);
+    const isPaid = ['pro', 'enterprise', 'admin'].includes(tier);
     if (!framework.isPublic && !isPaid) {
       res.status(403).json({
         success: false,

@@ -77,7 +77,7 @@ describe('subscriptions router auth', () => {
   });
 
   it('rejects anonymous /checkout with 401 (no Stripe call)', async () => {
-    const res = await request(buildApp()).post('/api/subscriptions/checkout').send({ tier: 'professional' });
+    const res = await request(buildApp()).post('/api/subscriptions/checkout').send({ tier: 'pro' });
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe('AUTHENTICATION_ERROR');
     expect(stripeMock.createCheckoutSession).not.toHaveBeenCalled();
@@ -119,11 +119,11 @@ describe('subscriptions router auth', () => {
     const res = await request(buildApp())
       .post('/api/subscriptions/checkout')
       .set('Authorization', `Bearer ${token}`)
-      .send({ tier: 'professional', institutionId: 'spoofed-inst' });
+      .send({ tier: 'pro', institutionId: 'spoofed-inst' });
     expect(res.status).toBe(200);
     expect(stripeMock.createCheckoutSession).toHaveBeenCalledWith(
       expect.objectContaining({
-        tier: 'professional',
+        tier: 'pro',
         institutionId: 'inst-from-token',
         email: 'jwt@inst.test',
       }),

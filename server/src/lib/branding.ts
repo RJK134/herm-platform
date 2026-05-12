@@ -16,7 +16,22 @@
 // ── Product ──────────────────────────────────────────────────────────────────
 
 export const PRODUCT = {
-  name: 'Future Horizons ASPT',
+  /**
+   * Short product name — used in chrome, OTP issuer, email signatures,
+   * sidebar footer, OpenAPI title. Phase 15.1 rebrand: "Future Horizons
+   * ASPT" → "FH Procure". HERM-emphasised branding moved into
+   * dataset-attribution copy (HERM_LICENCE_NOTICE below) — the product
+   * is the procurement suite, HERM is the included free reference
+   * model.
+   */
+  name: 'FH Procure',
+  /**
+   * Full product name — used where the short form would feel cryptic:
+   * legal headers (PDF cover, email signatures, OpenAPI contact, Trust
+   * Centre title), and any place an enterprise procurement reviewer
+   * needs the full vendor identity at a glance.
+   */
+  longName: 'Future Horizons Procurement Suite',
   vendor: 'Future Horizons Education',
   supportEmail: 'support@futurehorizons.education',
 } as const;
@@ -38,17 +53,45 @@ export const FRAMEWORK_SLUGS = {
  * claim emitted by `/api/auth/login` and `/api/auth/register`.
  *
  * The values here must stay in lockstep with the `Subscription.tier`
- * enum in `prisma/schema.prisma` (`FREE | PROFESSIONAL | ENTERPRISE`).
+ * enum in `prisma/schema.prisma` (`FREE | PRO | ENTERPRISE`).
  * SUPER_ADMIN is intentionally not a tier — platform-wide bypasses go
  * through an explicit `user.role === 'SUPER_ADMIN'` check in
  * `requirePaidTier`, not by polluting this list with a synthetic value.
+ *
+ * Phase 15.2 renamed the middle tier from `professional` → `pro`. The
+ * old value is preserved as a JWT-claim alias (see
+ * `LEGACY_TIER_ALIASES` below + the shim in
+ * `middleware/auth.ts::authenticateJWT`) so users carrying
+ * pre-rebrand tokens keep working until natural expiry.
  */
-export const PAID_TIERS = ['professional', 'enterprise'] as const;
+export const PAID_TIERS = ['pro', 'enterprise'] as const;
 export type PaidTier = (typeof PAID_TIERS)[number];
+
+/**
+ * Stale-token aliases. A JWT minted before Phase 15.2 carries
+ * `tier: 'professional'`; `authenticateJWT` rewrites it to `'pro'`
+ * before assigning to `req.user.tier` so `requirePaidTier(['pro'])`
+ * admits it transparently. Removable once live JWT TTLs have rotated
+ * past the rebrand deploy (see RUNBOOK § "Tier-alias deprecation").
+ */
+export const LEGACY_TIER_ALIASES: Record<string, string> = {
+  professional: 'pro',
+};
 
 export function isPaidTier(tier: string | undefined | null): boolean {
   if (!tier) return false;
   return (PAID_TIERS as readonly string[]).includes(tier.toLowerCase());
+}
+
+/**
+ * Normalises a tier string by collapsing legacy aliases. Idempotent;
+ * unknown values pass through unchanged so a malformed JWT still
+ * fails the downstream tier check the same way it did before.
+ */
+export function normaliseTier(tier: string | undefined | null): string {
+  if (!tier) return '';
+  const lower = tier.toLowerCase();
+  return LEGACY_TIER_ALIASES[lower] ?? lower;
 }
 
 // ── Licence helpers ──────────────────────────────────────────────────────────

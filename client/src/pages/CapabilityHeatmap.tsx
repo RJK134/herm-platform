@@ -13,6 +13,25 @@ function scoreToHex(value: number): string {
   return '#f3f4f6';
 }
 
+// Phase 14.5a — WCAG 1.4.1 (Use of Color). The cell background is the
+// fast-scan signal, but colour cannot be the SOLE channel. Each cell
+// also carries a unicode glyph (●/◐/empty) so the matrix is legible to
+// users with red-green colour-vision deficiency and to high-contrast
+// monochrome printouts of board-pack screenshots. The glyph is
+// aria-hidden because the cell-level aria-label already carries the
+// semantic value ("SITS — STU.001 score 100, full coverage").
+function scoreToGlyph(value: number): string {
+  if (value === 100) return '●'; // ●  full
+  if (value === 50) return '◐';  // ◐  partial
+  return '';                           //    none
+}
+
+function scoreLabel(value: number): string {
+  if (value === 100) return 'Full coverage';
+  if (value === 50) return 'Partial coverage';
+  return 'No coverage';
+}
+
 export function CapabilityHeatmap() {
   const { t } = useTranslation('capabilities');
   const { activeFramework } = useFramework();
@@ -71,9 +90,18 @@ export function CapabilityHeatmap() {
         </select>
 
         <div className="flex items-center gap-3 text-xs text-gray-500">
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-500 inline-block" /> {t('heatmap.legendFull', 'Full (100)')}</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-400 inline-block" /> {t('heatmap.legendPartial', 'Partial (50)')}</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-gray-200 inline-block" /> {t('heatmap.legendNone', 'None (0)')}</span>
+          <span className="flex items-center gap-1">
+            <span className="w-4 h-4 rounded bg-green-500 inline-flex items-center justify-center text-white text-[10px] font-bold" aria-hidden="true">●</span>
+            {t('heatmap.legendFull', 'Full (100)')}
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-4 h-4 rounded bg-amber-400 inline-flex items-center justify-center text-white text-[10px] font-bold" aria-hidden="true">◐</span>
+            {t('heatmap.legendPartial', 'Partial (50)')}
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-4 h-4 rounded bg-gray-200 inline-block" aria-hidden="true" />
+            {t('heatmap.legendNone', 'None (0)')}
+          </span>
         </div>
 
         {hoveredCell && hoveredSystem && hoveredCap && (
@@ -98,16 +126,24 @@ export function CapabilityHeatmap() {
       </div>
 
       <Card className="p-0 overflow-hidden">
-        <div className="overflow-auto max-h-[70vh]">
+        <div
+          className="overflow-auto max-h-[70vh]"
+          role="region"
+          aria-label={t('heatmap.tableAriaLabel', 'Capability coverage matrix: {{systems}} systems by {{caps}} capabilities. Each cell encodes coverage as colour and glyph.', { systems: data.systems.length, caps: filteredCapabilities.length })}
+        >
           <table className="text-xs border-collapse" style={{ minWidth: `${filteredCapabilities.length * 20 + 180}px` }}>
+            <caption className="sr-only">
+              {t('heatmap.tableCaption', 'Capability coverage matrix. Rows are systems; columns are HERM capability codes. Cell colour and glyph indicate coverage: green filled circle = full (100), amber half circle = partial (50), grey blank = none (0).')}
+            </caption>
             <thead className="sticky top-0 z-10">
               <tr>
-                <th className="sticky left-0 z-20 bg-gray-50 dark:bg-gray-800 border-b border-r border-gray-200 dark:border-gray-700 text-left py-2 px-3 font-medium text-gray-600 dark:text-gray-400 w-44">
+                <th scope="col" className="sticky left-0 z-20 bg-gray-50 dark:bg-gray-800 border-b border-r border-gray-200 dark:border-gray-700 text-left py-2 px-3 font-medium text-gray-600 dark:text-gray-400 w-44">
                   {t('heatmap.systemColumn', 'System')}
                 </th>
                 {filteredCapabilities.map(cap => (
                   <th
                     key={cap.code}
+                    scope="col"
                     className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-0 w-5"
                     title={`${cap.code}: ${cap.name}`}
                   >
@@ -124,14 +160,25 @@ export function CapabilityHeatmap() {
             <tbody>
               {data.systems.map(system => (
                 <tr key={system.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-700/20">
-                  <td className="sticky left-0 bg-white dark:bg-gray-900 border-b border-r border-gray-200 dark:border-gray-700 py-1.5 px-3 font-medium text-gray-800 dark:text-gray-200 z-10">
+                  <th scope="row" className="sticky left-0 bg-white dark:bg-gray-900 border-b border-r border-gray-200 dark:border-gray-700 py-1.5 px-3 font-medium text-gray-800 dark:text-gray-200 z-10 text-left">
                     <div className="truncate w-40">
-                      {system.isOwnSystem && <span className="text-teal mr-1">\u2605</span>}
+                      {/*
+                        UAT D-04 \u2014 the previous content was the six-character
+                        literal `\u2605` written directly in the JSX text node.
+                        JSX text nodes don't process backslash-u escapes (only
+                        JS string literals do), so it rendered as raw "\u2605"
+                        next to system names with isOwnSystem=true. Wrapping
+                        the escape in a JS expression `{'\u2605'}` forces JS
+                        to evaluate the escape and emit the BLACK STAR
+                        codepoint (U+2605) before JSX sees it.
+                      */}
+                      {system.isOwnSystem && <span className="text-teal mr-1">{'\u2605'}</span>}
                       {system.name}
                     </div>
-                  </td>
+                  </th>
                   {filteredCapabilities.map(cap => {
                     const val = data.matrix[system.id]?.[cap.code] ?? 0;
+                    const glyph = scoreToGlyph(val);
                     return (
                       <td
                         key={cap.code}
@@ -139,11 +186,15 @@ export function CapabilityHeatmap() {
                         onMouseEnter={() => setHoveredCell({ systemId: system.id, capCode: cap.code })}
                         onMouseLeave={() => setHoveredCell(null)}
                         title={`${system.name} \u2014 ${cap.code}: ${val === 100 ? t('heatmap.full', 'Full') : val === 50 ? t('heatmap.partial', 'Partial') : t('heatmap.none', 'None')}`}
+                        aria-label={`${system.name} ${cap.code} ${scoreLabel(val)}`}
                       >
                         <div
-                          className="w-5 h-5"
+                          className="w-5 h-5 flex items-center justify-center text-white text-[9px] font-bold leading-none"
                           style={{ backgroundColor: scoreToHex(val) }}
-                        />
+                          aria-hidden="true"
+                        >
+                          {glyph}
+                        </div>
                       </td>
                     );
                   })}
@@ -155,7 +206,7 @@ export function CapabilityHeatmap() {
       </Card>
 
       <div className="mt-2 text-xs text-gray-400 text-right">
-        {t('heatmap.hint', 'Hover over a cell to see details \u00b7 Green = Full \u00b7 Amber = Partial \u00b7 Light = None')}
+        {t('heatmap.hint', 'Hover over a cell to see details \u00b7 \u25cf Green = Full \u00b7 \u25d0 Amber = Partial \u00b7 Blank = None')}
       </div>
 
       <LicenceAttribution />

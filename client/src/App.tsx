@@ -13,6 +13,7 @@ import { RequireTier } from './components/auth/RequireTier';
 import { Login } from './pages/Login';
 import { SsoCallback } from './pages/SsoCallback';
 import { Register } from './pages/Register';
+import { TrustCentre } from './pages/TrustCentre';
 import { Leaderboard } from './pages/Leaderboard';
 import { RadarComparison } from './pages/RadarComparison';
 import { CapabilityHeatmap } from './pages/CapabilityHeatmap';
@@ -40,6 +41,7 @@ import { AdminVendors } from './pages/AdminVendors';
 import { AdminSso } from './pages/AdminSso';
 import { AdminSsoAll } from './pages/AdminSsoAll';
 import { AdminSsoForInstitution } from './pages/AdminSsoForInstitution';
+import { RoleAssignment } from './pages/admin/RoleAssignment';
 import { Subscriptions } from './pages/Subscriptions';
 import { SecuritySettings } from './pages/SecuritySettings';
 import { SectorAnalytics } from './pages/SectorAnalytics';
@@ -101,6 +103,15 @@ export default function App() {
                 <Route path="/login" element={<Login />} />
                 <Route path="/login/sso" element={<SsoCallback />} />
                 <Route path="/register" element={<Register />} />
+                {/*
+                  Phase 14.10 — public Trust Centre. No auth so procurement
+                  officers and InfoSec reviewers can find SOC 2 / ISO 27001
+                  / Cyber Essentials Plus status during pre-procurement
+                  evaluation. Route mounted alongside /login + /register
+                  rather than under the SidebarLayout so it's reachable
+                  without an account.
+                */}
+                <Route path="/trust" element={<TrustCentre />} />
 
                 <Route
                   path="/*"
@@ -188,6 +199,14 @@ export default function App() {
                           }
                         />
                         <Route
+                          path="/admin/roles"
+                          element={
+                            <ProtectedRoute roles={ADMIN_ROLES}>
+                              <RoleAssignment />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
                           path="/admin/sso"
                           element={
                             <ProtectedRoute roles={ADMIN_ROLES}>
@@ -231,7 +250,7 @@ export default function App() {
                           path="/sector"
                           element={
                             <RequireTier
-                              tiers={['professional', 'enterprise']}
+                              tiers={['pro', 'enterprise']}
                               featureName="Sector Intelligence"
                               description="Cross-institution sector analytics: adoption trends, capability coverage aggregates, and peer benchmarking. HERM capability data remains free — this view adds Future Horizons Education's comparative intelligence layer."
                             >

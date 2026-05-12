@@ -16,7 +16,7 @@ export interface AuthUser {
   role: string;
   institutionId: string;
   institutionName: string;
-  tier: 'free' | 'professional' | 'enterprise';
+  tier: 'free' | 'pro' | 'enterprise';
   /**
    * Present only on tokens minted by `POST /api/admin/impersonate` — carries
    * the SUPER_ADMIN's identity so the client can render the impersonation

@@ -1,8 +1,9 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { capabilitiesData } from './seeds/capabilities-data';
+import { getPrismaClient } from './_neon-http-prisma';
 
-const prisma = new PrismaClient();
+const prisma: PrismaClient = await getPrismaClient();
 const DEMO_PASSWORD = process.env['DEMO_PASSWORD'] ?? 'demo12345';
 
 async function main() {
@@ -205,24 +206,31 @@ async function main() {
   await seedVendorProfiles(prisma);
   console.log('Vendor profiles seeded');
 
-  // FHE seeding currently fails to load via tsx + ESM ("type": "module") on
-  // some Node 22 setups — see fhe-framework.ts import resolution. The platform
-  // is fully functional on HERM data alone, so we degrade gracefully here
-  // rather than blocking the seed. Re-enable once tsx ESM resolution stabilises.
-  try {
-    const { seedFheFramework } = await import('./seeds/fhe-framework');
-    await seedFheFramework(prisma);
-    console.log('FHE framework seeded');
+  // Phase 14.7 — FHE seeding now resolves cleanly. The cross-tree import
+  // from server/src/data/fhe-framework that was tripping tsx ESM
+  // resolution has been replaced with a colocated copy at
+  // ./seeds/fhe-framework-data.ts, so the seeder is self-contained
+  // within prisma/. Failures here are now genuine errors (e.g. DB
+  // connectivity, schema drift) rather than module-resolution noise,
+  // so we let them surface rather than swallowing them — a quiet
+  // "FHE seeding skipped" used to mask the very state UAT D-01
+  // surfaced (paid tier defaulting to a 0/0 framework).
+  const { seedFheFramework } = await import('./seeds/fhe-framework');
+  await seedFheFramework(prisma);
+  console.log('FHE framework seeded');
 
-    const { seedFheScores } = await import('./seeds/fhe-scores');
-    await seedFheScores(prisma);
-    console.log('FHE scores seeded');
+  // Phase 14.7b — relocated fhe-scoring-rules / fhe-manual-scores /
+  // herm-to-fhe-mapping data files into prisma/seeds/, so the
+  // defensive try/catch that 14.7 left around scores + mappings is
+  // no longer needed. Failures here are now genuine errors (DB
+  // connectivity, schema drift) that should surface, not module-
+  // resolution noise that masks them.
+  const { seedFheScores } = await import('./seeds/fhe-scores');
+  await seedFheScores(prisma);
+  console.log('FHE scores seeded');
 
-    const { seedFrameworkMappings } = await import('./seeds/framework-mappings');
-    await seedFrameworkMappings(prisma);
-  } catch (err) {
-    console.warn('[seed] FHE seeding skipped:', err instanceof Error ? err.message : err);
-  }
+  const { seedFrameworkMappings } = await import('./seeds/framework-mappings');
+  await seedFrameworkMappings(prisma);
 
   // ── Demo institution & user ──────────────────────────────────────────────
   const demoInstitution = await prisma.institution.upsert({
@@ -444,7 +452,7 @@ async function main() {
   console.log(`Demo basket seeded with ${coreCaps.length} capabilities`);
 
   // ── Demo procurement project ──────────────────────────────────────────────
-  await prisma.procurementProject.upsert({
+  const demoProject = await prisma.procurementProject.upsert({
     where: { id: 'demo-project-001' },
     update: {},
     create: {
@@ -459,7 +467,93 @@ async function main() {
       procurementRoute: 'open',
     },
   });
-  console.log('Demo procurement project seeded');
+
+  // UAT D-06 — Pipeline UI reads ProcurementStage rows; without these
+  // the Pipeline tab on the demo project renders empty on first login.
+  // We hardcode the 7-stage UK Procurement Act 2023 workflow here
+  // (mirrors UK_STAGES in server/src/services/domain/procurement-engine.ts)
+  // rather than importing the engine to keep the seed independent of
+  // the server prisma singleton (the seed has its own PrismaClient).
+  // The runtime equivalent fires for new projects via
+  // procurement.service.ts:createProject() which DOES import the engine.
+  const UK_DEMO_STAGES: Array<{ stageCode: string; stageName: string; stageOrder: number; status: 'IN_PROGRESS' | 'NOT_STARTED' }> = [
+    { stageCode: 'PLANNING', stageName: 'Planning & Business Case', stageOrder: 1, status: 'IN_PROGRESS' },
+    { stageCode: 'MARKET_ANALYSIS', stageName: 'Market Engagement', stageOrder: 2, status: 'NOT_STARTED' },
+    { stageCode: 'SPECIFICATION', stageName: 'Requirements Specification', stageOrder: 3, status: 'NOT_STARTED' },
+    // Stage names mirror UK_STAGES in
+    // server/src/services/domain/procurement-engine.ts exactly so the
+    // demo project's Pipeline cards match what users see on freshly-
+    // created projects (which go through procurement.service.ts:createProject(),
+    // which imports the engine). Copilot review on PR #100 noted three
+    // names had drifted from the engine's source-of-truth strings.
+    { stageCode: 'NOTICE', stageName: 'Tender Notice Publication', stageOrder: 4, status: 'NOT_STARTED' },
+    { stageCode: 'EVALUATION', stageName: 'Tender Evaluation', stageOrder: 5, status: 'NOT_STARTED' },
+    { stageCode: 'STANDSTILL', stageName: 'Mandatory Standstill Period', stageOrder: 6, status: 'NOT_STARTED' },
+    { stageCode: 'AWARD', stageName: 'Contract Award', stageOrder: 7, status: 'NOT_STARTED' },
+  ];
+  for (const def of UK_DEMO_STAGES) {
+    await prisma.procurementStage.upsert({
+      where: { projectId_stageCode: { projectId: demoProject.id, stageCode: def.stageCode } },
+      update: {},
+      create: {
+        projectId: demoProject.id,
+        stageCode: def.stageCode,
+        stageName: def.stageName,
+        stageOrder: def.stageOrder,
+        status: def.status,
+      },
+    });
+  }
+  console.log(`Demo procurement project seeded with ${UK_DEMO_STAGES.length} UK stages`);
+
+  // ── Demo evaluation project (Team Workspaces source data) ────────────────
+  // UAT reviewer reported Team Workspaces as a "stub" — the feature is
+  // fully implemented (see client/src/pages/TeamWorkspaces.tsx) but had no
+  // EvaluationProject seeded for the demo institution, so the four tabs
+  // (Projects / Domain Assignment / Team Progress / Score Aggregation)
+  // had no data to render. Seed one mid-flight project for Priya's
+  // institution (Midshire) so the demo lands on populated tabs.
+  const priyaUser = await prisma.user.findUnique({
+    where: { email: 'priya@midshire.ac.uk' },
+    select: { id: true, institutionId: true },
+  });
+  if (priyaUser) {
+    const evalDeadline = new Date();
+    evalDeadline.setDate(evalDeadline.getDate() + 30);
+    // Copilot review on PR #100 — `update: {}` would let the
+    // deadline drift into the past on every reseed against an existing
+    // database, surfacing as an "OVERDUE" demo state in Team
+    // Workspaces. Refresh `deadline` and `status` in the upsert update
+    // block so Midshire always lands on a 30-days-out, in_progress
+    // evaluation regardless of how many times the seed has run.
+    const demoEval = await prisma.evaluationProject.upsert({
+      where: { id: 'demo-evaluation-001' },
+      update: { status: 'in_progress', deadline: evalDeadline },
+      create: {
+        id: 'demo-evaluation-001',
+        name: 'SIS Replacement — Capability Evaluation',
+        description: 'Team-led scoring of 3 shortlisted SIS vendors against the Core SIS basket.',
+        frameworkId: hermFramework.id,
+        institutionId: priyaUser.institutionId,
+        leadUserId: priyaUser.id,
+        status: 'in_progress',
+        basketId: demoBasket.id,
+        deadline: evalDeadline,
+      },
+    });
+    await prisma.evaluationMember.upsert({
+      where: { projectId_userId: { projectId: demoEval.id, userId: priyaUser.id } },
+      update: {},
+      create: {
+        projectId: demoEval.id,
+        userId: priyaUser.id,
+        role: 'lead',
+      },
+    });
+    console.log('Demo evaluation project seeded for Priya (Midshire)');
+  } else {
+    console.warn('Priya not found; skipping EvaluationProject seed');
+  }
 
   console.log('Seeding complete!');
 }

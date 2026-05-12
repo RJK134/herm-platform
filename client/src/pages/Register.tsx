@@ -18,8 +18,8 @@ const TIERS = [
     ],
   },
   {
-    id: 'professional',
-    name: 'Professional',
+    id: 'pro',
+    name: 'Pro',
     price: '£199/mo',
     features: [
       'Everything in Free',
@@ -36,7 +36,7 @@ const TIERS = [
     name: 'Enterprise',
     price: '£499/mo',
     features: [
-      'Everything in Professional',
+      'Everything in Pro',
       'Multi-user institution account',
       'Vendor portal access',
       'API access',

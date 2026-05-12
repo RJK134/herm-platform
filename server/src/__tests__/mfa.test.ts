@@ -60,7 +60,7 @@ function sessionToken(userId: string): string {
       role: 'INSTITUTION_ADMIN',
       institutionId: 'inst-1',
       institutionName: 'Inst 1',
-      tier: 'professional',
+      tier: 'pro',
     },
     SECRET,
   );
@@ -342,7 +342,7 @@ describe('POST /api/auth/mfa/login', () => {
       institution: {
         id: 'inst-1',
         name: 'Inst 1',
-        subscription: { tier: 'PROFESSIONAL' },
+        subscription: { tier: 'PRO' },
       },
     });
 
@@ -360,7 +360,7 @@ describe('POST /api/auth/mfa/login', () => {
       userId: 'u-1',
       email: 'u@test.com',
       role: 'INSTITUTION_ADMIN',
-      tier: 'professional',
+      tier: 'pro',
     });
 
     // The minted token must NOT carry the challenge purpose.
