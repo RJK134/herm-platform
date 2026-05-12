@@ -73,13 +73,19 @@ the second `SSO_SECRET_KEY`.
    SSO controllers redirect to `${FRONTEND_URL}/login/sso?token=...`
    carrying the session JWT in the query string. If you set a
    third-party origin as the placeholder and someone exercises SSO
-   before Step 3 swaps in the Vercel host, that JWT leaks to the
-   third party. Pointing `FRONTEND_URL` at the Railway origin keeps
-   the redirect on the same host you control — it 404s harmlessly,
-   no token leak. Cookie / CORS for the buyer SPA won't work yet
-   (you haven't deployed it), but the container boots, the
-   healthcheck passes, and `/api/health` + `/api/readiness` answer
-   from `curl` — which is enough to hand a working API URL to Vercel
+   before Step 3 swaps in the Vercel host, the JWT leaks to that
+   third party (and may be indexed by their analytics or cached by
+   their CDN). Pointing `FRONTEND_URL` at the Railway origin keeps
+   the redirect on the same host you control — the 404 is harmless,
+   and the JWT only ends up in your own Railway access logs (the
+   `httpLogger` middleware logs `req.url` including the query string,
+   so it's not "no leak" — it's "leak to a host you already trust
+   with everything else").
+   **Strong recommendation: don't exercise SSO at all until
+   `FRONTEND_URL` is the real Vercel origin.** The placeholder is
+   for getting the container to boot the healthcheck — nothing more.
+   `/api/health` + `/api/readiness` answer from `curl` even with a
+   placeholder, which is enough to hand a working API URL to Vercel
    in the next step.
 
    `REDIS_URL` is auto-injected by the Redis plugin; don't set it
