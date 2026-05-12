@@ -20,7 +20,7 @@ import { NotificationBell } from '../NotificationBell';
 import { LanguageSelector } from '../LanguageSelector';
 import { NAV_SECTIONS } from '../../lib/navigation';
 import type { NavItem, NavSection as NavSectionType } from '../../lib/navigation';
-import { isPaidTier } from '../../lib/branding';
+import { isPaidTier, PRODUCT } from '../../lib/branding';
 
 const TIER_COLOURS: Record<string, string> = {
   enterprise: 'bg-amber-500/20 text-amber-300',
@@ -307,8 +307,8 @@ export function Sidebar() {
           </div>
           {!isCollapsed && (
             <div>
-              <div className="text-xs font-semibold text-teal">FH Procure</div>
-              <div className="text-[10px] text-white/50">by Future Horizons Education</div>
+              <div className="text-xs font-semibold text-teal">{PRODUCT.name}</div>
+              <div className="text-[10px] text-white/50">by {PRODUCT.vendor}</div>
             </div>
           )}
         </div>

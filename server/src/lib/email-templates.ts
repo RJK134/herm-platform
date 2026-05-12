@@ -11,6 +11,8 @@
  * easy to test with a single equality assert.
  */
 
+import { PRODUCT } from './branding';
+
 const APP_URL = process.env['APP_URL'] ?? 'http://localhost:5173';
 
 /**
@@ -57,7 +59,7 @@ export function renderBillingEmail(input: BillingEmailInput): RenderedEmail {
   if (link) {
     textParts.push('', `View details: ${link}`);
   }
-  textParts.push('', '— FH Procure');
+  textParts.push('', `— ${PRODUCT.name}`);
   const text = textParts.join('\n');
 
   const linkBlock = link
@@ -70,7 +72,7 @@ export function renderBillingEmail(input: BillingEmailInput): RenderedEmail {
     `<p>${escapeHtml(input.message)}</p>`,
     linkBlock,
     '<hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 24px 0;">',
-    '<p style="color: #6b7280; font-size: 12px;">— FH Procure</p>',
+    `<p style="color: #6b7280; font-size: 12px;">— ${escapeHtml(PRODUCT.name)}</p>`,
     '</body></html>',
   ].join('\n');
 

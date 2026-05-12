@@ -19,10 +19,12 @@
  * shape is documented inline.
  */
 
-const TITLE = 'FH Procure API';
+import { PRODUCT } from '../../lib/branding';
+
+const TITLE = `${PRODUCT.name} API`;
 const VERSION = '1.0.0';
 const DESCRIPTION =
-  'Public REST API for FH Procure — Future Horizons Procurement Suite. ' +
+  `Public REST API for ${PRODUCT.name} — ${PRODUCT.longName}. ` +
   'Authentication is JWT-bearer for end-user requests; API-key bearer (`herm_pk_…`) ' +
   'for machine-to-machine integrations. Every response uses the envelope ' +
   '`{ success, data?, error? }` — a successful response carries `data`, an ' +
@@ -44,7 +46,7 @@ export const openApiSpec = {
     version: VERSION,
     description: DESCRIPTION,
     contact: {
-      name: 'FH Procure Support',
+      name: `${PRODUCT.name} Support`,
       url: 'https://github.com/RJK134/herm-platform',
     },
     license: {
