@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npx prisma generate --schema=prisma/schema.prisma && npm run build --workspace=@herm-platform/server && npm run build --workspace=@herm-platform/client",
+  "buildCommand": "npx prisma generate --schema=prisma/schema.prisma && (if [ \"$VERCEL_ENV\" = \"production\" ]; then npx prisma migrate deploy --schema=prisma/schema.prisma; fi) && npm run build --workspace=@herm-platform/server && npm run build --workspace=@herm-platform/client",
   "outputDirectory": "client/dist",
   "installCommand": "npm install --include=dev",
   "framework": null,
