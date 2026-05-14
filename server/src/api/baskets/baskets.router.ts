@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticateJWT } from '../../middleware/auth';
+import { enforceQuota } from '../../middleware/enforceQuota';
 import { createBasket, listBaskets, getById, addItem, removeItem, evaluate } from './baskets.controller';
 
 const router = Router();
@@ -9,7 +10,10 @@ const router = Router();
 // requirement sets.
 router.use(authenticateJWT);
 
-router.post('/', createBasket);
+// Phase 15.3: gate basket creation on the per-tier `baskets` quota.
+// Counter increment is in the controller (post-write) so a failed
+// createBasket (validation, DB constraint) doesn't burn a slot.
+router.post('/', enforceQuota('baskets'), createBasket);
 router.get('/', listBaskets);
 router.get('/:id', getById);
 router.post('/:id/items', addItem);

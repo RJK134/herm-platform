@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { BasketsService } from './baskets.service';
 import { createBasketSchema, addItemSchema } from './baskets.schema';
+import { recordUsage } from '../../middleware/enforceQuota';
 
 const service = new BasketsService();
 
@@ -8,6 +9,12 @@ export const createBasket = async (req: Request, res: Response, next: NextFuncti
   try {
     const data = createBasketSchema.parse(req.body);
     const basket = await service.createBasket(data);
+    // Phase 15.3: increment the institution's monthly basket counter
+    // AFTER the write succeeds. enforceQuota('baskets') has already
+    // rejected when over-limit; this is the post-write bookkeeping.
+    if (req.user?.institutionId) {
+      await recordUsage(req.user.institutionId, 'baskets');
+    }
     res.status(201).json({ success: true, data: basket });
   } catch (err) {
     next(err);

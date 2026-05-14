@@ -132,6 +132,7 @@ model Institution {
   evaluationProjects EvaluationProject[]
   apiKeys            ApiKey[]
   ssoProviders       SsoIdentityProvider[]
+  usageCounters      UsageCounter[]
   createdAt          DateTime              @default(now())
   updatedAt          DateTime              @updatedAt
 
@@ -242,6 +243,39 @@ enum SubscriptionTier {
   FREE
   PRO
   ENTERPRISE
+}
+
+// Per-institution, per-metric usage counter — the persistence side of
+// Phase 15.3's quota enforcement. The `enforceQuota` middleware reads
+// the row for the current billing window before allowing a write;
+// `recordUsage()` increments it after the write succeeds.
+//
+// `period` is a YYYY-MM string (UTC). Quotas reset on the first
+// request of the next calendar month — a coarse but predictable
+// boundary that doesn't need a job to roll counters and is what the
+// Subscriptions page already promises users ("Document generation:
+// 5/mo"). The composite unique key on (institutionId, metric, period)
+// lets a single upsert handle both fresh-month inserts and same-month
+// increments without an explicit pre-read.
+//
+// Counts are tracked at int4 — even the heaviest tier capped at
+// "unlimited" stays well below 2^31. We deliberately do NOT cascade-
+// delete usage rows on Institution soft-delete: keeping the history
+// preserves the per-tenant usage trail for audit + dunning, and the
+// foreign-key constraint stays valid because Institution rows are
+// soft-deleted (deletedAt) rather than hard-removed.
+model UsageCounter {
+  id            String      @id @default(cuid())
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  metric        String
+  period        String
+  count         Int         @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([institutionId, metric, period])
+  @@index([institutionId, period])
 }
 
 enum DunningState {
