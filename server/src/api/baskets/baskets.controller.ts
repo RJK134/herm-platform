@@ -12,9 +12,12 @@ export const createBasket = async (req: Request, res: Response, next: NextFuncti
     // Phase 15.3: increment the institution's monthly basket counter
     // AFTER the write succeeds. enforceQuota('baskets') has already
     // rejected when over-limit; this is the post-write bookkeeping.
-    if (req.user?.institutionId) {
-      await recordUsage(req.user.institutionId, 'baskets');
-    }
+    // authenticateJWT upstream guarantees req.user.institutionId — the
+    // non-null assertion matches the pattern used elsewhere in the
+    // codebase (e.g. createProjectV2's `req.user!.institutionId`) and
+    // makes the invariant explicit instead of pretending the falsy
+    // branch is reachable.
+    await recordUsage(req.user!.institutionId, 'baskets');
     res.status(201).json({ success: true, data: basket });
   } catch (err) {
     next(err);
