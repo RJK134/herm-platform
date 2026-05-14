@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticateJWT, optionalJWT } from '../../middleware/auth';
+import { enforceQuota } from '../../middleware/enforceQuota';
 import {
   createProject, listProjects, getProject, updateProject, deleteProject,
   getWorkflow, updateStage, advanceWorkflow,
@@ -27,7 +28,12 @@ router.get('/jurisdictions/:code', getJurisdiction);
 // institutionId from the token, and stage / task / approval / evaluation
 // mutations record governance state that audit logs key off. Reads stay
 // on the router-level `optionalJWT` so anonymous dashboards still work.
-router.post('/v2/projects', authenticateJWT, createProjectV2);
+// Phase 15.3: gate v2 project creation on the per-tier
+// `procurement.projects` quota. v1 (`/projects`, below) deliberately
+// remains ungated — it's preserved for backward compatibility and
+// already runs without authentication, so a quota check would be
+// nonsensical.
+router.post('/v2/projects', authenticateJWT, enforceQuota('procurement.projects'), createProjectV2);
 router.get('/v2/projects', listProjectsV2);
 router.get('/v2/projects/:id', getProjectV2);
 

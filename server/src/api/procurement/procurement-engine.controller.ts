@@ -11,6 +11,7 @@ import {
   importBasketShortlistSchema,
 } from './procurement.schema';
 import { ProcurementService } from './procurement.service';
+import { recordUsage } from '../../middleware/enforceQuota';
 
 const procurementService = new ProcurementService();
 
@@ -48,6 +49,11 @@ export const createProjectV2 = async (req: Request, res: Response, next: NextFun
       procurementRoute: data.procurementRoute,
       startDate: data.startDate ? new Date(data.startDate) : undefined,
     });
+
+    // Phase 15.3: post-write usage increment. enforceQuota
+    // ('procurement.projects') gated the request; this updates the
+    // monthly counter only after the project is durably persisted.
+    await recordUsage(institution.id, 'procurement.projects');
 
     res.status(201).json({ success: true, data: project });
   } catch (err) { next(err); }

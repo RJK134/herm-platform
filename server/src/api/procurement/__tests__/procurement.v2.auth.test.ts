@@ -35,6 +35,14 @@ vi.mock('../../../utils/prisma', () => {
     update: vi.fn(),
     findMany: vi.fn(),
   };
+  // Phase 15.3: createProjectV2 now runs `enforceQuota` upstream and
+  // `recordUsage` post-write, both of which touch `usageCounter`.
+  // Tests in this file mint a free-tier JWT — the read path must
+  // resolve a counter under-limit so the gate admits the request.
+  const usageCounter = {
+    findUnique: vi.fn().mockResolvedValue({ count: 0 }),
+    upsert: vi.fn().mockResolvedValue({ count: 1 }),
+  };
   return {
     default: {
       institution,
@@ -42,6 +50,7 @@ vi.mock('../../../utils/prisma', () => {
       stageTask,
       stageApproval,
       procurementEvaluation,
+      usageCounter,
       $transaction: vi.fn(),
       $disconnect: vi.fn(),
     },
