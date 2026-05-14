@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
@@ -13,7 +14,7 @@ vi.mock('../hooks/useAuth', () => ({
   useAuth: () => mockAuth,
 }));
 
-function renderWithRoute(initialEntries: string[], element: JSX.Element) {
+function renderWithRoute(initialEntries: string[], element: ReactElement) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
       <Routes>

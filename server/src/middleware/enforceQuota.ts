@@ -31,70 +31,79 @@ export function enforceQuota(metric: Metric) {
     res: Response,
     next: NextFunction,
   ): Promise<void> {
-    // No user → upstream auth was misconfigured. Refuse closed; surfacing
-    // as 401 would mask a programming error.
-    const user = req.user;
-    if (!user) {
-      res.status(500).json({
-        success: false,
-        error: { code: 'INTERNAL_ERROR', message: 'Quota check ran before auth' },
+    try {
+      // No user → upstream auth was misconfigured. Refuse closed; surfacing
+      // as 401 would mask a programming error.
+      const user = req.user;
+      if (!user) {
+        res.status(500).json({
+          success: false,
+          error: { code: 'INTERNAL_ERROR', message: 'Quota check ran before auth' },
+        });
+        return;
+      }
+
+      // SUPER_ADMIN bypasses quotas. Platform staff exercise tenant
+      // surfaces during impersonation + support; gating those flows on a
+      // tenant's quota would be a self-foot-shooting.
+      if (user.role === 'SUPER_ADMIN') {
+        next();
+        return;
+      }
+
+      const limit = quotaFor(user.tier, metric);
+      if (limit === 'unlimited') {
+        next();
+        return;
+      }
+
+      const period = currentPeriod();
+      const row = await prisma.usageCounter.findUnique({
+        where: {
+          institutionId_metric_period: {
+            institutionId: user.institutionId,
+            metric,
+            period,
+          },
+        },
+        select: { count: true },
       });
-      return;
-    }
+      const used = row?.count ?? 0;
 
-    // SUPER_ADMIN bypasses quotas. Platform staff exercise tenant
-    // surfaces during impersonation + support; gating those flows on a
-    // tenant's quota would be a self-foot-shooting.
-    if (user.role === 'SUPER_ADMIN') {
+      if (used >= limit) {
+        logger.info(
+          {
+            event: 'quota.exceeded',
+            userId: user.userId,
+            institutionId: user.institutionId,
+            metric,
+            period,
+            used,
+            limit,
+            tier: user.tier,
+          },
+          'Quota exceeded',
+        );
+        res.status(402).json({
+          success: false,
+          error: {
+            code: 'QUOTA_EXCEEDED',
+            message: `You've reached your ${metric} quota for this billing period`,
+            details: { metric, used, limit, tier: user.tier, period },
+          },
+        });
+        return;
+      }
+
       next();
-      return;
+    } catch (err) {
+      // Express 4 does not catch rejected promises from async middleware
+      // — without this try/catch a Prisma timeout or connectivity blip
+      // would leak as an unhandled rejection and hang the request
+      // indefinitely. Mirrors the pattern in `authenticateJWT`,
+      // `apiKeyAuth`, and `frameworkContext`.
+      next(err);
     }
-
-    const limit = quotaFor(user.tier, metric);
-    if (limit === 'unlimited') {
-      next();
-      return;
-    }
-
-    const period = currentPeriod();
-    const row = await prisma.usageCounter.findUnique({
-      where: {
-        institutionId_metric_period: {
-          institutionId: user.institutionId,
-          metric,
-          period,
-        },
-      },
-      select: { count: true },
-    });
-    const used = row?.count ?? 0;
-
-    if (used >= limit) {
-      logger.info(
-        {
-          event: 'quota.exceeded',
-          userId: user.userId,
-          institutionId: user.institutionId,
-          metric,
-          period,
-          used,
-          limit,
-          tier: user.tier,
-        },
-        'Quota exceeded',
-      );
-      res.status(402).json({
-        success: false,
-        error: {
-          code: 'QUOTA_EXCEEDED',
-          message: `You've reached your ${metric} quota for this billing period`,
-          details: { metric, used, limit, tier: user.tier, period },
-        },
-      });
-      return;
-    }
-
-    next();
   };
 }
 

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
 interface AsyncBoundaryProps<T> {
@@ -32,7 +32,7 @@ export function AsyncBoundary<T>({
   errorFallback,
   emptyFallback,
   children,
-}: AsyncBoundaryProps<T>): JSX.Element {
+}: AsyncBoundaryProps<T>): ReactElement {
   if (isLoading) {
     return (
       <>

@@ -158,6 +158,40 @@ describe('enforceQuota — Phase 15.3', () => {
     });
   });
 
+  describe('async error containment', () => {
+    it('forwards Prisma errors to next(err) instead of hanging the request', async () => {
+      // Bugbot regression — without the try/catch around the
+      // findUnique await, a rejection on Express 4 leaks as an
+      // unhandled promise rejection and the request hangs (no
+      // response, no error path). Pin the behaviour: a rejected
+      // findUnique surfaces through the express error-handler, which
+      // we install inline as a sink to capture the forwarded error.
+      findUniqueMock.mockRejectedValue(new Error('postgres timeout'));
+      const captured: { err?: Error } = {};
+      const app = express();
+      app.use((req, _res, next) => {
+        (req as unknown as { user: Record<string, unknown> }).user = {
+          userId: 'u1', institutionId: 'inst-1', tier: 'free', role: 'VIEWER',
+        };
+        next();
+      });
+      app.post(
+        '/projects',
+        enforceQuota('procurement.projects'),
+        (_req, res) => { res.status(201).json({ success: true }); },
+      );
+      app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+        captured.err = err;
+        res.status(500).json({ success: false });
+      });
+
+      const res = await request(app).post('/projects');
+
+      expect(res.status).toBe(500);
+      expect(captured.err?.message).toBe('postgres timeout');
+    });
+  });
+
   describe('recordUsage — best-effort semantics', () => {
     it('upserts the counter for the current period', async () => {
       upsertMock.mockResolvedValue({ count: 1 });
