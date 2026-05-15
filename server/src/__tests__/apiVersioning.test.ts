@@ -41,10 +41,11 @@ describe('GET /api/openapi.json', () => {
     const res = await request(buildAppForOpenapi()).get('/api/openapi.json');
     expect(res.status).toBe(200);
     expect(res.body.openapi).toBe('3.1.0');
-    // Phase 15.1 rebrand: OpenAPI title is now "FH Procure API" (was
-    // "HERM Platform API"). HERM remains the included reference model,
-    // not the product identity.
-    expect(res.body.info.title).toMatch(/FH Procure/i);
+    // Phase 16.1 rebrand: OpenAPI title is now "FHE Procurement Platform
+    // API" (Phase 15.1 had "FH Procure API"; Phase 16 anchors brand to
+    // Future Horizons Education). HERM remains the included reference
+    // model, not the product identity.
+    expect(res.body.info.title).toMatch(/FHE Procurement Platform/i);
     expect(res.body.info.version).toMatch(/^\d+\.\d+\.\d+$/);
     const serverUrls = (res.body.servers as Array<{ url: string }>).map((s) => s.url);
     expect(serverUrls).toContain('/api/v1');

@@ -18,20 +18,20 @@
 export const PRODUCT = {
   /**
    * Short product name — used in chrome, OTP issuer, email signatures,
-   * sidebar footer, OpenAPI title. Phase 15.1 rebrand: "Future Horizons
-   * ASPT" → "FH Procure". HERM-emphasised branding moved into
-   * dataset-attribution copy (HERM_LICENCE_NOTICE below) — the product
-   * is the procurement suite, HERM is the included free reference
-   * model.
+   * sidebar footer, OpenAPI title. Phase 16.1 rebrand: "FH Procure" →
+   * "FHE Procurement Platform". Anchors the brand on Future Horizons
+   * Education rather than the interim "FH Procure" mark; HERM stays
+   * a free reference dataset (HERM_LICENCE_NOTICE below) rather than
+   * product identity.
    */
-  name: 'FH Procure',
+  name: 'FHE Procurement Platform',
   /**
    * Full product name — used where the short form would feel cryptic:
    * legal headers (PDF cover, email signatures, OpenAPI contact, Trust
    * Centre title), and any place an enterprise procurement reviewer
    * needs the full vendor identity at a glance.
    */
-  longName: 'Future Horizons Procurement Suite',
+  longName: 'Future Horizons System Procurement Platform',
   vendor: 'Future Horizons Education',
   supportEmail: 'support@futurehorizons.education',
 } as const;
