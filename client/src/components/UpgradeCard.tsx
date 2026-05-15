@@ -88,10 +88,16 @@ export function UpgradeCard({
   compact = false,
 }: UpgradeCardProps) {
   const tierName = formatTierList(requiredTiers);
-  // Phase 16.4 — pick the visual treatment from the lowest required
+  // Phase 16.4 — pick the visual treatment from the LOWEST required
   // tier (closer upgrade step). For ['pro','enterprise'] this lands
   // teal; for ['enterprise']-only routes it lands indigo.
-  const targetTier: PaidTier = requiredTiers[0] ?? 'pro';
+  //
+  // Bugbot 8fe3dd6e — pick by explicit rank rather than array
+  // position. `RequireTier`'s `tiers` prop is documented as
+  // order-irrelevant, so `requiredTiers[0]` is a bug:
+  // `['enterprise', 'pro']` would have rendered indigo even though
+  // 'pro' is the lower step.
+  const targetTier: PaidTier = requiredTiers.includes('pro') ? 'pro' : 'enterprise';
   const accent = tierAccent(targetTier);
 
   return (
