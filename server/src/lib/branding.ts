@@ -33,7 +33,7 @@ export const PRODUCT = {
    * in `name` above; the vendor is `vendor` below. Trust Centre copy calls
    * this out for reviewers who see both strings together.
    */
-  longName: 'Future Horizons System Procurement Platform',
+  longName: 'Future Horizons Education Procurement Platform',
   vendor: 'Future Horizons Education',
   supportEmail: 'support@futurehorizons.education',
 } as const;
