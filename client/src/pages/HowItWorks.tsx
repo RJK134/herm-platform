@@ -120,7 +120,7 @@ export function HowItWorks() {
       */}
       <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50/60 px-5 py-4 dark:border-emerald-800/60 dark:bg-emerald-900/20">
         <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
-          <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide dark:bg-emerald-900/40">
+          <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
             Free at every tier
           </span>
           <span className="text-sm font-semibold">UCISA HERM v3.1 reference model</span>
