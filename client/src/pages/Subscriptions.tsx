@@ -58,7 +58,14 @@ interface TierFeature {
   enterprise: string | boolean;
 }
 
+// Phase 16.2 — the leading row pins the platform's HERM-on-Free promise so
+// the free dataset is the first thing a procurement reviewer sees on the
+// pricing page. Three "Included" cells deliberately mirror across all
+// tiers: HERM is part of the platform on every tier, not a paid upsell.
+// HERM_COMPLIANCE rule #1 ("HERM capability access is free") is asserted
+// here in copy as well as enforced server-side.
 const TIER_FEATURES: TierFeature[] = [
+  { feature: 'UCISA HERM v3.1 reference model', free: 'Included', pro: 'Included', enterprise: 'Included' },
   { feature: 'Procurement projects', free: '3', pro: 'Unlimited', enterprise: 'Unlimited' },
   { feature: 'Team workspace members', free: '2', pro: '10', enterprise: 'Unlimited' },
   { feature: 'Capability baskets', free: '3', pro: 'Unlimited', enterprise: 'Unlimited' },
