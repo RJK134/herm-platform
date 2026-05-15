@@ -26,10 +26,12 @@ export const PRODUCT = {
    */
   name: 'FHE Procurement Platform',
   /**
-   * Full product name — used where the short form would feel cryptic:
-   * legal headers (PDF cover, email signatures, OpenAPI contact, Trust
-   * Centre title), and any place an enterprise procurement reviewer
-   * needs the full vendor identity at a glance.
+   * Full product name — category descriptor ("system procurement" as the
+   * offering). Used where the short form would feel cryptic: legal headers
+   * (PDF cover, email signatures, OpenAPI contact, Trust Centre intro).
+   * Intentionally not a strict letter-by-letter expansion of the "FHE" prefix
+   * in `name` above; the vendor is `vendor` below. Trust Centre copy calls
+   * this out for reviewers who see both strings together.
    */
   longName: 'Future Horizons System Procurement Platform',
   vendor: 'Future Horizons Education',
