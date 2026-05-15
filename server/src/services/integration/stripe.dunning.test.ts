@@ -92,9 +92,9 @@ beforeEach(() => {
   prismaMock.subscription.findUnique.mockReset();
   prismaMock.subscription.update.mockReset();
   prismaMock.payment.create.mockReset();
-  prismaMock.payment.upsert.mockReset();
   prismaMock.payment.updateMany.mockReset();
   prismaMock.payment.findFirst.mockReset();
+  prismaMock.payment.upsert.mockReset();
   prismaMock.user.findMany.mockReset();
   prismaMock.notification.createMany.mockReset();
   prismaMock.user.findMany.mockResolvedValue([{ id: 'admin-1', email: 'admin-1@inst.test' }]);
