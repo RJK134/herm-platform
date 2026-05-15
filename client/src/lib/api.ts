@@ -194,6 +194,18 @@ export const api = {
   deleteSsoIdpForInstitution: (institutionId: string) =>
     client.delete(`/admin/sso/institutions/${encodeURIComponent(institutionId)}`),
 
+  // Phase 16.14 — Enterprise dedicated-CSM contact form. Server is
+  // Enterprise-tier-gated via requirePaidTier(['enterprise']) on the
+  // route; Free/Pro callers receive SUBSCRIPTION_REQUIRED through the
+  // shared interceptor → ApiError pipeline.
+  submitCsmRequest: (data: {
+    topic: 'kickoff' | 'quarterly-review' | 'tooling-question' | 'roadmap-input' | 'escalation' | 'other';
+    message: string;
+    preferredContactMethod?: 'email' | 'phone' | 'video-call';
+    preferredContactDetail?: string;
+  }) =>
+    client.post<ApiResponse<{ accepted: boolean; notice: string }>>('/admin/csm-request', data),
+
   // Phase 10.8 — MFA (TOTP)
   getMfaStatus: () =>
     client.get<

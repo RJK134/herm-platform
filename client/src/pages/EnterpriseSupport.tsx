@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react';
-import axios from 'axios';
 import { CheckCircle2, AlertCircle, Loader2, Headphones } from 'lucide-react';
 import { Header } from '../components/layout/Header';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { api, ApiError } from '../lib/api';
 
 /**
  * Phase 16.14 — Enterprise dedicated-CSM contact form.
@@ -46,23 +46,28 @@ export function EnterpriseSupport() {
     setResult(null);
     setSubmitting(true);
     try {
-      const { data } = await axios.post<{
-        success: true;
-        data: { accepted: boolean; notice: string };
-      }>('/api/admin/csm-request', {
-        topic,
+      // Phase 16.14 — uses the shared `api` namespace (which routes
+      // through client/src/lib/api.ts's axios interceptor) rather than
+      // raw axios. That means non-2xx responses become `ApiError`
+      // instances with `.message` already plucked from the standard
+      // envelope, and the 401-redirect / 402-quota / 500-toast
+      // global behaviours all apply.
+      const res = await api.submitCsmRequest({
+        topic: topic as Parameters<typeof api.submitCsmRequest>[0]['topic'],
         message,
-        preferredContactMethod: contactMethod,
-        preferredContactDetail: contactDetail.trim() || undefined,
+        preferredContactMethod: contactMethod as 'email' | 'phone' | 'video-call',
+        ...(contactDetail.trim() ? { preferredContactDetail: contactDetail.trim() } : {}),
       });
-      setResult({ kind: 'ok', notice: data.data.notice });
+      setResult({ kind: 'ok', notice: res.data.data?.notice ?? 'Request sent.' });
       setMessage('');
       setContactDetail('');
     } catch (err: unknown) {
-      const apiMsg = (err as { response?: { data?: { error?: { message?: string } } } })
-        ?.response?.data?.error?.message;
-      const fallback = err instanceof Error ? err.message : 'Failed to send request';
-      setResult({ kind: 'err', error: apiMsg ?? fallback });
+      const errorMessage = err instanceof ApiError
+        ? err.message
+        : err instanceof Error
+          ? err.message
+          : 'Failed to send request';
+      setResult({ kind: 'err', error: errorMessage });
     } finally {
       setSubmitting(false);
     }
