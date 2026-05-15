@@ -178,13 +178,16 @@ export function Subscriptions() {
 
   const tierIcon = (t: string) => {
     if (t === 'ENTERPRISE') return <Building2 className="w-5 h-5" />;
-    if (t === 'PROFESSIONAL') return <Zap className="w-5 h-5" />;
+    // Phase 16.10: admit both 'PRO' (current Prisma enum value, post
+    // 15.2 rename) and 'PROFESSIONAL' (legacy backstop) so a cached
+    // client state from before the rename still renders correctly.
+    if (t === 'PROFESSIONAL' || t === 'PRO') return <Zap className="w-5 h-5" />;
     return <Shield className="w-5 h-5" />;
   };
 
   const tierColour = (t: string) => {
     if (t === 'ENTERPRISE') return 'text-purple-600 dark:text-purple-400';
-    if (t === 'PROFESSIONAL') return 'text-teal-600 dark:text-teal-400';
+    if (t === 'PROFESSIONAL' || t === 'PRO') return 'text-teal-600 dark:text-teal-400';
     return 'text-gray-600 dark:text-gray-400';
   };
 
@@ -285,7 +288,7 @@ export function Subscriptions() {
                     <Zap className="w-4 h-4 text-teal-500" />
                     <span className="dark:text-white">{t("subscription.pro", "Pro")}</span>
                     <span className="font-normal text-gray-400">£2,500/yr</span>
-                    {currentTier === 'PROFESSIONAL' && (
+                    {(currentTier === 'PROFESSIONAL' || currentTier === 'PRO') && (
                       <span className="text-xs bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 px-1.5 py-0.5 rounded-full">{t("subscription.current", "Current")}</span>
                     )}
                   </div>
@@ -337,7 +340,7 @@ export function Subscriptions() {
               </Button>
             </>
           )}
-          {currentTier === 'PROFESSIONAL' && (
+          {(currentTier === 'PROFESSIONAL' || currentTier === 'PRO') && (
             <Button
               className="bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-2"
               onClick={() => checkoutMutation.mutate('institutionEnterprise')}
