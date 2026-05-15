@@ -32,6 +32,16 @@ describe('checkEnvironment — Stripe secret pairing (Workstream G)', () => {
     delete process.env['NODE_ENV'];
     delete process.env['STRIPE_SECRET_KEY'];
     delete process.env['STRIPE_WEBHOOK_SECRET'];
+    // Phase 16.11 — Bugbot 4469b089: explicitly clear the price-ID envs
+    // so tests that rely on their absence (the new "without price IDs"
+    // throw + warn assertions) aren't flaky when the host machine has
+    // them set (e.g. an operator running tests after a local prod-mode
+    // export). Without these the negative tests pass on CI but fail
+    // locally for some developers.
+    delete process.env['STRIPE_PRICE_INST_PRO'];
+    delete process.env['STRIPE_PRICE_INST_ENT'];
+    delete process.env['STRIPE_PRICE_VENDOR_ENH'];
+    delete process.env['STRIPE_PRICE_VENDOR_PREM'];
     delete process.env['ANTHROPIC_API_KEY'];
     delete process.env['DEV_UNLOCK_ALL_TIERS'];
     delete process.env['FRONTEND_URL'];
