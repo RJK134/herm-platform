@@ -40,8 +40,9 @@ vi.mock('../../../utils/prisma', () => {
   const vendorSystem = { findMany: vi.fn().mockResolvedValue([]) };
   // Phase 16.7: saveEstimate now runs `enforceQuota` upstream and
   // `recordUsage` post-write, both of which touch `usageCounter`.
-  // Tests in this file mint paid-tier JWTs — the read path must
-  // resolve a counter under-limit so the gate admits the request.
+  // Tests in this file default the JWT tier to 'free' — the read
+  // path must resolve a counter under-limit so the gate admits the
+  // request even on the lowest tier.
   const usageCounter = {
     findUnique: vi.fn().mockResolvedValue({ count: 0 }),
     upsert: vi.fn().mockResolvedValue({ count: 1 }),
