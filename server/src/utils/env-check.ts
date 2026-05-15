@@ -63,6 +63,24 @@ export function checkEnvironment(): void {
     else warnings.push(msg);
   }
 
+  // Phase 16.11 — Stripe price-ID validation. Without these envs the
+  // checkout button renders happily but `createCheckoutSession`
+  // returns "Price not configured for tier: institutionPro" only at
+  // click-time — the user discovers the misconfig by trying to pay.
+  // Make it loud at boot in production. Vendor price IDs stay
+  // optional (vendor checkout is not yet exposed in the client UI;
+  // its env-check lands when the vendor self-serve flow ships).
+  if (process.env['STRIPE_SECRET_KEY']) {
+    const requiredInstitutionPrices = ['STRIPE_PRICE_INST_PRO', 'STRIPE_PRICE_INST_ENT'] as const;
+    for (const env of requiredInstitutionPrices) {
+      if (!process.env[env]) {
+        const msg = `  ${env} is required when STRIPE_SECRET_KEY is set — without it the checkout button renders but the resulting session creation fails with "Price not configured". Set the price ID from https://dashboard.stripe.com/products.`;
+        if (isProd) missing.push(msg);
+        else warnings.push(msg);
+      }
+    }
+  }
+
   // SMTP coherence: if SMTP_HOST is set, the operator clearly intends to
   // send mail — but a host alone is not enough. Without SMTP_FROM (or
   // SMTP_USER as a fallback) the email path silently disables itself,
