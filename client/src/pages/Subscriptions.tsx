@@ -15,7 +15,10 @@ import { PRODUCT } from '../lib/branding';
 // ── Interfaces ────────────────────────────────────────────────────────────────
 
 interface SubscriptionData {
-  tier: 'FREE' | 'PROFESSIONAL' | 'ENTERPRISE';
+  // Phase 16.10: align with the Subscription.tier enum (Phase 15.2 PRO
+  // rename). 'PROFESSIONAL' is kept for one release as a backstop for
+  // any cached client state that still carries the legacy value.
+  tier: 'FREE' | 'PROFESSIONAL' | 'PRO' | 'ENTERPRISE';
   status: string;
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
@@ -48,8 +51,7 @@ interface CheckoutResponse {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const TIER_ORDER: Record<string, number> = { FREE: 0, PROFESSIONAL: 1, ENTERPRISE: 2 };
-const STRIPE_BILLING_PORTAL_URL = import.meta.env.VITE_STRIPE_BILLING_PORTAL_URL?.trim();
+const TIER_ORDER: Record<string, number> = { FREE: 0, PROFESSIONAL: 1, PRO: 1, ENTERPRISE: 2 };
 
 interface TierFeature {
   feature: string;
@@ -149,6 +151,26 @@ export function Subscriptions() {
     },
   });
 
+  // Phase 16.10 — Stripe Customer Portal session. Replaces the legacy
+  // VITE_STRIPE_BILLING_PORTAL_URL env (a single global URL was wrong
+  // anyway — the portal needs to be customer-scoped). Server creates
+  // the session per request; we redirect via window.location.href so
+  // the user lands directly on Stripe's hosted portal.
+  const portalMutation = useMutation({
+    mutationFn: () =>
+      axios.post<{ success: true; data: { configured: boolean; url: string | null; message?: string } }>(
+        '/api/subscriptions/portal',
+      ),
+    onSuccess: (res) => {
+      if (res.data.data.url) {
+        window.location.href = res.data.data.url;
+      } else {
+        setUpgradeMsg(res.data.data.message ?? 'Stripe billing portal is not available right now.');
+        setUpgradeMsgOpen(true);
+      }
+    },
+  });
+
   const sub = subQuery.data;
   const payments = invoicesQuery.data ?? sub?.payments ?? [];
   const currentTier = sub?.tier ?? 'FREE';
@@ -212,15 +234,15 @@ export function Subscriptions() {
           </div>
 
           <div className="flex items-center gap-2">
-            {(currentTier === 'PROFESSIONAL' || currentTier === 'ENTERPRISE') && sub?.stripeCustomerId && STRIPE_BILLING_PORTAL_URL && (
-              <a
-                href={STRIPE_BILLING_PORTAL_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-teal-600 dark:text-teal-400 border border-teal-300 dark:border-teal-700 rounded-lg hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors"
+            {(currentTier === 'PROFESSIONAL' || currentTier === 'PRO' || currentTier === 'ENTERPRISE') && sub?.stripeCustomerId && (
+              <button
+                type="button"
+                onClick={() => portalMutation.mutate()}
+                disabled={portalMutation.isPending}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-teal-600 dark:text-teal-400 border border-teal-300 dark:border-teal-700 rounded-lg hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors disabled:opacity-60"
               >
                 <ExternalLink className="w-3.5 h-3.5" /> {t("subscription.manageOnStripe", "Manage on Stripe")}
-              </a>
+              </button>
             )}
             {currentTier !== 'FREE' && sub?.status === 'active' && (
               <Button

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticateJWT } from '../../middleware/auth';
-import { createCheckout, stripeWebhook, getStatus, cancelSub, getInvoices } from './subscriptions.controller';
+import { createCheckout, stripeWebhook, getStatus, cancelSub, getInvoices, createPortal } from './subscriptions.controller';
 
 const router = Router();
 
@@ -20,5 +20,9 @@ router.post('/checkout', createCheckout);
 router.get('/status', getStatus);
 router.post('/cancel', cancelSub);
 router.get('/invoices', getInvoices);
+// Phase 16.10 — Stripe Customer Portal session. Replaces the legacy
+// VITE_STRIPE_BILLING_PORTAL_URL env which hardcoded a single global
+// portal URL on the client.
+router.post('/portal', createPortal);
 
 export default router;
