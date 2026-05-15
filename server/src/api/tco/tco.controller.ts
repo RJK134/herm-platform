@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { TcoService } from './tco.service';
+import { recordUsage } from '../../middleware/enforceQuota';
 import {
   calculateTcoSchema,
   compareTcoSchema,
@@ -88,6 +89,10 @@ export const saveEstimate = async (
       createdById: req.user!.userId,
       institutionId: req.user!.institutionId,
     });
+    // Phase 16.7: post-write usage increment. enforceQuota
+    // ('tco.calculations') gated the request; this updates the
+    // monthly counter only after the estimate is durably persisted.
+    await recordUsage(req.user!.institutionId, 'tco.calculations');
     res.status(201).json({ success: true, data: estimate });
   } catch (err) {
     next(err);
