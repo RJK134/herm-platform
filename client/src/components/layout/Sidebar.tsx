@@ -6,7 +6,6 @@ import {
   LogIn,
   LogOut,
   User,
-  Crown,
   Lock,
   ChevronLeft,
   ChevronRight,
@@ -21,13 +20,12 @@ import { LanguageSelector } from '../LanguageSelector';
 import { NAV_SECTIONS } from '../../lib/navigation';
 import type { NavItem, NavSection as NavSectionType } from '../../lib/navigation';
 import { isPaidTier, PRODUCT } from '../../lib/branding';
+import { TierBadge } from './TierBadge';
 
-const TIER_COLOURS: Record<string, string> = {
-  enterprise: 'bg-amber-500/20 text-amber-300',
-  pro: 'bg-teal/20 text-teal',
-  free: 'bg-white/10 text-white/50',
-};
-
+// Phase 16.4 — TIER_COLOURS dict replaced by `<TierBadge>` (which
+// reads from the tier-accent CSS utilities + data-tier attribute on
+// <html>, set by AuthContext). TIER_LABELS stays for the
+// describeRequirement() tooltip text on locked nav items.
 const TIER_LABELS: Record<string, string> = {
   pro: 'Pro',
   enterprise: 'Enterprise',
@@ -348,14 +346,7 @@ export function Sidebar() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span
-                      className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${
-                        TIER_COLOURS[user!.tier] ?? TIER_COLOURS.free
-                      }`}
-                    >
-                      <Crown className="w-3 h-3" />
-                      {user!.tier.charAt(0).toUpperCase() + user!.tier.slice(1)}
-                    </span>
+                    <TierBadge tier={user!.tier} />
                   </div>
                   <button
                     onClick={handleLogout}
