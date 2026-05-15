@@ -47,6 +47,7 @@ import { SecuritySettings } from './pages/SecuritySettings';
 import { SectorAnalytics } from './pages/SectorAnalytics';
 import { ApiIntegration } from './pages/ApiIntegration';
 import { FrameworkMapping } from './pages/FrameworkMapping';
+import { EnterpriseSupport } from './pages/EnterpriseSupport';
 import { NotFound } from './pages/NotFound';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LicenceFooter } from './components/LicenceFooter';
@@ -279,6 +280,18 @@ export default function App() {
                               description="Cross-framework migration tooling — map HERM capabilities to the FHE Capability Framework (or any future enterprise framework). Included on the Enterprise plan."
                             >
                               <FrameworkMapping />
+                            </RequireTier>
+                          }
+                        />
+                        <Route
+                          path="/enterprise-support"
+                          element={
+                            <RequireTier
+                              tiers={['enterprise']}
+                              featureName="Enterprise Support"
+                              description="Direct line to your Customer Success Manager — kickoff scheduling, quarterly reviews, escalations, and roadmap input. Included on the Enterprise plan."
+                            >
+                              <EnterpriseSupport />
                             </RequireTier>
                           }
                         />
