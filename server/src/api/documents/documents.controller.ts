@@ -2,9 +2,11 @@ import type { Request, Response, NextFunction } from 'express';
 import { DocumentsService } from './documents.service';
 import { generateDocumentSchema, updateDocumentSchema } from './documents.schema';
 import { renderBusinessCasePdf, type BrandingOverride } from '../../services/pdf/render-business-case';
+import { brandingPreferencesSchema } from '../admin/branding.controller';
 import { ValidationError } from '../../utils/errors';
 import { audit } from '../../lib/audit';
 import { recordUsage } from '../../middleware/enforceQuota';
+import { logger } from '../../lib/logger';
 import prisma from '../../utils/prisma';
 
 const service = new DocumentsService();
@@ -102,15 +104,37 @@ export const exportDocumentPdf = async (
     // Tier check is server-side authoritative — even if a Pro
     // institution wrote brandingPreferences via curl somehow, the
     // renderer only consults it for Enterprise tier.
+    //
+    // Vercel review-bot 853f3a2b: the JSONB column is freeform on the
+    // DB side; an admin who hand-crafted a curl request could have
+    // stored a malformed shape that a TypeScript `as` cast would
+    // miss. Run the same Zod schema used on PUT to revalidate the
+    // stored blob before passing it to the renderer. If the row is
+    // invalid we fall through to platform defaults + warn-log; the
+    // admin still gets a PDF rather than a 500.
     let branding: BrandingOverride | undefined;
     if (req.user!.tier?.toLowerCase() === 'enterprise') {
       const inst = await prisma.institution.findUnique({
         where: { id: req.user!.institutionId },
         select: { brandingPreferences: true },
       });
-      const prefs = inst?.brandingPreferences as BrandingOverride | null | undefined;
-      if (prefs && (prefs.primaryColor || prefs.secondaryColor || prefs.footerText || prefs.logoUrl)) {
-        branding = prefs;
+      const raw = inst?.brandingPreferences;
+      if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+        const parsed = brandingPreferencesSchema.safeParse(raw);
+        if (parsed.success) {
+          const prefs = parsed.data;
+          // Bot 403ba3d2 — include secondaryColor in the activation
+          // gate so an admin who only sets that field still gets
+          // their override applied.
+          if (prefs.primaryColor || prefs.secondaryColor || prefs.footerText || prefs.logoUrl) {
+            branding = prefs;
+          }
+        } else {
+          logger.warn(
+            { institutionId: req.user!.institutionId, issues: parsed.error.issues },
+            'brandingPreferences failed schema validation on PDF export — falling back to platform default',
+          );
+        }
       }
     }
 

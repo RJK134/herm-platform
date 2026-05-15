@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import prisma from '../../utils/prisma';
 import { audit } from '../../lib/audit';
 
@@ -26,13 +27,18 @@ import { audit } from '../../lib/audit';
 // colour palette). All four are nullable to allow explicit "clear"
 // (set the field to null in PUT body to reset to platform default).
 //
-// Hex-colour pattern: matches #RGB / #RRGGBB / #RRGGBBAA. URL is
-// permissive — Stripe-style validation of "is the asset reachable"
-// is the renderer's problem at PDF-generation time, not Zod's.
+// Hex-colour pattern: only the valid CSS hex lengths are admitted —
+// 3 (#RGB), 4 (#RGBA), 6 (#RRGGBB), 8 (#RRGGBBAA). Bugbot 7afe9b86
+// caught that the earlier `{3,8}` quantifier let through invalid 5 +
+// 7 digit values like `#12345`, which pdfkit's fillColor() then either
+// silently misrenders or throws on at PDF-generation time. The
+// alternation-grouped pattern below rejects them up front.
+const HEX_COLOR_RE = /^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
+
 export const brandingPreferencesSchema = z.object({
   logoUrl:        z.string().url('Logo URL must be a valid URL').max(2048).nullable().optional(),
-  primaryColor:   z.string().regex(/^#[0-9a-fA-F]{3,8}$/, 'Must be a hex colour like #3730a3').nullable().optional(),
-  secondaryColor: z.string().regex(/^#[0-9a-fA-F]{3,8}$/, 'Must be a hex colour like #a5b4fc').nullable().optional(),
+  primaryColor:   z.string().regex(HEX_COLOR_RE, 'Must be a hex colour like #3730a3 (3, 4, 6, or 8 hex digits)').nullable().optional(),
+  secondaryColor: z.string().regex(HEX_COLOR_RE, 'Must be a hex colour like #a5b4fc (3, 4, 6, or 8 hex digits)').nullable().optional(),
   footerText:     z.string().trim().max(200, 'Footer text must be 200 characters or fewer').nullable().optional(),
 });
 
@@ -56,9 +62,37 @@ export async function putBranding(req: Request, res: Response, next: NextFunctio
   try {
     const data = brandingPreferencesSchema.parse(req.body);
     const { institutionId } = req.user!;
+
+    // Phase 16.13 — Bugbot ee2dabec: merge with the existing JSON
+    // rather than replacing it wholesale. Every field in the Zod
+    // schema is `.optional()` ("update one at a time"), so sending
+    // `{primaryColor: "#..."}` previously erased `logoUrl`,
+    // `footerText`, etc. Read the current blob, apply only the keys
+    // present in `data` (skipping `undefined`; preserving explicit
+    // `null` as the "clear back to default" signal), and write back.
+    const existing = await prisma.institution.findUnique({
+      where: { id: institutionId },
+      select: { brandingPreferences: true },
+    });
+    const prior = (existing?.brandingPreferences ?? {}) as Record<string, unknown>;
+    const merged: Record<string, unknown> = { ...prior };
+    // Iterate the schema keys (not Object.keys(data)) so a request with
+    // an extra unknown field can't pollute the stored blob.
+    for (const key of ['logoUrl', 'primaryColor', 'secondaryColor', 'footerText'] as const) {
+      // `undefined` = "field not supplied in this request, preserve prior".
+      // `null`      = "explicit clear back to platform default".
+      // any other   = "overwrite with new value".
+      if (data[key] !== undefined) merged[key] = data[key];
+    }
+
     const updated = await prisma.institution.update({
       where: { id: institutionId },
-      data: { brandingPreferences: data },
+      // `merged` is a Record<string, unknown> from the read-merge-write
+      // dance; Prisma's JSON input type wants `InputJsonValue` (no
+      // unknown). The merged blob is structurally safe — every entry
+      // came from either the prior column or a Zod-validated request —
+      // so cast is the right call here.
+      data: { brandingPreferences: merged as Prisma.InputJsonValue },
       select: { brandingPreferences: true },
     });
     await audit(req, {
@@ -69,6 +103,9 @@ export async function putBranding(req: Request, res: Response, next: NextFunctio
       changes: {
         // Don't dump the full payload into audit (could contain
         // multi-line footerText). Record which fields were touched.
+        // Object.keys(data) here reflects what the REQUEST supplied,
+        // not the merged state — that's the audit signal worth
+        // tracking ("admin changed primaryColor today").
         fields: Object.keys(data),
         hasLogoUrl: data.logoUrl != null,
         hasPrimaryColor: data.primaryColor != null,
