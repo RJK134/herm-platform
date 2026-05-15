@@ -89,6 +89,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     delete axios.defaults.headers.common['Authorization'];
   }, []);
 
+  // Phase 16.3 — set `data-tier` on <html> so the tier-accent CSS
+  // utilities (.tier-accent-bg / .tier-accent-text / etc., defined in
+  // index.css) resolve to the right ramp without prop-drilling. Free
+  // is the cascade default — the attribute is `'free'` for both
+  // anonymous callers and authenticated free-tier users; only Pro and
+  // Enterprise need the override.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const tier = (user?.tier ?? 'free').toLowerCase();
+    document.documentElement.dataset['tier'] = tier;
+  }, [user]);
+
   // Restore session from localStorage on mount
   useEffect(() => {
     const saved = localStorage.getItem(TOKEN_KEY);
