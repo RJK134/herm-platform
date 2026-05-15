@@ -1,0 +1,24 @@
+-- Phase 16.13 — Enterprise white-label exports.
+--
+-- Adds an optional `brandingPreferences` JSONB column to Institution.
+-- The PDF / Word render services consult this only when the
+-- institution's tier is Enterprise (gate enforced server-side, not
+-- by a DB constraint). Free / Pro institutions can technically write
+-- the column via the admin API, but the renderer ignores it for them.
+--
+-- JSON shape (validated by Zod at the API boundary, not in Postgres):
+--   {
+--     "logoUrl": "https://customer.example.ac.uk/brand/logo.png",
+--     "primaryColor": "#3730a3",
+--     "secondaryColor": "#a5b4fc",
+--     "footerText": "Confidential — internal procurement"
+--   }
+-- All fields optional; renderer falls back to platform defaults for
+-- any missing field.
+--
+-- Reversible via `ALTER TABLE "Institution" DROP COLUMN
+-- "brandingPreferences";` — additive column, no foreign-key fanout.
+-- The column is nullable + the additive change runs in milliseconds
+-- even on a large Institution table (no defaults to backfill).
+
+ALTER TABLE "Institution" ADD COLUMN "brandingPreferences" JSONB;

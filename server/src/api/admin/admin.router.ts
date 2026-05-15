@@ -10,6 +10,7 @@ import {
 } from './admin-vendors.controller';
 import { startImpersonation, endImpersonation } from './impersonation.controller';
 import { submitCsmRequest } from './csm-request.controller';
+import { getBranding, putBranding } from './branding.controller';
 import {
   readMe as readSsoMe,
   upsertMe as upsertSsoMe,
@@ -51,6 +52,13 @@ router.post(
 
 // All other admin routes require a valid JWT and INSTITUTION_ADMIN or SUPER_ADMIN role
 router.use(authenticateJWT, requireRole(['SUPER_ADMIN', 'INSTITUTION_ADMIN']));
+
+// Phase 16.13 — Enterprise white-label export branding. Both reads
+// and writes are Enterprise-only AND require admin role (covered by
+// the router-level guard above). The PDF / Word renderer re-checks
+// tier before applying the override at render time.
+router.get('/branding', requirePaidTier(['enterprise']), getBranding);
+router.put('/branding', requirePaidTier(['enterprise']), putBranding);
 
 router.get('/vendors', listVendorAccounts);
 router.patch('/vendors/:id', updateVendorAccount);

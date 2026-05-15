@@ -101,13 +101,20 @@ model Capability {
 // ── Platform Core ────────────────────────────────────────────────────────────
 
 model Institution {
-  id                 String                @id @default(cuid())
-  name               String
-  slug               String                @unique
-  country            String
-  tier               String                @default("free")
-  logoUrl            String?
-  domain             String?
+  id                  String                @id @default(cuid())
+  name                String
+  slug                String                @unique
+  country             String
+  tier                String                @default("free")
+  logoUrl             String?
+  domain              String?
+  /// Phase 16.13 — white-label export branding (Enterprise-only).
+  /// Optional JSON blob carrying { logoUrl, primaryColor, secondaryColor,
+  /// footerText? }. When set AND the institution's tier is Enterprise,
+  /// PDF/Word exports render with these overrides instead of the
+  /// platform defaults. Pro/Free institutions ignore the field — the
+  /// PDF renderer only consults it after the tier gate passes.
+  brandingPreferences Json?
   // Phase 11.14 — soft-delete cascade. When an Institution is removed
   // by a SUPER_ADMIN, the row is kept for the retention grace window
   // so the change can be reversed before the scheduler hard-deletes
@@ -124,17 +131,17 @@ model Institution {
   // `onDelete: Cascade` FK), so the keys are revoked at the same
   // moment, but a defence-in-depth check on `Institution.deletedAt`
   // in api-key-auth is on the deferred follow-up list.
-  deletedAt          DateTime?
-  users              User[]
-  baskets            CapabilityBasket[]
-  projects           ProcurementProject[]
-  subscription       Subscription?
-  evaluationProjects EvaluationProject[]
-  apiKeys            ApiKey[]
-  ssoProviders       SsoIdentityProvider[]
-  usageCounters      UsageCounter[]
-  createdAt          DateTime              @default(now())
-  updatedAt          DateTime              @updatedAt
+  deletedAt           DateTime?
+  users               User[]
+  baskets             CapabilityBasket[]
+  projects            ProcurementProject[]
+  subscription        Subscription?
+  evaluationProjects  EvaluationProject[]
+  apiKeys             ApiKey[]
+  ssoProviders        SsoIdentityProvider[]
+  usageCounters       UsageCounter[]
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
 
   @@index([deletedAt])
   // Phase 11.16 (L3) — speeds up the email-based SSO discovery path

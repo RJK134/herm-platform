@@ -1,10 +1,11 @@
 import type { Request, Response, NextFunction } from 'express';
 import { DocumentsService } from './documents.service';
 import { generateDocumentSchema, updateDocumentSchema } from './documents.schema';
-import { renderBusinessCasePdf } from '../../services/pdf/render-business-case';
+import { renderBusinessCasePdf, type BrandingOverride } from '../../services/pdf/render-business-case';
 import { ValidationError } from '../../utils/errors';
 import { audit } from '../../lib/audit';
 import { recordUsage } from '../../middleware/enforceQuota';
+import prisma from '../../utils/prisma';
 
 const service = new DocumentsService();
 
@@ -96,10 +97,28 @@ export const exportDocumentPdf = async (
     }>;
 
     const metaLine = `${doc.title} · Generated ${new Date(doc.createdAt).toLocaleDateString('en-GB')}`;
+
+    // Phase 16.13 — apply Enterprise white-label branding override.
+    // Tier check is server-side authoritative — even if a Pro
+    // institution wrote brandingPreferences via curl somehow, the
+    // renderer only consults it for Enterprise tier.
+    let branding: BrandingOverride | undefined;
+    if (req.user!.tier?.toLowerCase() === 'enterprise') {
+      const inst = await prisma.institution.findUnique({
+        where: { id: req.user!.institutionId },
+        select: { brandingPreferences: true },
+      });
+      const prefs = inst?.brandingPreferences as BrandingOverride | null | undefined;
+      if (prefs && (prefs.primaryColor || prefs.footerText || prefs.logoUrl)) {
+        branding = prefs;
+      }
+    }
+
     const buffer = await renderBusinessCasePdf({
       title: doc.title,
       sections,
       metaLine,
+      ...(branding ? { branding } : {}),
     });
 
     await audit(req, {
