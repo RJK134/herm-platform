@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticateJWT, optionalJWT } from '../../middleware/auth';
+import { enforceQuota } from '../../middleware/enforceQuota';
 import {
   generatePreview,
   saveDocument,
@@ -21,8 +22,14 @@ router.post('/generate', optionalJWT, generatePreview);
 // than the request body.
 router.use(authenticateJWT);
 
-/** POST /api/documents — generate + save */
-router.post('/', saveDocument);
+/**
+ * POST /api/documents — generate + save.
+ * Phase 16.6: gated on the per-tier `document.generation` quota
+ * (Free 5/mo, Pro/Enterprise unlimited). The preview route stays
+ * ungated since it doesn't persist; only saves count toward the
+ * monthly cap.
+ */
+router.post('/', enforceQuota('document.generation'), saveDocument);
 
 /** GET /api/documents — list saved documents */
 router.get('/', listDocuments);
