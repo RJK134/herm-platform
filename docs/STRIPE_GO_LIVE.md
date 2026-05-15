@@ -73,9 +73,11 @@ In `https://dashboard.stripe.com/webhooks` (live mode):
     - `customer.subscription.deleted`
     - `customer.subscription.updated`
     - `invoice.payment_failed`
-    - `invoice.payment_succeeded` (Phase 16.9 — required for past_due → active auto-recovery)
+    - `invoice.payment_succeeded` — **requires PR #144 (Phase 16.9) to be merged**, otherwise this event is delivered but the handler is missing and Stripe will silently retry. The Prerequisites checklist above pins this.
     - `charge.refunded`
     - `charge.dispute.created`
+
+    If PR #144 is not yet merged when you reach this step, **stop and merge it first**. Enabling the event on a webhook endpoint whose server doesn't handle it isn't dangerous (the request 200s on the unknown-event no-op path) but past_due subscriptions won't auto-recover until #144 lands.
 5. After creation, **click your new endpoint** → **Signing secret** → **Reveal** → copy the `whsec_…` value.
 6. Paste this into Vercel as `STRIPE_WEBHOOK_SECRET` (production scope, both Production + Build).
 
