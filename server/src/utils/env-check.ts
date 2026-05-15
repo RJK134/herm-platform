@@ -21,6 +21,8 @@ const ENV_VARS: EnvVar[] = [
   { name: 'ANTHROPIC_API_KEY',     required: false, description: 'Anthropic API key for AI chat feature' },
   { name: 'STRIPE_SECRET_KEY',     required: false, description: 'Stripe secret key for subscription billing' },
   { name: 'STRIPE_WEBHOOK_SECRET', required: false, description: 'Stripe webhook secret for payment event verification' },
+  { name: 'STRIPE_PRICE_INST_PRO', required: false, description: 'Stripe price ID for Institution Pro tier (monthly). REQUIRED in production when STRIPE_SECRET_KEY is set — see prod-only check below.' },
+  { name: 'STRIPE_PRICE_INST_ENT', required: false, description: 'Stripe price ID for Institution Enterprise tier (monthly). REQUIRED in production when STRIPE_SECRET_KEY is set — see prod-only check below.' },
   { name: 'REDIS_URL',             required: false, description: 'Redis connection string (e.g. redis://localhost:6379) — enables the Redis readiness probe when set; shared rate-limit / session state is not yet implemented' },
   { name: 'SMTP_HOST',             required: false, description: 'SMTP server host for outbound email (billing notifications etc.)' },
   { name: 'SMTP_FROM',             required: false, description: 'Default From: address for outbound email (e.g. "HERM <noreply@example.com>")' },
@@ -61,6 +63,27 @@ export function checkEnvironment(): void {
       '  STRIPE_SECRET_KEY is set but STRIPE_WEBHOOK_SECRET is not — webhook signature verification cannot run, and every Stripe event will silently no-op. Set STRIPE_WEBHOOK_SECRET (from https://dashboard.stripe.com/webhooks).';
     if (isProd) missing.push(msg);
     else warnings.push(msg);
+  }
+
+  // Phase 16.11 — Stripe price IDs: if billing is configured
+  // (STRIPE_SECRET_KEY), the Institution Pro and Enterprise price IDs are
+  // required in production. Without them, the checkout path silently falls
+  // back to empty strings, which renders "Price not configured" on first
+  // checkout. The operator won't notice until a customer tries to upgrade.
+  // Fail at boot in production so the env is validated upfront.
+  if (process.env['STRIPE_SECRET_KEY']) {
+    if (!process.env['STRIPE_PRICE_INST_PRO']) {
+      const msg =
+        '  STRIPE_PRICE_INST_PRO is not set — Institution Pro checkout will fail with "Price not configured". Set to the Stripe price ID from https://dashboard.stripe.com/products (live mode if production).';
+      if (isProd) missing.push(msg);
+      else warnings.push(msg);
+    }
+    if (!process.env['STRIPE_PRICE_INST_ENT']) {
+      const msg =
+        '  STRIPE_PRICE_INST_ENT is not set — Institution Enterprise checkout will fail with "Price not configured". Set to the Stripe price ID from https://dashboard.stripe.com/products (live mode if production).';
+      if (isProd) missing.push(msg);
+      else warnings.push(msg);
+    }
   }
 
   // SMTP coherence: if SMTP_HOST is set, the operator clearly intends to
