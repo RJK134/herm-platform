@@ -100,7 +100,7 @@ Open the live site (`https://herm-platform.vercel.app`) in a real browser sessio
 1. **Health checks**:
     ```bash
     curl -s https://herm-platform.vercel.app/api/health        # → 200, {"status":"ok"}
-    curl -s https://herm-platform.vercel.app/api/readiness     # → 200, database.ok: true
+    curl -s https://herm-platform.vercel.app/api/ready         # → 200, database.ok: true
     ```
 2. **Free→Pro upgrade with a real card**:
     - Sign in as a Free-tier user (create a test institution if needed).
