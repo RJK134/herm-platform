@@ -1,6 +1,7 @@
 /**
  * Tests for the new Stripe webhook event handlers added in Workstream G:
  *   - invoice.payment_failed   → dunningState=past_due + Payment(status=failed) + admin notification
+ *   - invoice.payment_succeeded → dunningState=past_due→active (recovery) + Payment(status=succeeded) + admin notification
  *   - customer.subscription.updated → tier reconciliation from price ID + admin notification
  *   - charge.refunded          → Payment(status=refunded) + admin notification
  *   - charge.dispute.created   → dunningState=paused + admin notification
@@ -163,6 +164,88 @@ describe('stripe webhook — invoice.payment_failed', () => {
     constructEvent.mockReturnValueOnce({
       type: 'invoice.payment_failed',
       data: { object: { subscription: 'sub_unknown', amount_due: 5000, currency: 'gbp' } },
+    });
+    prismaMock.subscription.findFirst.mockResolvedValueOnce(null);
+    await handleWebhook(Buffer.from('payload'), 'sig');
+    expect(prismaMock.subscription.update).not.toHaveBeenCalled();
+    expect(prismaMock.payment.create).not.toHaveBeenCalled();
+    expect(prismaMock.notification.createMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('stripe webhook — invoice.payment_succeeded', () => {
+  it('flips dunningState from past_due back to active + writes a succeeded Payment + notifies admins', async () => {
+    constructEvent.mockReturnValueOnce({
+      type: 'invoice.payment_succeeded',
+      data: {
+        object: {
+          subscription: 'sub_stripe_recovered',
+          amount_paid: 5000,
+          currency: 'gbp',
+          payment_intent: 'pi_recovered_1',
+        },
+      },
+    });
+    prismaMock.subscription.findFirst.mockResolvedValueOnce({
+      id: 'sub_db_recovered',
+      institutionId: 'inst-recovered',
+      dunningState: 'past_due',
+    });
+
+    const res = await handleWebhook(Buffer.from('payload'), 'sig');
+
+    expect(res).toEqual({ handled: true, event: 'invoice.payment_succeeded' });
+    expect(prismaMock.subscription.update).toHaveBeenCalledWith({
+      where: { id: 'sub_db_recovered' },
+      data: { dunningState: 'active' },
+    });
+    expect(prismaMock.payment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          subscriptionId: 'sub_db_recovered',
+          amount: 50,
+          currency: 'GBP',
+          status: 'succeeded',
+          stripePaymentId: 'pi_recovered_1',
+          paidAt: expect.any(Date),
+        }),
+      }),
+    );
+    expect(prismaMock.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { institutionId: 'inst-recovered', role: 'INSTITUTION_ADMIN' } }),
+    );
+    expect(prismaMock.notification.createMany).toHaveBeenCalled();
+  });
+
+  it('is a no-op when the subscription is not in past_due state', async () => {
+    constructEvent.mockReturnValueOnce({
+      type: 'invoice.payment_succeeded',
+      data: {
+        object: {
+          subscription: 'sub_stripe_active',
+          amount_paid: 5000,
+          currency: 'gbp',
+          payment_intent: 'pi_active_1',
+        },
+      },
+    });
+    prismaMock.subscription.findFirst.mockResolvedValueOnce({
+      id: 'sub_db_active',
+      institutionId: 'inst-active',
+      dunningState: 'active',
+    });
+
+    await handleWebhook(Buffer.from('payload'), 'sig');
+
+    expect(prismaMock.subscription.update).not.toHaveBeenCalled();
+    expect(prismaMock.payment.create).not.toHaveBeenCalled();
+    expect(prismaMock.notification.createMany).not.toHaveBeenCalled();
+  });
+
+  it('is a no-op when the subscription id does not match a row (unknown remote)', async () => {
+    constructEvent.mockReturnValueOnce({
+      type: 'invoice.payment_succeeded',
+      data: { object: { subscription: 'sub_unknown', amount_paid: 5000, currency: 'gbp' } },
     });
     prismaMock.subscription.findFirst.mockResolvedValueOnce(null);
     await handleWebhook(Buffer.from('payload'), 'sig');
