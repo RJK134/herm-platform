@@ -109,7 +109,7 @@ export const exportDocumentPdf = async (
         select: { brandingPreferences: true },
       });
       const prefs = inst?.brandingPreferences as BrandingOverride | null | undefined;
-      if (prefs && (prefs.primaryColor || prefs.footerText || prefs.logoUrl)) {
+      if (prefs && (prefs.primaryColor || prefs.secondaryColor || prefs.footerText || prefs.logoUrl)) {
         branding = prefs;
       }
     }
