@@ -32,6 +32,8 @@ describe('checkEnvironment — Stripe secret pairing (Workstream G)', () => {
     delete process.env['NODE_ENV'];
     delete process.env['STRIPE_SECRET_KEY'];
     delete process.env['STRIPE_WEBHOOK_SECRET'];
+    delete process.env['STRIPE_PRICE_INST_PRO'];
+    delete process.env['STRIPE_PRICE_INST_ENT'];
     delete process.env['ANTHROPIC_API_KEY'];
     delete process.env['DEV_UNLOCK_ALL_TIERS'];
     delete process.env['FRONTEND_URL'];
