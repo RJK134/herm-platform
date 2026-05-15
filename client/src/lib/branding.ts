@@ -5,7 +5,7 @@
 
 export const PRODUCT = {
   name: 'FHE Procurement Platform',
-  longName: 'Future Horizons System Procurement Platform',
+  longName: 'Future Horizons Education Procurement Platform',
   vendor: 'Future Horizons Education',
   supportEmail: 'support@futurehorizons.education',
 } as const;

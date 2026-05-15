@@ -31,7 +31,7 @@ export const PRODUCT = {
    * Centre title), and any place an enterprise procurement reviewer
    * needs the full vendor identity at a glance.
    */
-  longName: 'Future Horizons System Procurement Platform',
+  longName: 'Future Horizons Education Procurement Platform',
   vendor: 'Future Horizons Education',
   supportEmail: 'support@futurehorizons.education',
 } as const;
