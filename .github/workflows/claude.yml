@@ -1,21 +1,35 @@
 name: Claude Code Auto-Fix
 
-# Triggered when a bug issue is opened/labeled, or when @claude is mentioned in a comment.
-# Claude Code runs, analyzes the issue, creates a branch, commits a fix, and opens a PR.
+# Triggered for bug-labeled issues, @claude mentions on threads, and PR reviews.
+# Claude Code runs, analyzes the thread, creates a branch, commits a fix, and opens a PR.
 on:
   issues:
-    types: [opened, labeled]
+    types: [opened, assigned]
   issue_comment:
     types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
 
 jobs:
   claude-fix:
-    # Run only on bug-labeled issues OR when a comment contains "@claude"
     if: |
       (github.event_name == 'issues' &&
+       github.event.action == 'opened' &&
+       contains(github.event.issue.labels.*.name, 'bug')) ||
+      (github.event_name == 'issues' &&
+       github.event.action == 'assigned' &&
        contains(github.event.issue.labels.*.name, 'bug')) ||
       (github.event_name == 'issue_comment' &&
-       contains(github.event.comment.body, '@claude'))
+       contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review' &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.review.body != null &&
+       contains(github.event.review.body, '@claude'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -29,7 +43,8 @@ jobs:
           fetch-depth: 0
 
       - name: Run Claude Code
-        uses: anthropics/claude-code-action@v1
+        # v1 — commit resolved from tag v1 (anthropics/claude-code-action)
+        uses: anthropics/claude-code-action@51ea8ea73a139f2a74ff649e3092c25a904aed7e
         with:
           # Pay-per-use Anthropic API key (sk-ant-api03-...).
           # Stored as a repository secret named ANTHROPIC_API_KEY.
