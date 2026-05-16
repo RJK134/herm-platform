@@ -45,4 +45,34 @@
   .focus-ring {
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal focus-visible:ring-offset-2;
   }
+
+  /*
+   * Phase 16.3 — tier-aware accent utilities.
+   *
+   * Components opt into a tier-coloured chrome treatment by adding
+   * `tier-accent-bg` / `tier-accent-border` / `tier-accent-text` /
+   * `tier-accent-ring`. The actual colour resolves at render time from
+   * the `data-tier` attribute on `<html>` (set by AuthContext on
+   * login/logout). Default cascade: anonymous + free both resolve to
+   * the slate ramp; authenticated Pro to teal; Enterprise to indigo.
+   *
+   * Why DOM data-attribute rather than a React-context hook: lets pure
+   * CSS components (cards, badges, illustrations) tier-skin without
+   * having to thread a `tier` prop down. AuthContext is the only
+   * writer; everything downstream just reads.
+   */
+  .tier-accent-bg     { @apply bg-tier-free-500; }
+  .tier-accent-border { @apply border-tier-free-500; }
+  .tier-accent-text   { @apply text-tier-free-500; }
+  .tier-accent-ring   { @apply ring-tier-free-500; }
+
+  [data-tier='pro'] .tier-accent-bg     { @apply bg-tier-pro-500; }
+  [data-tier='pro'] .tier-accent-border { @apply border-tier-pro-500; }
+  [data-tier='pro'] .tier-accent-text   { @apply text-tier-pro-500; }
+  [data-tier='pro'] .tier-accent-ring   { @apply ring-tier-pro-500; }
+
+  [data-tier='enterprise'] .tier-accent-bg     { @apply bg-tier-enterprise-500; }
+  [data-tier='enterprise'] .tier-accent-border { @apply border-tier-enterprise-500; }
+  [data-tier='enterprise'] .tier-accent-text   { @apply text-tier-enterprise-500; }
+  [data-tier='enterprise'] .tier-accent-ring   { @apply ring-tier-enterprise-500; }
 }
