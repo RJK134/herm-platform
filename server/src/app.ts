@@ -37,6 +37,7 @@ import subscriptionsRouter from './api/subscriptions/subscriptions.router';
 import adminRouter from './api/admin/admin.router';
 import sectorAnalyticsRouter from './api/sector-analytics/sector-analytics.router';
 import notificationsRouter from './api/notifications/notifications.router';
+import usageRouter from './api/usage/usage.router';
 import keysRouter from './api/keys/keys.router';
 import frameworksRouter from './api/frameworks/frameworks.router';
 import frameworkMappingsRouter from './api/framework-mappings/framework-mappings.router';
@@ -162,6 +163,7 @@ export function createApp(): Express {
 
     app.use(`${base}/sector/analytics`, sectorAnalyticsRouter);
     app.use(`${base}/notifications`, notificationsRouter);
+    app.use(`${base}/usage`, usageRouter);
     app.use(`${base}/keys`, keysRouter);
 
     app.use(`${base}/frameworks`, frameworksRouter);
