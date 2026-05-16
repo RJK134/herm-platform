@@ -40,7 +40,12 @@ export function SecuritySettings() {
   }
 
   useEffect(() => {
-    refreshStatus();
+    // Phase 16 lint paydown — `refreshStatus()` sets state synchronously
+    // on its first lines, which React 19's react-hooks/set-state-in-effect
+    // flags. queueMicrotask defers it past the render commit.
+    queueMicrotask(() => {
+      void refreshStatus();
+    });
   }, []);
 
   async function handleEnroll() {
