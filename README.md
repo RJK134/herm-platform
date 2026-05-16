@@ -1,6 +1,6 @@
 # FHE Procurement Platform
 
-**Future Horizons System Procurement Platform** — enterprise procurement intelligence for higher education from **Future Horizons Education (FHE)**. Score, compare and shortlist SIS/LMS/CRM/HCM systems against the UCISA HERM v3.1 reference model (165 business capabilities — included free at every tier) plus the proprietary FHE Capability Framework on paid tiers.
+**Future Horizons Education Procurement Platform** — enterprise procurement intelligence for higher education from **Future Horizons Education (FHE)**. Score, compare and shortlist SIS/LMS/CRM/HCM systems against the UCISA HERM v3.1 reference model (165 business capabilities — included free at every tier) plus the proprietary FHE Capability Framework on paid tiers.
 
 The product is **FHE Procurement Platform** (Phase 16.1 final rebrand; supersedes the interim "FH Procure" name from Phase 15.1). **HERM v3.1** is the included reference dataset, not the product itself. The repository directory and CLAUDE.md still use the legacy `herm-platform` slug — keep both working during the rebrand rollover.
 

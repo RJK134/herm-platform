@@ -30,7 +30,7 @@ import type { PaidTier } from './branding';
 
 /**
  * The end-user product IA is organised around four top-level sections
- * aligned to the FHE Procurement Platform (Future Horizons System Procurement Platform) redesign brief:
+ * aligned to the FHE Procurement Platform (Future Horizons Education Procurement Platform) redesign brief:
  *
  *   1. HERM Explorer         — free-tier HERM reference data + attribution
  *   2. Procurement Workspace — authenticated tools, usage-capped on free

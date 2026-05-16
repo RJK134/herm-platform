@@ -1,6 +1,6 @@
 # HERM licence compliance
 
-FHE Procurement Platform (Future Horizons System Procurement Platform)
+FHE Procurement Platform (Future Horizons Education Procurement Platform)
 ships two capability frameworks with different commercial and licensing
 characteristics. This document captures the invariants the code must
 preserve to remain compliant with the HERM licence and honest with our
