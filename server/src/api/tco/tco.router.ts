@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticateJWT, requireRole } from '../../middleware/auth';
+import { enforceQuota } from '../../middleware/enforceQuota';
 import {
   getBenchmarks,
   getBenchmark,
@@ -32,7 +33,11 @@ router.post('/compare', compare);
 // — TCO numbers are commercially sensitive and shouldn't be visible
 // to broader read-only roles.
 const tcoRoles = ['FINANCE', 'PROCUREMENT_LEAD', 'INSTITUTION_ADMIN', 'SUPER_ADMIN'];
-router.post('/estimates', authenticateJWT, requireRole(tcoRoles), saveEstimate);
+// Phase 16.7: gate persisted estimates on the per-tier
+// `tco.calculations` quota (Free 10/mo, Pro/Enterprise unlimited).
+// /calculate + /compare stay free — they're stateless calculators that
+// don't persist; only the saved-estimate path counts toward the cap.
+router.post('/estimates', authenticateJWT, requireRole(tcoRoles), enforceQuota('tco.calculations'), saveEstimate);
 router.get('/estimates', authenticateJWT, requireRole(tcoRoles), listEstimates);
 router.get('/estimates/:id', authenticateJWT, requireRole(tcoRoles), getEstimate);
 
