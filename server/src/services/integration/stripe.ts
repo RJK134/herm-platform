@@ -464,6 +464,53 @@ export async function getSubscriptionStatus(stripeCustomerId: string) {
   return subscriptions.data[0] ?? null;
 }
 
+/**
+ * Phase 16.10 — create a single-use Stripe-hosted Customer Portal
+ * session for the given customer. Returns `{url, configured}`:
+ *  - `configured: false` when Stripe is not configured at all (parity
+ *    with `createCheckoutSession`'s shape so the client renders the
+ *    same "billing not enabled" modal).
+ *  - `url: null + configured: true` if Stripe is configured but the
+ *    customer has no Stripe-side record (free-tier customer who never
+ *    checked out — the UI shouldn't have shown the "Manage" button).
+ *  - `url: <https://billing.stripe.com/...>` on success — the client
+ *    redirects via window.location.href.
+ *
+ * `return_url` is where Stripe sends the user back to after they're
+ * done in the portal. Pinned to `${APP_URL}/subscription` so the user
+ * lands back on the page they came from.
+ */
+export interface PortalSessionResult {
+  url: string | null;
+  configured: boolean;
+  message?: string;
+}
+
+export async function createPortalSession(
+  stripeCustomerId: string | null,
+): Promise<PortalSessionResult> {
+  const stripe = getStripe();
+  if (!stripe) {
+    return {
+      url: null,
+      configured: false,
+      message: 'Payment processing is not configured on this instance.',
+    };
+  }
+  if (!stripeCustomerId) {
+    return {
+      url: null,
+      configured: true,
+      message: 'No Stripe customer record for this institution. Upgrade to a paid plan to manage billing.',
+    };
+  }
+  const session = await stripe.billingPortal.sessions.create({
+    customer: stripeCustomerId,
+    return_url: `${APP_URL}/subscription`,
+  });
+  return { url: session.url, configured: true };
+}
+
 export async function cancelSubscription(stripeSubscriptionId: string) {
   const stripe = getStripe();
   if (!stripe) return null;

@@ -75,3 +75,27 @@ export const getInvoices = async (req: Request, res: Response, next: NextFunctio
     res.json({ success: true, data: sub?.payments ?? [] });
   } catch (err) { next(err); }
 };
+
+/**
+ * Phase 16.10 — Stripe Customer Portal session.
+ * Replaces the legacy `VITE_STRIPE_BILLING_PORTAL_URL` env which
+ * hardcoded a single global portal URL on the client. The portal URL
+ * needs to be customer-scoped (the portal lets the user manage THEIR
+ * payment methods, view THEIR invoices, change THEIR plan), so it has
+ * to be created server-side per request with the right customer id.
+ *
+ * Response shape mirrors `createCheckout` — `{configured, url, message}`
+ * — so the client renders the same "billing not enabled" modal on
+ * `configured: false`.
+ */
+export const createPortal = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { institutionId } = req.user!;
+    const sub = await prisma.subscription.findUnique({
+      where: { institutionId },
+      select: { stripeCustomerId: true },
+    });
+    const result = await stripeService.createPortalSession(sub?.stripeCustomerId ?? null);
+    res.json({ success: true, data: result });
+  } catch (err) { next(err); }
+};
