@@ -350,6 +350,50 @@ export async function handleWebhook(rawBody: Buffer, signature: string): Promise
     }
   }
 
+  // ── Successful recovery from dunning ───────────────────────────────────
+  // Stripe sends `invoice.payment_succeeded` after a successful retry (e.g.
+  // when a customer fixes their payment method and Stripe retries). Lift the
+  // subscription back to active so billing flows resume normally.
+  if (event.type === 'invoice.payment_succeeded') {
+    const invoice = event.data.object as Stripe.Invoice & {
+      subscription?: string | { id: string } | null;
+      payment_intent?: string | { id: string } | null;
+    };
+    const stripeSubId =
+      typeof invoice.subscription === 'string'
+        ? invoice.subscription
+        : invoice.subscription?.id;
+    if (stripeSubId) {
+      const dbSub = await prisma.subscription.findFirst({ where: { stripeSubscriptionId: stripeSubId } });
+      if (dbSub && dbSub.dunningState === 'past_due') {
+        await prisma.subscription.update({
+          where: { id: dbSub.id },
+          data: { dunningState: 'active' },
+        });
+        const paymentIntentId =
+          typeof invoice.payment_intent === 'string'
+            ? invoice.payment_intent
+            : invoice.payment_intent?.id ?? null;
+        await prisma.payment.create({
+          data: {
+            subscriptionId: dbSub.id,
+            amount: (invoice.amount_paid ?? 0) / 100,
+            currency: (invoice.currency ?? 'gbp').toUpperCase(),
+            status: 'succeeded',
+            stripePaymentId: paymentIntentId,
+            paidAt: new Date(),
+          },
+        });
+        await notifyInstitutionAdmins(dbSub.institutionId, {
+          type: 'BILLING',
+          title: 'Payment recovered',
+          message: 'Your payment method is active and your subscription has been restored to good standing.',
+          link: '/subscription',
+        });
+      }
+    }
+  }
+
   // ── Refund issued ──────────────────────────────────────────────────────
   // Match the Payment row by `stripePaymentId` (which we set to
   // `payment_intent` on the success path). Mark it `refunded` so the
