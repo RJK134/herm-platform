@@ -32,6 +32,17 @@ describe('checkEnvironment — Stripe secret pairing (Workstream G)', () => {
     delete process.env['NODE_ENV'];
     delete process.env['STRIPE_SECRET_KEY'];
     delete process.env['STRIPE_WEBHOOK_SECRET'];
+    // Phase 16 test-paydown: PR #146 added prod-mode validation for the
+    // Stripe price-ID envs but its sibling test-file edits didn't ship.
+    // Two tests below ("production + both set → no throw" and "production
+    // + neither set → no throw") rely on these being absent, but if the
+    // host/CI env has them set (or a prior test set them and afterEach
+    // restored a polluted snapshot) the prod-only check fires and the
+    // assertions invert. Explicitly delete them here.
+    delete process.env['STRIPE_PRICE_INST_PRO'];
+    delete process.env['STRIPE_PRICE_INST_ENT'];
+    delete process.env['STRIPE_PRICE_VENDOR_ENH'];
+    delete process.env['STRIPE_PRICE_VENDOR_PREM'];
     delete process.env['ANTHROPIC_API_KEY'];
     delete process.env['DEV_UNLOCK_ALL_TIERS'];
     delete process.env['FRONTEND_URL'];
@@ -64,10 +75,17 @@ describe('checkEnvironment — Stripe secret pairing (Workstream G)', () => {
     expect(warnLines).toMatch(/STRIPE_SECRET_KEY.*STRIPE_WEBHOOK_SECRET/);
   });
 
-  it('production + both set → no throw, no Stripe-pairing warning', () => {
+  it('production + both set + price IDs → no throw, no Stripe-pairing warning', () => {
     process.env['NODE_ENV'] = 'production';
     process.env['STRIPE_SECRET_KEY'] = 'sk_live_xxx';
     process.env['STRIPE_WEBHOOK_SECRET'] = 'whsec_xxx';
+    // Phase 16.11 (PR #146) introduced a prod-mode check that requires
+    // the price IDs whenever STRIPE_SECRET_KEY is set. Without them this
+    // "happy path" assertion would inadvertently exercise the missing-
+    // price-IDs failure path. Set both so the test stays focused on the
+    // pairing-warning behaviour it was originally written to pin.
+    process.env['STRIPE_PRICE_INST_PRO'] = 'price_pro_test';
+    process.env['STRIPE_PRICE_INST_ENT'] = 'price_ent_test';
     expect(() => checkEnvironment()).not.toThrow();
     const allOutput = [...consoleError.mock.calls, ...consoleWarn.mock.calls].flat().join('\n');
     expect(allOutput).not.toMatch(/STRIPE_SECRET_KEY.*STRIPE_WEBHOOK_SECRET/);
@@ -78,7 +96,11 @@ describe('checkEnvironment — Stripe secret pairing (Workstream G)', () => {
     // STRIPE_SECRET_KEY unset → billing is intentionally disabled, no pairing concern.
     expect(() => checkEnvironment()).not.toThrow();
     const allOutput = [...consoleError.mock.calls, ...consoleWarn.mock.calls].flat().join('\n');
-    expect(allOutput).not.toMatch(/STRIPE_SECRET_KEY is set/);
+    // Tighten the regex to the actual pairing-warning text. The earlier
+    // `/STRIPE_SECRET_KEY is set/` false-matched the description of
+    // STRIPE_PRICE_INST_PRO in the "Optional environment variables not
+    // set" list ("…REQUIRED in production when STRIPE_SECRET_KEY is set…").
+    expect(allOutput).not.toMatch(/STRIPE_SECRET_KEY is set but STRIPE_WEBHOOK_SECRET/);
   });
 });
 

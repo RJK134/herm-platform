@@ -124,23 +124,19 @@ function toPem(base64: string): string {
  * signing and encryption). Encryption-only descriptors are ignored.
  */
 export function parseMetadataFeed(xml: string): Map<string, FeedEntry> {
-  // @xmldom/xmldom 0.9 widened `errorHandler` to a discriminated union
-  // (`ErrorHandlerFunction | ErrorHandlerObject`) but the object arm
-  // isn't exported. TS 5.7+ narrows literals to the function arm for
-  // excess-property checking, flagging the per-level fields. Cast to
-  // the function arm so the runtime object form passes type-checking
-  // — xmldom inspects the value shape at construction time, not the
-  // declared type, so this is safe.
-  const errorHandler = {
-    // The UKAMF feed validates against its schema upstream; locally we
-    // suppress non-fatal warnings to keep logs quiet.
-    warning: () => undefined,
-    error: () => undefined,
-    fatalError: (msg: string) => {
-      throw new Error(`metadata XML parse error: ${msg}`);
+  // @xmldom/xmldom 0.9 removed the legacy `errorHandler: { warning, error,
+  // fatalError }` object shape in favour of a single `onError(level, msg)`
+  // callback. The constructor throws `errorHandler object is no longer
+  // supported, switch to onError!` at construction time on the old shape.
+  // The UKAMF feed validates against its schema upstream; locally we
+  // suppress non-fatal levels and rethrow only on `fatalError`.
+  const doc = new DOMParser({
+    onError: (level: string, msg: unknown) => {
+      if (level === 'fatalError') {
+        throw new Error(`metadata XML parse error: ${String(msg)}`);
+      }
     },
-  } as unknown as (level: string, msg: unknown) => unknown;
-  const doc = new DOMParser({ errorHandler }).parseFromString(xml, 'application/xml');
+  }).parseFromString(xml, 'application/xml');
 
   // xmldom's parser is lenient — it returns a (mostly empty) document for
   // garbage input rather than throwing. Validate the root element so we
