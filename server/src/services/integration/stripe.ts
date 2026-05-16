@@ -350,10 +350,31 @@ export async function handleWebhook(rawBody: Buffer, signature: string): Promise
     }
   }
 
-  // ── Successful recovery from dunning ───────────────────────────────────
-  // Stripe sends `invoice.payment_succeeded` after a successful retry (e.g.
-  // when a customer fixes their payment method and Stripe retries). Lift the
-  // subscription back to active so billing flows resume normally.
+  // ── Successful renewal → exit dunning ──────────────────────────────────
+  // Phase 16.9. Stripe sends `invoice.payment_succeeded` after a renewal
+  // completes — including after a recovery on a previously past_due
+  // subscription. Without this branch the dunningState column would
+  // stay 'past_due' indefinitely; the only recovery path was a manual
+  // admin edit. Transition back to 'active' so future failed-payment
+  // alerts fire correctly + upsert a Payment row so the admin's
+  // invoices view shows the recovery.
+  //
+  // State-machine guard (Bugbot finding, ref1_7f19c0ae): only the
+  // `past_due → active` and `active → active` transitions are valid
+  // from this event. If a `customer.subscription.deleted` already set
+  // dunningState to `'cancelled'` (sub cancelled) or
+  // `charge.dispute.created` set it to `'paused'` (dispute hold), a
+  // late-arriving `invoice.payment_succeeded` must NOT re-activate
+  // the subscription — Stripe doesn't guarantee event ordering, so
+  // re-activating would silently undo the deletion or dispute hold.
+  //
+  // Idempotency: the Payment write uses `upsert` keyed on the
+  // `stripePaymentId` unique column. On replay (same payment_intent)
+  // the upsert is a no-op update; on the failed → succeeded
+  // transition path it overwrites the prior 'failed' row's status,
+  // which is the intended end state (Stripe's payment_intent has
+  // settled successfully — there is no longer a "failed" payment to
+  // track).
   if (event.type === 'invoice.payment_succeeded') {
     const invoice = event.data.object as Stripe.Invoice & {
       subscription?: string | { id: string } | null;
@@ -365,31 +386,70 @@ export async function handleWebhook(rawBody: Buffer, signature: string): Promise
         : invoice.subscription?.id;
     if (stripeSubId) {
       const dbSub = await prisma.subscription.findFirst({ where: { stripeSubscriptionId: stripeSubId } });
-      if (dbSub && dbSub.dunningState === 'past_due') {
-        await prisma.subscription.update({
-          where: { id: dbSub.id },
-          data: { dunningState: 'active' },
-        });
+      if (dbSub) {
+        const wasPastDue = dbSub.dunningState === 'past_due';
+        // Skip the state-machine update entirely when the sub is
+        // already in a terminal/holding state. The Payment write
+        // still runs so the admin's invoices view records that
+        // Stripe took the money (which is the operator-actionable
+        // fact even if the subscription itself shouldn't auto-resume).
+        const isTerminalState = dbSub.dunningState === 'cancelled' || dbSub.dunningState === 'paused';
+        if (!isTerminalState) {
+          await prisma.subscription.update({
+            where: { id: dbSub.id },
+            data: { dunningState: 'active', status: 'active' },
+          });
+        } else {
+          logger.warn(
+            { subscriptionId: dbSub.id, currentDunningState: dbSub.dunningState },
+            'invoice.payment_succeeded received for a subscription in a terminal/holding state — skipping auto-resume',
+          );
+        }
         const paymentIntentId =
           typeof invoice.payment_intent === 'string'
             ? invoice.payment_intent
             : invoice.payment_intent?.id ?? null;
-        await prisma.payment.create({
-          data: {
-            subscriptionId: dbSub.id,
-            amount: (invoice.amount_paid ?? 0) / 100,
-            currency: (invoice.currency ?? 'gbp').toUpperCase(),
-            status: 'succeeded',
-            stripePaymentId: paymentIntentId,
-            paidAt: new Date(),
-          },
-        });
-        await notifyInstitutionAdmins(dbSub.institutionId, {
-          type: 'BILLING',
-          title: 'Payment recovered',
-          message: 'Your payment method is active and your subscription has been restored to good standing.',
-          link: '/subscription',
-        });
+        if (paymentIntentId) {
+          // `Payment.stripePaymentId` is a unique column — using
+          // upsert keyed on it is the only replay-safe pattern.
+          // A previously-failed row with the same intent transitions
+          // to status='succeeded' on the recovery event (Stripe
+          // settled the charge — the failed row is no longer the
+          // truth). On a routine replay this is a no-op update.
+          await prisma.payment.upsert({
+            where: { stripePaymentId: paymentIntentId },
+            create: {
+              subscriptionId: dbSub.id,
+              amount: (invoice.amount_paid ?? invoice.amount_due ?? 0) / 100,
+              currency: (invoice.currency ?? 'gbp').toUpperCase(),
+              status: 'succeeded',
+              stripePaymentId: paymentIntentId,
+              paidAt: new Date(),
+            },
+            update: {
+              status: 'succeeded',
+              amount: (invoice.amount_paid ?? invoice.amount_due ?? 0) / 100,
+              currency: (invoice.currency ?? 'gbp').toUpperCase(),
+              paidAt: new Date(),
+            },
+          });
+        }
+        // Only notify on the past_due → active transition. Routine
+        // monthly renewals shouldn't email every admin; the admin
+        // would silence them after the first one anyway. Terminal
+        // states (cancelled / paused) also suppress notification —
+        // the operator needs the audit log here, not a feel-good
+        // email when the subscription is staying cancelled.
+        if (wasPastDue && !isTerminalState) {
+          await notifyInstitutionAdmins(dbSub.institutionId, {
+            type: 'BILLING',
+            title: 'Payment recovered',
+            message:
+              'Good news — the latest renewal payment went through and your ' +
+              'subscription is back to active. No further action needed.',
+            link: '/subscription',
+          });
+        }
       }
     }
   }
