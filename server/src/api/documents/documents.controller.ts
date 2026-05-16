@@ -4,6 +4,7 @@ import { generateDocumentSchema, updateDocumentSchema } from './documents.schema
 import { renderBusinessCasePdf } from '../../services/pdf/render-business-case';
 import { ValidationError } from '../../utils/errors';
 import { audit } from '../../lib/audit';
+import { recordUsage } from '../../middleware/enforceQuota';
 
 const service = new DocumentsService();
 
@@ -21,6 +22,10 @@ export const saveDocument = async (req: Request, res: Response, next: NextFuncti
     const data = generateDocumentSchema.parse(req.body);
     if (req.user) { data.institutionId = req.user.institutionId; data.institutionName = data.institutionName ?? req.user.institutionName; }
     const doc = await service.saveDocument(data);
+    // Phase 16.6: post-write usage increment. enforceQuota
+    // ('document.generation') gated the request; this updates the
+    // monthly counter only after the document is durably persisted.
+    await recordUsage(req.user!.institutionId, 'document.generation');
     res.status(201).json({ success: true, data: doc });
   } catch (err) { next(err); }
 };
