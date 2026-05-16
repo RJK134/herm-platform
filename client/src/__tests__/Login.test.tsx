@@ -40,14 +40,20 @@ describe('Login — post-login redirect safety', () => {
     mockLogin.mockResolvedValue({ type: 'success' });
   });
 
-  it('renders the FH Procure product branding', () => {
+  it('renders the FHE Procurement Platform branding with HERM as a footnote', () => {
     renderLoginAt('/login');
 
     expect(
       screen.getByRole('heading', { name: PRODUCT.name, level: 1 }),
     ).toBeInTheDocument();
+    // Phase 16.1: HERM moved from headline ("UCISA HERM v3.1 Procurement
+    // Intelligence") to a tier-positioning footnote so the product
+    // identity reads as FHE first, HERM as the included reference.
     expect(
-      screen.getByText(/UCISA HERM v3\.1 Procurement Intelligence/i),
+      screen.getByText(/Procurement intelligence for higher education/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Includes UCISA HERM v3\.1.*free at every tier/i),
     ).toBeInTheDocument();
   });
 

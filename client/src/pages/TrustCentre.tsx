@@ -106,6 +106,12 @@ export function TrustCentre() {
             How {PRODUCT.name} ({PRODUCT.longName}) protects institutional
             data and meets UK higher-education InfoSec gating requirements.
           </p>
+          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+            In product naming, &ldquo;FHE&rdquo; denotes {PRODUCT.vendor}. The
+            full product name describes the system-procurement offering; it is
+            not a letter-by-letter expansion of the &ldquo;FHE&rdquo;
+            abbreviation.
+          </p>
         </header>
 
         <section aria-labelledby="certifications-heading" className="mb-12">

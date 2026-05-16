@@ -1,10 +1,10 @@
 # HERM licence compliance
 
-FH Procure (Future Horizons Procurement Suite) ships two capability
-frameworks with different commercial and licensing characteristics. This
-document captures the invariants the code must preserve to remain
-compliant with the HERM licence and honest with our customers about
-what they are paying for.
+FHE Procurement Platform (Future Horizons Education Procurement Platform)
+ships two capability frameworks with different commercial and licensing
+characteristics. This document captures the invariants the code must
+preserve to remain compliant with the HERM licence and honest with our
+customers about what they are paying for.
 
 ## Frameworks shipped
 
