@@ -1,6 +1,7 @@
 /**
  * Tests for the new Stripe webhook event handlers added in Workstream G:
  *   - invoice.payment_failed   → dunningState=past_due + Payment(status=failed) + admin notification
+ *   - invoice.payment_succeeded → dunningState=past_due→active (recovery) + Payment(status=succeeded) + admin notification
  *   - customer.subscription.updated → tier reconciliation from price ID + admin notification
  *   - charge.refunded          → Payment(status=refunded) + admin notification
  *   - charge.dispute.created   → dunningState=paused + admin notification
@@ -49,6 +50,11 @@ const { prismaMock } = vi.hoisted(() => ({
       create: vi.fn(),
       updateMany: vi.fn(),
       findFirst: vi.fn(),
+      // Phase 16.9 — invoice.payment_succeeded uses upsert keyed on the
+      // unique stripePaymentId column. The failed → succeeded transition
+      // path requires this (findFirst+create would throw P2002 on the
+      // unique constraint).
+      upsert: vi.fn(),
     },
     user: {
       findMany: vi.fn(),
@@ -88,6 +94,7 @@ beforeEach(() => {
   prismaMock.payment.create.mockReset();
   prismaMock.payment.updateMany.mockReset();
   prismaMock.payment.findFirst.mockReset();
+  prismaMock.payment.upsert.mockReset();
   prismaMock.user.findMany.mockReset();
   prismaMock.notification.createMany.mockReset();
   prismaMock.user.findMany.mockResolvedValue([{ id: 'admin-1', email: 'admin-1@inst.test' }]);
@@ -168,6 +175,179 @@ describe('stripe webhook — invoice.payment_failed', () => {
     await handleWebhook(Buffer.from('payload'), 'sig');
     expect(prismaMock.subscription.update).not.toHaveBeenCalled();
     expect(prismaMock.payment.create).not.toHaveBeenCalled();
+    expect(prismaMock.notification.createMany).not.toHaveBeenCalled();
+  });
+});
+
+// Phase 16.9 — successful renewal recovers a past_due subscription.
+// Pins the auto-recovery contract: dunningState flips back to 'active',
+// a Payment row is upserted (unique on stripePaymentId so replays +
+// failed→succeeded transitions are both safe), admins are notified
+// only on the past_due → active transition, and terminal states
+// ('cancelled', 'paused') are NOT overwritten by a late-arriving event.
+describe('stripe webhook — invoice.payment_succeeded', () => {
+  it('flips dunningState past_due → active + upserts a succeeded Payment + notifies admins', async () => {
+    constructEvent.mockReturnValueOnce({
+      type: 'invoice.payment_succeeded',
+      data: {
+        object: {
+          subscription: 'sub_stripe_recovered',
+          amount_paid: 5000,
+          currency: 'gbp',
+          payment_intent: 'pi_recovered_1',
+        },
+      },
+    });
+    prismaMock.subscription.findFirst.mockResolvedValueOnce({
+      id: 'sub_db_recovered',
+      institutionId: 'inst-1',
+      dunningState: 'past_due',
+    });
+
+    const res = await handleWebhook(Buffer.from('payload'), 'sig');
+
+    expect(res).toEqual({ handled: true, event: 'invoice.payment_succeeded' });
+    expect(prismaMock.subscription.update).toHaveBeenCalledWith({
+      where: { id: 'sub_db_recovered' },
+      data: { dunningState: 'active', status: 'active' },
+    });
+    // Payment.stripePaymentId is @unique — upsert keyed on it handles
+    // both the fresh-payment path and the failed→succeeded transition
+    // path without throwing P2002. The `update` clause overwrites the
+    // prior 'failed' row (Stripe settled the charge — that's the truth now).
+    expect(prismaMock.payment.upsert).toHaveBeenCalledWith({
+      where: { stripePaymentId: 'pi_recovered_1' },
+      create: expect.objectContaining({
+        subscriptionId: 'sub_db_recovered',
+        amount: 50,
+        currency: 'GBP',
+        status: 'succeeded',
+        stripePaymentId: 'pi_recovered_1',
+      }),
+      update: expect.objectContaining({
+        status: 'succeeded',
+        amount: 50,
+        currency: 'GBP',
+      }),
+    });
+    expect(prismaMock.notification.createMany).toHaveBeenCalled();
+  });
+
+  it('does NOT notify admins for a routine renewal (subscription was already active)', async () => {
+    constructEvent.mockReturnValueOnce({
+      type: 'invoice.payment_succeeded',
+      data: {
+        object: {
+          subscription: 'sub_stripe_active',
+          amount_paid: 5000,
+          currency: 'gbp',
+          payment_intent: 'pi_routine_1',
+        },
+      },
+    });
+    prismaMock.subscription.findFirst.mockResolvedValueOnce({
+      id: 'sub_db_active',
+      institutionId: 'inst-2',
+      dunningState: 'active', // already active — no transition signal
+    });
+
+    await handleWebhook(Buffer.from('payload'), 'sig');
+
+    expect(prismaMock.subscription.update).toHaveBeenCalledWith({
+      where: { id: 'sub_db_active' },
+      data: { dunningState: 'active', status: 'active' },
+    });
+    expect(prismaMock.payment.upsert).toHaveBeenCalled();
+    // No admin notification on the routine path — would be email noise.
+    expect(prismaMock.notification.createMany).not.toHaveBeenCalled();
+  });
+
+  it('upsert is idempotent on Stripe replay — second delivery produces no new Payment row', async () => {
+    constructEvent.mockReturnValueOnce({
+      type: 'invoice.payment_succeeded',
+      data: {
+        object: {
+          subscription: 'sub_stripe_replay',
+          amount_paid: 5000,
+          currency: 'gbp',
+          payment_intent: 'pi_replay_1',
+        },
+      },
+    });
+    prismaMock.subscription.findFirst.mockResolvedValueOnce({
+      id: 'sub_db_replay',
+      institutionId: 'inst-3',
+      dunningState: 'active',
+    });
+
+    await handleWebhook(Buffer.from('payload'), 'sig');
+
+    // The upsert path is the idempotency guarantee — DB-side the
+    // `update` clause runs on replay, producing no new row. We
+    // assert the call shape; the database's own behaviour is the
+    // contract being relied on.
+    expect(prismaMock.payment.upsert).toHaveBeenCalledTimes(1);
+    expect(prismaMock.payment.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { stripePaymentId: 'pi_replay_1' },
+      }),
+    );
+  });
+
+  // Bugbot finding ref1_7f19c0ae — state-machine race protection.
+  // Stripe doesn't guarantee webhook ordering; a late-arriving
+  // payment_succeeded must NOT undo a cancelled / paused transition
+  // set by an earlier customer.subscription.deleted /
+  // charge.dispute.created event.
+  for (const terminal of ['cancelled', 'paused'] as const) {
+    it(`does NOT re-activate a subscription in '${terminal}' state`, async () => {
+      constructEvent.mockReturnValueOnce({
+        type: 'invoice.payment_succeeded',
+        data: {
+          object: {
+            subscription: 'sub_stripe_terminal',
+            amount_paid: 5000,
+            currency: 'gbp',
+            payment_intent: 'pi_terminal',
+          },
+        },
+      });
+      prismaMock.subscription.findFirst.mockResolvedValueOnce({
+        id: 'sub_db_terminal',
+        institutionId: 'inst-terminal',
+        dunningState: terminal,
+      });
+
+      await handleWebhook(Buffer.from('payload'), 'sig');
+
+      // Subscription row is NOT touched — the existing terminal
+      // state is preserved against this late delivery.
+      expect(prismaMock.subscription.update).not.toHaveBeenCalled();
+      // Payment row IS upserted — the operator still wants to see
+      // that Stripe took the money, even if the subscription is
+      // staying in its terminal state.
+      expect(prismaMock.payment.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { stripePaymentId: 'pi_terminal' },
+        }),
+      );
+      // No admin notification either — would be misleading
+      // ("payment recovered!" on a cancelled sub).
+      expect(prismaMock.notification.createMany).not.toHaveBeenCalled();
+    });
+  }
+
+  it('is a no-op when the subscription id does not match a row (unknown remote)', async () => {
+    constructEvent.mockReturnValueOnce({
+      type: 'invoice.payment_succeeded',
+      data: { object: { subscription: 'sub_unknown', amount_paid: 5000, currency: 'gbp' } },
+    });
+    prismaMock.subscription.findFirst.mockResolvedValueOnce(null);
+
+    await handleWebhook(Buffer.from('payload'), 'sig');
+
+    expect(prismaMock.subscription.update).not.toHaveBeenCalled();
+    expect(prismaMock.payment.upsert).not.toHaveBeenCalled();
     expect(prismaMock.notification.createMany).not.toHaveBeenCalled();
   });
 });

@@ -15,7 +15,10 @@ import { PRODUCT } from '../lib/branding';
 // ── Interfaces ────────────────────────────────────────────────────────────────
 
 interface SubscriptionData {
-  tier: 'FREE' | 'PROFESSIONAL' | 'ENTERPRISE';
+  // Phase 16.10: align with the Subscription.tier enum (Phase 15.2 PRO
+  // rename). 'PROFESSIONAL' is kept for one release as a backstop for
+  // any cached client state that still carries the legacy value.
+  tier: 'FREE' | 'PROFESSIONAL' | 'PRO' | 'ENTERPRISE';
   status: string;
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
@@ -48,8 +51,7 @@ interface CheckoutResponse {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const TIER_ORDER: Record<string, number> = { FREE: 0, PROFESSIONAL: 1, ENTERPRISE: 2 };
-const STRIPE_BILLING_PORTAL_URL = import.meta.env.VITE_STRIPE_BILLING_PORTAL_URL?.trim();
+const TIER_ORDER: Record<string, number> = { FREE: 0, PROFESSIONAL: 1, PRO: 1, ENTERPRISE: 2 };
 
 interface TierFeature {
   feature: string;
@@ -58,7 +60,14 @@ interface TierFeature {
   enterprise: string | boolean;
 }
 
+// Phase 16.2 — the leading row pins the platform's HERM-on-Free promise so
+// the free dataset is the first thing a procurement reviewer sees on the
+// pricing page. Three "Included" cells deliberately mirror across all
+// tiers: HERM is part of the platform on every tier, not a paid upsell.
+// HERM_COMPLIANCE rule #1 ("HERM capability access is free") is asserted
+// here in copy as well as enforced server-side.
 const TIER_FEATURES: TierFeature[] = [
+  { feature: 'UCISA HERM v3.1 reference model', free: 'Included', pro: 'Included', enterprise: 'Included' },
   { feature: 'Procurement projects', free: '3', pro: 'Unlimited', enterprise: 'Unlimited' },
   { feature: 'Team workspace members', free: '2', pro: '10', enterprise: 'Unlimited' },
   { feature: 'Capability baskets', free: '3', pro: 'Unlimited', enterprise: 'Unlimited' },
@@ -149,6 +158,26 @@ export function Subscriptions() {
     },
   });
 
+  // Phase 16.10 — Stripe Customer Portal session. Replaces the legacy
+  // VITE_STRIPE_BILLING_PORTAL_URL env (a single global URL was wrong
+  // anyway — the portal needs to be customer-scoped). Server creates
+  // the session per request; we redirect via window.location.href so
+  // the user lands directly on Stripe's hosted portal.
+  const portalMutation = useMutation({
+    mutationFn: () =>
+      axios.post<{ success: true; data: { configured: boolean; url: string | null; message?: string } }>(
+        '/api/subscriptions/portal',
+      ),
+    onSuccess: (res) => {
+      if (res.data.data.url) {
+        window.location.href = res.data.data.url;
+      } else {
+        setUpgradeMsg(res.data.data.message ?? 'Stripe billing portal is not available right now.');
+        setUpgradeMsgOpen(true);
+      }
+    },
+  });
+
   const sub = subQuery.data;
   const payments = invoicesQuery.data ?? sub?.payments ?? [];
   const currentTier = sub?.tier ?? 'FREE';
@@ -156,13 +185,16 @@ export function Subscriptions() {
 
   const tierIcon = (t: string) => {
     if (t === 'ENTERPRISE') return <Building2 className="w-5 h-5" />;
-    if (t === 'PROFESSIONAL') return <Zap className="w-5 h-5" />;
+    // Phase 16.10: admit both 'PRO' (current Prisma enum value, post
+    // 15.2 rename) and 'PROFESSIONAL' (legacy backstop) so a cached
+    // client state from before the rename still renders correctly.
+    if (t === 'PROFESSIONAL' || t === 'PRO') return <Zap className="w-5 h-5" />;
     return <Shield className="w-5 h-5" />;
   };
 
   const tierColour = (t: string) => {
     if (t === 'ENTERPRISE') return 'text-purple-600 dark:text-purple-400';
-    if (t === 'PROFESSIONAL') return 'text-teal-600 dark:text-teal-400';
+    if (t === 'PROFESSIONAL' || t === 'PRO') return 'text-teal-600 dark:text-teal-400';
     return 'text-gray-600 dark:text-gray-400';
   };
 
@@ -212,15 +244,15 @@ export function Subscriptions() {
           </div>
 
           <div className="flex items-center gap-2">
-            {(currentTier === 'PROFESSIONAL' || currentTier === 'ENTERPRISE') && sub?.stripeCustomerId && STRIPE_BILLING_PORTAL_URL && (
-              <a
-                href={STRIPE_BILLING_PORTAL_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-teal-600 dark:text-teal-400 border border-teal-300 dark:border-teal-700 rounded-lg hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors"
+            {(currentTier === 'PROFESSIONAL' || currentTier === 'PRO' || currentTier === 'ENTERPRISE') && sub?.stripeCustomerId && (
+              <button
+                type="button"
+                onClick={() => portalMutation.mutate()}
+                disabled={portalMutation.isPending}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-teal-600 dark:text-teal-400 border border-teal-300 dark:border-teal-700 rounded-lg hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors disabled:opacity-60"
               >
                 <ExternalLink className="w-3.5 h-3.5" /> {t("subscription.manageOnStripe", "Manage on Stripe")}
-              </a>
+              </button>
             )}
             {currentTier !== 'FREE' && sub?.status === 'active' && (
               <Button
@@ -263,7 +295,7 @@ export function Subscriptions() {
                     <Zap className="w-4 h-4 text-teal-500" />
                     <span className="dark:text-white">{t("subscription.pro", "Pro")}</span>
                     <span className="font-normal text-gray-400">£2,500/yr</span>
-                    {currentTier === 'PROFESSIONAL' && (
+                    {(currentTier === 'PROFESSIONAL' || currentTier === 'PRO') && (
                       <span className="text-xs bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 px-1.5 py-0.5 rounded-full">{t("subscription.current", "Current")}</span>
                     )}
                   </div>
@@ -315,7 +347,7 @@ export function Subscriptions() {
               </Button>
             </>
           )}
-          {currentTier === 'PROFESSIONAL' && (
+          {(currentTier === 'PROFESSIONAL' || currentTier === 'PRO') && (
             <Button
               className="bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-2"
               onClick={() => checkoutMutation.mutate('institutionEnterprise')}

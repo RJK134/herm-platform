@@ -40,8 +40,9 @@ const TIERS = [
       'Multi-user institution account',
       'Vendor portal access',
       'API access',
-      'SLA & dedicated support',
-      'Custom scoring methodology',
+      'White-label PDF / Word exports',
+      'Dedicated CSM',
+      'SLA & priority support',
     ],
   },
 ];

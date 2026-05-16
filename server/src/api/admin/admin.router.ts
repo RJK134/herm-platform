@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticateJWT, requireRole } from '../../middleware/auth';
+import { requirePaidTier } from '../../middleware/require-paid-tier';
 import {
   listVendorAccounts,
   updateVendorAccount,
@@ -8,6 +9,8 @@ import {
   reviewSubmission,
 } from './admin-vendors.controller';
 import { startImpersonation, endImpersonation } from './impersonation.controller';
+import { submitCsmRequest } from './csm-request.controller';
+import { getBranding, putBranding } from './branding.controller';
 import {
   readMe as readSsoMe,
   upsertMe as upsertSsoMe,
@@ -36,8 +39,26 @@ const router = Router();
 router.post('/impersonate', authenticateJWT, startImpersonation);
 router.post('/impersonate/end', authenticateJWT, endImpersonation);
 
+// Phase 16.14 — Enterprise dedicated-CSM contact form. Open to ANY
+// authenticated user on an Enterprise tenant (not just admins) — the
+// tier predicate is the gate, not the role. Mounted before the
+// INSTITUTION_ADMIN guard below for that reason.
+router.post(
+  '/csm-request',
+  authenticateJWT,
+  requirePaidTier(['enterprise']),
+  submitCsmRequest,
+);
+
 // All other admin routes require a valid JWT and INSTITUTION_ADMIN or SUPER_ADMIN role
 router.use(authenticateJWT, requireRole(['SUPER_ADMIN', 'INSTITUTION_ADMIN']));
+
+// Phase 16.13 — Enterprise white-label export branding. Both reads
+// and writes are Enterprise-only AND require admin role (covered by
+// the router-level guard above). The PDF / Word renderer re-checks
+// tier before applying the override at render time.
+router.get('/branding', requirePaidTier(['enterprise']), getBranding);
+router.put('/branding', requirePaidTier(['enterprise']), putBranding);
 
 router.get('/vendors', listVendorAccounts);
 router.patch('/vendors/:id', updateVendorAccount);

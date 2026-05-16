@@ -111,6 +111,25 @@ export function HowItWorks() {
     <div>
       <Header title={t('howItWorks.title', 'How It Works')} subtitle={t('howItWorks.subtitle', 'Scoring methodology, evidence standards, and framework explanation')} />
 
+      {/*
+        Phase 16.2 — Free-tier callout. Pins the HERM-on-Free promise as
+        the first thing a procurement reviewer sees on the methodology
+        page. HERM is positioned as a free reference dataset that comes
+        with the platform on every tier (HERM_COMPLIANCE rule #1) — paid
+        tiers add the scoring/comparison/intelligence surface on top.
+      */}
+      <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50/60 px-5 py-4 dark:border-emerald-800/60 dark:bg-emerald-900/20">
+        <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
+          <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+            Free at every tier
+          </span>
+          <span className="text-sm font-semibold">UCISA HERM v3.1 reference model</span>
+        </div>
+        <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+          165 capabilities · 21 systems benchmarked · leaderboard, heatmap, radar comparison, capability basket, and CSV export — all included on the free tier with full attribution. Paid tiers (Pro / Enterprise) layer cross-institution sector intelligence, framework mappings, white-label exports, and API access on top of the same HERM dataset.
+        </p>
+      </div>
+
       {/* Tab bar */}
       <div className="flex gap-1 mb-6 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit">
         {TABS.map(tab => (

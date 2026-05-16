@@ -1,4 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="6" fill="#0d9488"/>
-  <text x="16" y="22" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="16" fill="white">H</text>
+  <!--
+    FHE Procurement Platform favicon (Phase 16.1).
+    Inspired by the Future Horizons Education globe lockup: dark indigo
+    ground, banded ellipse motif. Single-colour text "FHE" stamps the
+    brand at 32×32. SVG so it scales for retina + tab thumbnails.
+  -->
+  <rect width="32" height="32" rx="6" fill="#0b1220"/>
+  <!-- Stylised globe stripes (echo of the FHE logo) -->
+  <g fill="#3aa6b0">
+    <ellipse cx="16" cy="9"  rx="9" ry="1.2"/>
+    <ellipse cx="16" cy="13" rx="11" ry="1.2"/>
+    <ellipse cx="16" cy="17" rx="11" ry="1.2"/>
+    <ellipse cx="16" cy="21" rx="9" ry="1.2"/>
+  </g>
+  <!-- Wordmark stamp -->
+  <text x="16" y="29" text-anchor="middle" font-family="DM Sans, sans-serif" font-weight="700" font-size="6" fill="#f9fafb" letter-spacing="0.5">FHE</text>
 </svg>

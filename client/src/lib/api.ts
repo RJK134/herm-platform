@@ -72,6 +72,25 @@ export interface SsoIdpUpsertPayload {
   oidcClientSecret?: string | null;
 }
 
+/**
+ * Phase 16.8 — quota-exceeded error shape. The server's enforceQuota
+ * middleware emits 402 + code 'QUOTA_EXCEEDED' + a structured `details`
+ * payload. Components that want bespoke handling beyond the global
+ * toast (e.g. inline upgrade card on the page where the click
+ * happened) can narrow with `isQuotaExceeded(err)`.
+ */
+export interface QuotaExceededDetails {
+  metric: string;
+  used: number;
+  limit: number | string;
+  tier: string;
+  period: string;
+}
+
+export function isQuotaExceeded(err: unknown): err is ApiError & { details: QuotaExceededDetails } {
+  return err instanceof ApiError && err.status === 402 && err.code === 'QUOTA_EXCEEDED';
+}
+
 export class ApiError extends Error {
   code: string;
   status: number;
@@ -144,6 +163,20 @@ client.interceptors.response.use(
         const returnTo = encodeURIComponent(here);
         window.location.href = `/login?returnTo=${returnTo}`;
       }
+    } else if (status === 402 && code === 'QUOTA_EXCEEDED' && typeof window !== 'undefined') {
+      // Phase 16.8 — quota-exceeded toast. Shows the user the cap they
+      // hit + a one-click route to /subscription. The 402 status is the
+      // Phase 15.3 server-side enforcement; this is the global UX seam
+      // so per-mutation handlers don't each have to repeat the
+      // upgrade-CTA copy. The `details` payload carries
+      // { metric, used, limit, tier, period }.
+      toast.error(`${message} — upgrade to lift the limit.`, {
+        duration: 6000,
+        // react-hot-toast v2 doesn't give us a stable per-id dedupe out
+        // of the box; setting `id` so a rapid burst of 402s for the
+        // same metric only renders one toast.
+        id: `quota-${(details as { metric?: string } | undefined)?.metric ?? 'unknown'}`,
+      });
     } else if (status >= 500) {
       toast.error(message);
     }
@@ -193,6 +226,18 @@ export const api = {
     ),
   deleteSsoIdpForInstitution: (institutionId: string) =>
     client.delete(`/admin/sso/institutions/${encodeURIComponent(institutionId)}`),
+
+  // Phase 16.14 — Enterprise dedicated-CSM contact form. Server is
+  // Enterprise-tier-gated via requirePaidTier(['enterprise']) on the
+  // route; Free/Pro callers receive SUBSCRIPTION_REQUIRED through the
+  // shared interceptor → ApiError pipeline.
+  submitCsmRequest: (data: {
+    topic: 'kickoff' | 'quarterly-review' | 'tooling-question' | 'roadmap-input' | 'escalation' | 'other';
+    message: string;
+    preferredContactMethod?: 'email' | 'phone' | 'video-call';
+    preferredContactDetail?: string;
+  }) =>
+    client.post<ApiResponse<{ accepted: boolean; notice: string }>>('/admin/csm-request', data),
 
   // Phase 10.8 — MFA (TOTP)
   getMfaStatus: () =>

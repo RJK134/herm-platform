@@ -144,7 +144,10 @@ export function Login() {
             {PRODUCT.name}
           </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
-            UCISA HERM v3.1 Procurement Intelligence
+            Procurement intelligence for higher education
+          </p>
+          <p className="text-gray-400 dark:text-gray-500 mt-1 text-xs">
+            Includes UCISA HERM v3.1 reference model — free at every tier
           </p>
         </div>
 

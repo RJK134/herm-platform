@@ -21,6 +21,8 @@ const ENV_VARS: EnvVar[] = [
   { name: 'ANTHROPIC_API_KEY',     required: false, description: 'Anthropic API key for AI chat feature' },
   { name: 'STRIPE_SECRET_KEY',     required: false, description: 'Stripe secret key for subscription billing' },
   { name: 'STRIPE_WEBHOOK_SECRET', required: false, description: 'Stripe webhook secret for payment event verification' },
+  { name: 'STRIPE_PRICE_INST_PRO', required: false, description: 'Stripe price ID for Institution Pro tier (monthly). REQUIRED in production when STRIPE_SECRET_KEY is set — see prod-only check below.' },
+  { name: 'STRIPE_PRICE_INST_ENT', required: false, description: 'Stripe price ID for Institution Enterprise tier (monthly). REQUIRED in production when STRIPE_SECRET_KEY is set — see prod-only check below.' },
   { name: 'REDIS_URL',             required: false, description: 'Redis connection string (e.g. redis://localhost:6379) — enables the Redis readiness probe when set; shared rate-limit / session state is not yet implemented' },
   { name: 'SMTP_HOST',             required: false, description: 'SMTP server host for outbound email (billing notifications etc.)' },
   { name: 'SMTP_FROM',             required: false, description: 'Default From: address for outbound email (e.g. "HERM <noreply@example.com>")' },
