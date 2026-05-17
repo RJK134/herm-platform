@@ -48,6 +48,7 @@ import { SectorAnalytics } from './pages/SectorAnalytics';
 import { ApiIntegration } from './pages/ApiIntegration';
 import { FrameworkMapping } from './pages/FrameworkMapping';
 import { EnterpriseSupport } from './pages/EnterpriseSupport';
+import { AdminBranding } from './pages/AdminBranding';
 import { NotFound } from './pages/NotFound';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LicenceFooter } from './components/LicenceFooter';
@@ -293,6 +294,27 @@ export default function App() {
                             >
                               <EnterpriseSupport />
                             </RequireTier>
+                          }
+                        />
+                        {/*
+                          Phase 16.13b — white-label branding admin UI. Wraps
+                          in BOTH a role gate (INSTITUTION_ADMIN/SUPER_ADMIN)
+                          via ProtectedRoute AND the Enterprise tier gate via
+                          RequireTier. The server's PUT /api/admin/branding
+                          enforces both independently — this is UI mirror.
+                        */}
+                        <Route
+                          path="/admin/branding"
+                          element={
+                            <ProtectedRoute roles={ADMIN_ROLES}>
+                              <RequireTier
+                                tiers={['enterprise']}
+                                featureName="White-label branding"
+                                description="Customise the look of generated PDF exports for your institution: primary/secondary colours, footer text, and logo URL. Included on the Enterprise plan."
+                              >
+                                <AdminBranding />
+                              </RequireTier>
+                            </ProtectedRoute>
                           }
                         />
                         <Route path="*" element={<NotFound />} />

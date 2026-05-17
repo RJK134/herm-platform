@@ -91,6 +91,18 @@ export function isQuotaExceeded(err: unknown): err is ApiError & { details: Quot
   return err instanceof ApiError && err.status === 402 && err.code === 'QUOTA_EXCEEDED';
 }
 
+// ── Phase 16.13 — Enterprise white-label branding ────────────────────────
+// Mirrors `brandingPreferencesSchema` in server/src/api/admin/branding.controller.ts.
+// Every field is independently nullable so admins can update one at a time;
+// `null` means "explicit clear back to platform default", `undefined` (when
+// the API omits the field) means "no value set yet".
+export interface BrandingPreferences {
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+  secondaryColor?: string | null;
+  footerText?: string | null;
+}
+
 export class ApiError extends Error {
   code: string;
   status: number;
@@ -238,6 +250,23 @@ export const api = {
     preferredContactDetail?: string;
   }) =>
     client.post<ApiResponse<{ accepted: boolean; notice: string }>>('/admin/csm-request', data),
+
+  // Phase 16.13b — Enterprise white-label branding admin UI. Both
+  // endpoints are Enterprise-tier-gated server-side via
+  // requirePaidTier(['enterprise']); Free/Pro callers get a 403
+  // SUBSCRIPTION_REQUIRED through the shared interceptor.
+  // putBranding does read-merge-write server-side so a partial PUT
+  // (e.g. just `{primaryColor}`) preserves other fields. Pass
+  // `null` for a field to explicitly clear it back to platform default.
+  getBranding: () =>
+    client.get<ApiResponse<{ brandingPreferences: BrandingPreferences | null }>>(
+      '/admin/branding',
+    ),
+  putBranding: (data: Partial<BrandingPreferences>) =>
+    client.put<ApiResponse<{ brandingPreferences: BrandingPreferences | null }>>(
+      '/admin/branding',
+      data,
+    ),
 
   // Phase 10.8 — MFA (TOTP)
   getMfaStatus: () =>
