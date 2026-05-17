@@ -73,7 +73,15 @@ const TOKEN_KEY = 'herm_auth_token';
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // Phase 16 lint paydown — `isLoading` is true only when there's a saved
+  // token to validate (the /auth/me round-trip). When there's no token,
+  // the user is anonymous and there's nothing to load. Lazy-init lets us
+  // skip the `setIsLoading(false)` synchronous setState in the mount
+  // effect, which React 19's `react-hooks/set-state-in-effect` rule flags.
+  const [isLoading, setIsLoading] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return !!localStorage.getItem(TOKEN_KEY);
+  });
 
   const setAuth = useCallback((newToken: string, userData: AuthUser) => {
     localStorage.setItem(TOKEN_KEY, newToken);
@@ -101,26 +109,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.dataset['tier'] = tier;
   }, [user]);
 
-  // Restore session from localStorage on mount
+  // Restore session from localStorage on mount. The lazy-init for
+  // `isLoading` above means the anonymous case (no token) already starts
+  // at false — no synchronous setState needed in the else branch.
   useEffect(() => {
     const saved = localStorage.getItem(TOKEN_KEY);
-    if (saved) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${saved}`;
-      axios
-        .get<{ success: boolean; data: AuthUser }>('/api/auth/me')
-        .then(({ data }) => {
-          if (data.success) {
-            setToken(saved);
-            setUser(data.data);
-          } else {
-            clearAuth();
-          }
-        })
-        .catch(() => clearAuth())
-        .finally(() => setIsLoading(false));
-    } else {
-      setIsLoading(false);
-    }
+    if (!saved) return;
+    axios.defaults.headers.common['Authorization'] = `Bearer ${saved}`;
+    axios
+      .get<{ success: boolean; data: AuthUser }>('/api/auth/me')
+      .then(({ data }) => {
+        if (data.success) {
+          setToken(saved);
+          setUser(data.data);
+        } else {
+          clearAuth();
+        }
+      })
+      .catch(() => clearAuth())
+      .finally(() => setIsLoading(false));
   }, [clearAuth]);
 
   const login = useCallback(

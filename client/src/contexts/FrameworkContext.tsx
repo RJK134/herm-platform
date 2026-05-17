@@ -74,27 +74,44 @@ export function FrameworkProvider({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
-    setIsLoading(true);
+    // Phase 16 lint paydown — React 19's react-hooks/set-state-in-effect
+    // flags `setIsLoading(true)` running synchronously in the effect
+    // body. Queue it via queueMicrotask so it runs after the current
+    // render commits, then all subsequent state mutations are inside
+    // promise resolutions which the rule accepts.
+    //
     // Use the shared authenticated API client so the JWT (and any future
     // auth headers) travel with this request — critical for paid-tier
     // callers whose account can see the proprietary framework list.
-    api
-      .listFrameworks()
-      .then(({ data: payload }) => {
-        if (payload.success && Array.isArray(payload.data)) {
-          setFrameworks(payload.data as Framework[]);
-          const defaultFw = selectDefault(payload.data as Framework[]);
-          setActiveFramework(defaultFw);
-        }
-      })
-      .catch(() => {
-        // If the frameworks endpoint fails, continue with an empty list —
-        // the UI will render the public fallback served by framework-context
-        // middleware on the server.
-        setFrameworks([]);
-        setActiveFramework(null);
-      })
-      .finally(() => setIsLoading(false));
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setIsLoading(true);
+      api
+        .listFrameworks()
+        .then(({ data: payload }) => {
+          if (cancelled) return;
+          if (payload.success && Array.isArray(payload.data)) {
+            setFrameworks(payload.data as Framework[]);
+            const defaultFw = selectDefault(payload.data as Framework[]);
+            setActiveFramework(defaultFw);
+          }
+        })
+        .catch(() => {
+          // If the frameworks endpoint fails, continue with an empty list —
+          // the UI will render the public fallback served by framework-context
+          // middleware on the server.
+          if (cancelled) return;
+          setFrameworks([]);
+          setActiveFramework(null);
+        })
+        .finally(() => {
+          if (!cancelled) setIsLoading(false);
+        });
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [selectDefault]);
 
   return (

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Lock, Search } from 'lucide-react';
@@ -20,6 +20,10 @@ export function FrameworkMapping() {
   const { user, isAuthenticated } = useAuthContext();
   const isEnterprise = user?.tier === 'enterprise' || user?.role === 'SUPER_ADMIN';
 
+  // `selectedMappingId` tracks explicit user clicks. When null, the
+  // effective selection falls back to the first mapping in the list —
+  // derived in render below rather than synced through a state-setting
+  // useEffect (React 19 lint flags that pattern as cascading-render-risk).
   const [selectedMappingId, setSelectedMappingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [strengthFilter, setStrengthFilter] = useState<string>('');
@@ -35,24 +39,22 @@ export function FrameworkMapping() {
     retry: false,
   });
 
+  // Derived effective selection — explicit user click wins, otherwise
+  // the first item in the list. Avoids the "auto-select via useEffect +
+  // setState" pattern that triggered react-hooks/set-state-in-effect.
+  const effectiveSelectedId = selectedMappingId ?? mappings?.[0]?.id ?? null;
+
   const {
     data: selectedMapping,
     isLoading: mappingLoading,
   } = useQuery({
-    queryKey: ['framework-mapping', selectedMappingId],
+    queryKey: ['framework-mapping', effectiveSelectedId],
     queryFn: () =>
-      selectedMappingId
-        ? api.getFrameworkMapping(selectedMappingId).then((r) => r.data.data)
+      effectiveSelectedId
+        ? api.getFrameworkMapping(effectiveSelectedId).then((r) => r.data.data)
         : null,
-    enabled: isAuthenticated && isEnterprise && !!selectedMappingId,
+    enabled: isAuthenticated && isEnterprise && !!effectiveSelectedId,
   });
-
-  // Auto-select the first mapping when the list loads
-  useEffect(() => {
-    if (mappings && mappings.length > 0 && !selectedMappingId) {
-      setSelectedMappingId(mappings[0].id);
-    }
-  }, [mappings, selectedMappingId]);
 
   // Filter items by search and strength
   const filteredItems = useMemo(() => {
@@ -152,7 +154,7 @@ export function FrameworkMapping() {
             key={m.id}
             onClick={() => setSelectedMappingId(m.id)}
             className={`text-left p-4 rounded-lg border transition-all ${
-              selectedMappingId === m.id
+              effectiveSelectedId === m.id
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-sm'
                 : 'border-gray-200 bg-white dark:bg-gray-800 hover:border-gray-300'
             }`}

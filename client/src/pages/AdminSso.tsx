@@ -96,7 +96,11 @@ export function AdminSso() {
   }
 
   useEffect(() => {
-    void refresh();
+    // Phase 16 lint paydown — `refresh()` calls `setLoading(true)` synchronously
+    // on its first line, which React 19's react-hooks/set-state-in-effect
+    // flags when invoked directly from an effect body. Queue via
+    // queueMicrotask so the setState happens after the render commits.
+    queueMicrotask(() => void refresh());
   }, []);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {

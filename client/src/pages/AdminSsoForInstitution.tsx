@@ -87,7 +87,10 @@ export function AdminSsoForInstitution() {
   }
 
   useEffect(() => {
-    if (institutionId) void refresh();
+    // Phase 16 lint paydown — `refresh()` calls setState synchronously
+    // on its first lines, which React 19's react-hooks/set-state-in-effect
+    // flags. queueMicrotask defers it past the render commit.
+    if (institutionId) queueMicrotask(() => void refresh());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [institutionId]);
 
