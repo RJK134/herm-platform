@@ -65,24 +65,21 @@ export function checkEnvironment(): void {
     else warnings.push(msg);
   }
 
-  // Phase 16.11 — Stripe price IDs: if billing is configured
-  // (STRIPE_SECRET_KEY), the Institution Pro and Enterprise price IDs are
-  // required in production. Without them, the checkout path silently falls
-  // back to empty strings, which renders "Price not configured" on first
-  // checkout. The operator won't notice until a customer tries to upgrade.
-  // Fail at boot in production so the env is validated upfront.
+  // Phase 16.11 — Stripe price-ID validation. Without these envs the
+  // checkout button renders happily but `createCheckoutSession`
+  // returns "Price not configured for tier: institutionPro" only at
+  // click-time — the user discovers the misconfig by trying to pay.
+  // Make it loud at boot in production. Vendor price IDs stay
+  // optional (vendor checkout is not yet exposed in the client UI;
+  // its env-check lands when the vendor self-serve flow ships).
   if (process.env['STRIPE_SECRET_KEY']) {
-    if (!process.env['STRIPE_PRICE_INST_PRO']) {
-      const msg =
-        '  STRIPE_PRICE_INST_PRO is not set — Institution Pro checkout will fail with "Price not configured". Set to the Stripe price ID from https://dashboard.stripe.com/products (live mode if production).';
-      if (isProd) missing.push(msg);
-      else warnings.push(msg);
-    }
-    if (!process.env['STRIPE_PRICE_INST_ENT']) {
-      const msg =
-        '  STRIPE_PRICE_INST_ENT is not set — Institution Enterprise checkout will fail with "Price not configured". Set to the Stripe price ID from https://dashboard.stripe.com/products (live mode if production).';
-      if (isProd) missing.push(msg);
-      else warnings.push(msg);
+    const requiredInstitutionPrices = ['STRIPE_PRICE_INST_PRO', 'STRIPE_PRICE_INST_ENT'] as const;
+    for (const env of requiredInstitutionPrices) {
+      if (!process.env[env]) {
+        const msg = `  ${env} is required when STRIPE_SECRET_KEY is set — without it the checkout button renders but the resulting session creation fails with "Price not configured". Set the price ID from https://dashboard.stripe.com/products.`;
+        if (isProd) missing.push(msg);
+        else warnings.push(msg);
+      }
     }
   }
 

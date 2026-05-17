@@ -32,6 +32,16 @@ describe('checkEnvironment — Stripe secret pairing (Workstream G)', () => {
     delete process.env['NODE_ENV'];
     delete process.env['STRIPE_SECRET_KEY'];
     delete process.env['STRIPE_WEBHOOK_SECRET'];
+    // Phase 16.11 — Bugbot 4469b089: explicitly clear the price-ID envs
+    // so tests that rely on their absence (the new "without price IDs"
+    // throw + warn assertions) aren't flaky when the host machine has
+    // them set (e.g. an operator running tests after a local prod-mode
+    // export). Without these the negative tests pass on CI but fail
+    // locally for some developers.
+    delete process.env['STRIPE_PRICE_INST_PRO'];
+    delete process.env['STRIPE_PRICE_INST_ENT'];
+    delete process.env['STRIPE_PRICE_VENDOR_ENH'];
+    delete process.env['STRIPE_PRICE_VENDOR_PREM'];
     delete process.env['ANTHROPIC_API_KEY'];
     delete process.env['DEV_UNLOCK_ALL_TIERS'];
     delete process.env['FRONTEND_URL'];
@@ -64,13 +74,38 @@ describe('checkEnvironment — Stripe secret pairing (Workstream G)', () => {
     expect(warnLines).toMatch(/STRIPE_SECRET_KEY.*STRIPE_WEBHOOK_SECRET/);
   });
 
-  it('production + both set → no throw, no Stripe-pairing warning', () => {
+  it('production + both set + price IDs → no throw, no Stripe complaints', () => {
     process.env['NODE_ENV'] = 'production';
     process.env['STRIPE_SECRET_KEY'] = 'sk_live_xxx';
     process.env['STRIPE_WEBHOOK_SECRET'] = 'whsec_xxx';
+    // Phase 16.11 — when STRIPE_SECRET_KEY is set, the institution
+    // price IDs are now also required so a checkout click in
+    // production can't fall through to "Price not configured".
+    process.env['STRIPE_PRICE_INST_PRO'] = 'price_xxx';
+    process.env['STRIPE_PRICE_INST_ENT'] = 'price_yyy';
     expect(() => checkEnvironment()).not.toThrow();
     const allOutput = [...consoleError.mock.calls, ...consoleWarn.mock.calls].flat().join('\n');
     expect(allOutput).not.toMatch(/STRIPE_SECRET_KEY.*STRIPE_WEBHOOK_SECRET/);
+    expect(allOutput).not.toMatch(/STRIPE_PRICE_INST_(PRO|ENT) is required/);
+  });
+
+  it('production + STRIPE_SECRET_KEY without price IDs → throws (Phase 16.11)', () => {
+    process.env['NODE_ENV'] = 'production';
+    process.env['STRIPE_SECRET_KEY'] = 'sk_live_xxx';
+    process.env['STRIPE_WEBHOOK_SECRET'] = 'whsec_xxx';
+    expect(() => checkEnvironment()).toThrow();
+    const allOutput = consoleError.mock.calls.flat().join('\n');
+    expect(allOutput).toMatch(/STRIPE_PRICE_INST_PRO is required/);
+    expect(allOutput).toMatch(/STRIPE_PRICE_INST_ENT is required/);
+  });
+
+  it('development + STRIPE_SECRET_KEY without price IDs → warn-only', () => {
+    process.env['NODE_ENV'] = 'development';
+    process.env['STRIPE_SECRET_KEY'] = 'sk_test_xxx';
+    process.env['STRIPE_WEBHOOK_SECRET'] = 'whsec_xxx';
+    expect(() => checkEnvironment()).not.toThrow();
+    const warnOutput = consoleWarn.mock.calls.flat().join('\n');
+    expect(warnOutput).toMatch(/STRIPE_PRICE_INST_PRO is required/);
   });
 
   it('production + neither set → no throw, no Stripe-pairing complaint (Stripe is genuinely off)', () => {
