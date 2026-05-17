@@ -12,6 +12,12 @@ import { startImpersonation, endImpersonation } from './impersonation.controller
 import { submitCsmRequest } from './csm-request.controller';
 import { getBranding, putBranding } from './branding.controller';
 import {
+  createInvite,
+  listPendingInvites,
+  revokeInvite,
+} from '../invites/invites.controller';
+import { enforceQuota } from '../../middleware/enforceQuota';
+import {
   readMe as readSsoMe,
   upsertMe as upsertSsoMe,
   deleteMe as deleteSsoMe,
@@ -59,6 +65,15 @@ router.use(authenticateJWT, requireRole(['SUPER_ADMIN', 'INSTITUTION_ADMIN']));
 // tier before applying the override at render time.
 router.get('/branding', requirePaidTier(['enterprise']), getBranding);
 router.put('/branding', requirePaidTier(['enterprise']), putBranding);
+
+// Phase 16.5 — team-member invitations. INSTITUTION_ADMIN / SUPER_ADMIN
+// (covered by the router-level role guard above) creates a pending
+// Invite row + emails the recipient a /claim link. Quota counts ACTIVE
+// members, not invites — the gate here pre-checks so an admin can't
+// queue more invites than there are seats left.
+router.post('/users/invite', enforceQuota('team.members'), createInvite);
+router.get('/users/invites', listPendingInvites);
+router.delete('/users/invites/:id', revokeInvite);
 
 router.get('/vendors', listVendorAccounts);
 router.patch('/vendors/:id', updateVendorAccount);

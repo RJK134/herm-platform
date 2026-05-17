@@ -38,6 +38,7 @@ import adminRouter from './api/admin/admin.router';
 import sectorAnalyticsRouter from './api/sector-analytics/sector-analytics.router';
 import notificationsRouter from './api/notifications/notifications.router';
 import usageRouter from './api/usage/usage.router';
+import invitesRouter from './api/invites/invites.router';
 import keysRouter from './api/keys/keys.router';
 import frameworksRouter from './api/frameworks/frameworks.router';
 import frameworkMappingsRouter from './api/framework-mappings/framework-mappings.router';
@@ -164,6 +165,11 @@ export function createApp(): Express {
     app.use(`${base}/sector/analytics`, sectorAnalyticsRouter);
     app.use(`${base}/notifications`, notificationsRouter);
     app.use(`${base}/usage`, usageRouter);
+    // Phase 16.5 — public invite-claim surface. GET /api/invites/:token
+    // and POST /api/invites/:token/claim run before the user has any
+    // auth session; the 32-byte random token in the URL is the auth.
+    // Admin-side creation lives under /api/admin/users/invite (JWT-gated).
+    app.use(`${base}/invites`, invitesRouter);
     app.use(`${base}/keys`, keysRouter);
 
     app.use(`${base}/frameworks`, frameworksRouter);
