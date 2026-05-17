@@ -40,6 +40,14 @@ herm-platform is a full-stack TypeScript monorepo (npm workspaces) with:
 - Missing HTTP status codes or incorrect status code usage
 - Endpoints missing rate limiting where appropriate
 
+### Workflow & CI Infrastructure
+
+Flag these as **Medium severity** when a PR touches `.github/workflows/` or repository scaffolding files:
+
+- Two or more workflow files (e.g. `claude.yml` and `claude-code-fix.yml`) both subscribing to `on: issue_comment` with a job-level `if:` that contains `'@claude'` — a single mention fires both, doubling `ANTHROPIC_API_KEY` spend and producing racing PRs. Fix: keep exactly one pinned workflow (`anthropics/claude-code-action@<commit-sha>`) and delete the older unpinned file, folding any prompt-customisation into the survivor.
+- Any workflow that calls `anthropics/claude-code-action` added or modified without an `ANTHROPIC_API_KEY` secret configured at `Settings → Secrets and variables → Actions` — the job-level `if:` skips silently until someone `@claude`-mentions, at which point the action fails with `Bad credentials`. Surface the nav path `https://github.com/<owner>/<repo>/settings/secrets/actions` in the review; do **not** attempt to set the secret.
+- A workflow declaring `on: merge_group` whose jobs are gated `if: github.event_name == 'pull_request'` without `|| github.event_name == 'merge_group'` — jobs always skip on merge-queue entries, so the merge queue passes with no real checks. Fix: every job under such a workflow must include `github.event_name == 'merge_group'` in its `if:` alongside `pull_request` / `push`.
+
 ## Ignore These
 
 - Styling or CSS/Tailwind class ordering preferences
@@ -54,25 +62,9 @@ herm-platform is a full-stack TypeScript monorepo (npm workspaces) with:
 
 Be direct and concise. Focus on bugs, security vulnerabilities, and correctness issues. Suggest specific fixes with code when possible. Do not comment if there is nothing actionable to fix.
 
-## Workflow & CI Infrastructure
+## Cross-references
 
-These are org-wide patterns Bugbot must surface as **Medium severity** or higher whenever a PR touches `.github/workflows/` or repository scaffolding files. They reflect bugs we have hit in this org and want auto-flagged on every future PR.
-
-### Duplicate Claude workflows on `issue_comment`
-
-The repository contains both `.github/workflows/claude.yml` and `.github/workflows/claude-code-fix.yml` (or any two workflow files) where each subscribes to `on: issue_comment` with `types: [created]` AND has a job-level `if:` that gates on `contains(github.event.comment.body, '@claude')`. A single `@claude` mention will fire both workflows in parallel, doubling `ANTHROPIC_API_KEY` spend and producing racing PRs. Fix: keep exactly one workflow file (the pinned one, typically `claude.yml` at `anthropics/claude-code-action@<commit-sha>`); delete the older unpinned one and fold any prompt-customisation into the survivor. Severity: **Medium**.
-
-### Missing `ANTHROPIC_API_KEY` repository secret
-
-A PR adds or modifies `.github/workflows/claude.yml` (or any workflow that calls `anthropics/claude-code-action`) and the repository does not have an `ANTHROPIC_API_KEY` secret configured at `Settings → Secrets and variables → Actions`. The workflow's job-level `if:` will skip silently while no one `@claude`-mentions, so CI looks green at merge time and the next mention fails with an opaque `Bad credentials` error. Surface this in the PR review with a one-line nav path: `https://github.com/<owner>/<repo>/settings/secrets/actions`. Do **not** attempt to set the secret; only flag. Severity: **Medium**.
-
-### `merge_group` trigger without job-level `if:`
-
-A workflow declares `on: merge_group` but its jobs are gated `if: github.event_name == 'pull_request'` without `|| github.event_name == 'merge_group'`. Jobs always skip on merge-queue entries, so the merge queue passes with no real checks. Fix: every job under a workflow with `on: merge_group` must have an `if:` that includes `github.event_name == 'merge_group'` alongside `pull_request` / `push`. Severity: **Medium**.
-
-### Cross-references
-
-These rules were derived from:
+The Workflow & CI Infrastructure rules were derived from:
 
 - RJK134/Maieus2 #112 (duplicate `claude.yml` + `claude-code-fix.yml`, Bugbot finding, Medium).
 - RJK134/herm-platform #151 (same pattern; rename-based fix).
