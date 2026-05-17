@@ -140,6 +140,7 @@ model Institution {
   apiKeys             ApiKey[]
   ssoProviders        SsoIdentityProvider[]
   usageCounters       UsageCounter[]
+  invites             Invite[]
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @updatedAt
 
@@ -336,12 +337,50 @@ model User {
   domainAssignments              EvaluationDomainAssignment[]    @relation("DomainAssignments")
   conflictOfInterestDeclarations ConflictOfInterestDeclaration[]
   notifications                  Notification[]
+  invitesSent                    Invite[]                        @relation("InvitesSent")
   createdAt                      DateTime                        @default(now())
   updatedAt                      DateTime                        @updatedAt
 
   @@unique([institutionId, externalId])
   @@index([institutionId])
   @@index([deletedAt])
+}
+
+/// Phase 16.5 — team-member invitations.
+///
+/// Admin POSTs `{email, role}` → server creates an Invite row + emails the
+/// recipient a `/claim?token=...` link. The recipient sets their own
+/// password on the claim page, which atomically: creates a User row
+/// (institutionId/role copied from invite), marks the invite `claimedAt`,
+/// and increments the `team.members` UsageCounter. Quota counts active
+/// members (Users), not invites — an unclaimed invite doesn't burn a slot.
+///
+/// Tokens are 32-byte URL-safe random strings (256 bits, hashed in column).
+/// Invites expire after 7 days; the claim endpoint rejects expired rows.
+/// `email` is duplicated from the invitee (rather than referencing a
+/// User row that doesn't exist yet); a partial unique index prevents two
+/// outstanding invites to the same email in the same institution.
+model Invite {
+  id            String      @id @default(cuid())
+  email         String
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  role          UserRole
+  /// SHA-256 hash of the random token sent in the email. The plaintext
+  /// token is never stored; comparison happens by hashing the inbound
+  /// token and looking it up.
+  tokenHash     String      @unique
+  expiresAt     DateTime
+  claimedAt     DateTime?
+  /// Becomes the User.id when claim succeeds — useful for audit
+  /// linkage. Nullable until claim.
+  claimedById   String?
+  createdById   String
+  createdBy     User        @relation("InvitesSent", fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+
+  @@index([institutionId])
+  @@index([email])
 }
 
 enum UserRole {

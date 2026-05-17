@@ -12,6 +12,7 @@ import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { RequireTier } from './components/auth/RequireTier';
 import { Login } from './pages/Login';
 import { SsoCallback } from './pages/SsoCallback';
+import { Claim } from './pages/Claim';
 import { Register } from './pages/Register';
 import { TrustCentre } from './pages/TrustCentre';
 import { Leaderboard } from './pages/Leaderboard';
@@ -104,6 +105,14 @@ export default function App() {
                 <Route path="/login" element={<Login />} />
                 <Route path="/login/sso" element={<SsoCallback />} />
                 <Route path="/register" element={<Register />} />
+                {/*
+                  Phase 16.5 — invite-claim page. URL: /claim?token=…
+                  Anonymous access; the token in the query string is the
+                  auth. On successful claim the server returns a session
+                  JWT that AuthContext picks up via setSessionFromClaim,
+                  and the user redirects to the dashboard signed in.
+                */}
+                <Route path="/claim" element={<Claim />} />
                 {/*
                   Phase 14.10 — public Trust Centre. No auth so procurement
                   officers and InfoSec reviewers can find SOC 2 / ISO 27001

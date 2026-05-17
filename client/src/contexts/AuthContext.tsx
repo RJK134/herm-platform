@@ -58,6 +58,13 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<LoginResult>;
   loginMfa: (challengeToken: string, code: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
+  /**
+   * Phase 16.5 — accept a server-minted session post-invite-claim. The
+   * claim endpoint returns `{token, user}`; this function stores both
+   * (identical surface to `login`'s success path) so the Claim page
+   * can redirect into the dashboard without bouncing through /login.
+   */
+  setSessionFromClaim: (token: string, user: AuthUser) => void;
   logout: () => void;
   endImpersonation: () => Promise<void>;
 }
@@ -180,6 +187,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearAuth();
   }, [clearAuth]);
 
+  const setSessionFromClaim = useCallback(
+    (newToken: string, userData: AuthUser) => {
+      setAuth(newToken, userData);
+    },
+    [setAuth],
+  );
+
   const endImpersonation = useCallback(async () => {
     // Errors from `/end` come back as non-2xx and Axios throws — the
     // legacy `if (!data.success)` branch was dead. Catch the AxiosError
@@ -212,6 +226,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         loginMfa,
         register,
+        setSessionFromClaim,
         logout,
         endImpersonation,
       }}
