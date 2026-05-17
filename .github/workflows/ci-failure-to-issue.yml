@@ -2,7 +2,7 @@ name: CI failure → bug issue
 
 # Whenever ANY workflow run on the default branch finishes in failure,
 # open (or update) a bug-labeled issue. The bug label triggers
-# claude-code-fix.yml, which assigns Claude Code to investigate.
+# claude.yml, which assigns Claude Code to investigate.
 on:
   workflow_run:
     workflows: ["*"]
